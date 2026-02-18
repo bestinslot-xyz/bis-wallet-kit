@@ -1,0 +1,103 @@
+/* :host to make it work with shadow DOM, :root for dev playground */
+:host, :root {
+  --bis-cw-primary: #FF9900;
+
+  /* Dark theme colors */
+  --bis-cw-dark-bg: #0a0a0a; /* #17171C */
+  --bis-cw-dark-fg: #FAFAF9;
+  --bis-cw-dark-muted-fg: #A3A3A3;
+  --bis-cw-dark-border: hsl(0, 0%, 100%, 0.06); /* #28293D */
+
+  /* Light theme colors */
+  --bis-cw-light-bg: #FFF;
+  --bis-cw-light-fg: #0a0a0a;
+  --bis-cw-light-muted-fg: #737373;
+  --bis-cw-light-border: #e5e5e5;
+
+  /* Set default theme to dark */
+  --bis-cw-bg: var(--bis-cw-dark-bg);
+  --bis-cw-fg: var(--bis-cw-dark-fg);
+  --bis-cw-muted-fg: var(--bis-cw-dark-muted-fg);
+  --bis-cw-border: var(--bis-cw-dark-border);
+
+  /* TW Fixes - Somehow these wont get included in the final build */
+  --tw-border-style: solid;
+  --tw-bg-opacity: 1;
+}
+
+/* Light theme for system preference */
+@media (prefers-color-scheme: light) {
+  :host, :root {
+    --bis-cw-bg: var(--bis-cw-light-bg);
+    --bis-cw-fg: var(--bis-cw-light-fg);
+    --bis-cw-muted-fg: var(--bis-cw-light-muted-fg);
+    --bis-cw-border: var(--bis-cw-light-border);
+  }
+}
+
+/* Forced Light Theme */
+.bis-cw-theme-light {
+  --bis-cw-bg: var(--bis-cw-light-bg);
+  --bis-cw-fg: var(--bis-cw-light-fg);
+  --bis-cw-muted-fg: var(--bis-cw-light-muted-fg);
+  --bis-cw-border: var(--bis-cw-light-border);
+}
+
+/* Forced Dark Theme */
+.bis-cw-theme-dark {
+  --bis-cw-bg: var(--bis-cw-dark-bg);
+  --bis-cw-fg: var(--bis-cw-dark-fg);
+  --bis-cw-muted-fg: var(--bis-cw-dark-muted-fg);
+  --bis-cw-border: var(--bis-cw-dark-border);
+}
+
+@theme {
+  --color-primary: #FF9900;
+}
+
+@utility bg-background {
+  background: var(--bis-cw-bg);
+}
+
+@utility text-foreground {
+  color: var(--bis-cw-fg);
+}
+
+@utility text-muted-foreground {
+  color: var(--bis-cw-muted-fg);
+}
+
+@utility border-border {
+  border-color: var(--bis-cw-border);
+}
+
+/*
+ * Custom scrollbar
+ */
+.best-scrollbar {
+  overflow: auto;
+  scrollbar-width: thin; /* For Firefox */
+  scrollbar-color: #25252d transparent; /* For Firefox, sets thumb and track color */
+}
+
+.best-scrollbar::-webkit-scrollbar {
+  width: 6px; /* Width of the scrollbar */
+  height: 6px; /* Height of the scrollbar (relevant for horizontal bars) */
+  background: transparent; /* Makes the scrollbar transparent when not active */
+}
+
+.best-scrollbar::-webkit-scrollbar-thumb {
+  background: white; /* Color of the thumb */ /* v1: black */
+  -webkit-border-radius: 1ex; /* Fully rounded corners for the thumb */
+  -webkit-box-shadow: 0 1px 2px rgba(0,0,0,.75); /* Shadow around the thumb */
+  border: 1px solid transparent; /* Optional: Border for the thumb */
+}
+
+.best-scrollbar::-webkit-scrollbar-corner {
+  background: transparent; /* Makes the scrollbar corner transparent */
+}
+
+.best-scrollbar::-webkit-scrollbar-track {
+  background: transparent; /* Makes the track transparent */
+  border-radius: 9999px; /* Fully rounded corners for the track */
+}

@@ -1,0 +1,84 @@
+{
+  "name": "@bestinslot/wallet-kit",
+  "type": "module",
+  "version": "0.6.26",
+  "private": false,
+  "packageManager": "pnpm@10.28.2",
+  "description": "A lightweight JavaScript library for connecting Bitcoin wallets with a unified API.",
+  "exports": {
+    ".": {
+      "types": "./dist/types/main.d.ts",
+      "import": "./dist/bis-wallet-kit.js"
+    }
+  },
+  "module": "dist/bis-wallet-kit.js",
+  "types": "dist/types/main.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc -b && vite build",
+    "build:debug": "vue-tsc -b && vite build --minify=false",
+    "preview": "vite preview",
+    "lint": "eslint",
+    "lint:fix": "eslint --fix"
+  },
+  "peerDependencies": {
+    "vue": "^3.5.13"
+  },
+  "dependencies": {
+    "@bestinslot/nada": "^0.1.6",
+    "@bitcoinerlab/secp256k1": "^1.2.0",
+    "@bokuweb/zstd-wasm": "^0.0.27",
+    "@cmdcode/buff-utils": "^2.0.0",
+    "@cmdcode/crypto-tools": "^2.8.0",
+    "@cmdcode/tapscript": "1.5.3",
+    "@noble/curves": "2.0.1",
+    "@noble/hashes": "2.0.1",
+    "@noble/secp256k1": "^3.0.0",
+    "base64-arraybuffer": "^1.0.2",
+    "bip322-js": "^3.0.0",
+    "bitcoinjs-lib": "^6.1.7",
+    "bitcoinjs-message": "^2.2.0",
+    "cbor2": "^1.12.0",
+    "ecpair": "^3.0.0",
+    "ethers": "^6.16.0",
+    "tiny-secp256k1": "^2.2.4",
+    "varuint-bitcoin": "^2.0.0",
+    "web3": "^4.16.0"
+  },
+  "devDependencies": {
+    "@antfu/eslint-config": "^6.7.3",
+    "@leather-wallet/types": "^0.2.1",
+    "@tailwindcss/vite": "^4.1.18",
+    "@vitejs/plugin-vue": "^6.0.3",
+    "@vue/tsconfig": "^0.8.1",
+    "@vueuse/core": "^14.1.0",
+    "clsx": "^2.1.1",
+    "eslint": "^9.39.2",
+    "solc": "^0.8.33",
+    "tailwind-merge": "^3.4.0",
+    "tailwindcss": "^4.1.18",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.0",
+    "vite-plugin-dts": "^4.5.4",
+    "vite-plugin-node-polyfills": "^0.24.0",
+    "vite-plugin-wasm": "^3.5.0",
+    "vue-tsc": "^3.2.2"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com/"
+  },
+  "pnpm": {
+    "patchedDependencies": {
+      "@cmdcode/tapscript@1.5.3": "patches/@cmdcode__tapscript@1.5.3.patch"
+    },
+    "onlyBuiltDependencies": [
+      "@tailwindcss/oxide",
+      "esbuild",
+      "secp256k1",
+      "unrs-resolver"
+    ]
+  }
+}

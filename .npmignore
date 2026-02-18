@@ -1,0 +1,8 @@
+src/
+*.ts
+vite.config.ts
+eslint.config.mjs
+.env
+.env.example
+.vscode/
+dist/favicon.ico

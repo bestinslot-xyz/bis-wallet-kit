@@ -1,0 +1,52 @@
+diff --git a/dist/main.cjs b/dist/main.cjs
+index 27a5122a32b959318498f1432a856675cf72e4a9..8ca069491ae495d799a73dcc8491539750684b8f 100644
+--- a/dist/main.cjs
++++ b/dist/main.cjs
+@@ -1401,11 +1401,8 @@ function encodeWord(word) {
+         buff = Buff$1.bytes(word);
+     }
+     if (buff.length === 1) {
+-        if (buff[0] !== 0 && buff[0] <= 16) {
+-            buff[0] += 0x50;
+-            return buff;
+-        }
+-        else if (buff[0] > 128 && buff[0] <= 255) {
++        if (buff[0] > 128 && buff[0] <= 255) {
+             buff = new Uint8Array([buff[0], 0]);
+         }
+         return Buff$1.join([encodeSize(buff.length), buff]);
+@@ -11542,7 +11539,7 @@ class ZodPipeline extends ZodType {
+         });
+     }
+ }
+-const custom = (check, params = {},
++const custom = (check, params = {},
+ /*
+  * @deprecated
+  *
+diff --git a/dist/module.mjs b/dist/module.mjs
+index 6b4a7ffa965bb965143d88f8738b39512796f115..d5d481505f518026490b2b039ee6f79c98236f0e 100644
+--- a/dist/module.mjs
++++ b/dist/module.mjs
+@@ -1399,11 +1399,8 @@ function encodeWord(word) {
+         buff = Buff$1.bytes(word);
+     }
+     if (buff.length === 1) {
+-        if (buff[0] !== 0 && buff[0] <= 16) {
+-            buff[0] += 0x50;
+-            return buff;
+-        }
+-        else if (buff[0] > 128 && buff[0] <= 255) {
++        if (buff[0] > 128 && buff[0] <= 255) {
+             buff = new Uint8Array([buff[0], 0]);
+         }
+         return Buff$1.join([encodeSize(buff.length), buff]);
+@@ -11540,7 +11537,7 @@ class ZodPipeline extends ZodType {
+         });
+     }
+ }
+-const custom = (check, params = {},
++const custom = (check, params = {},
+ /*
+  * @deprecated
+  *

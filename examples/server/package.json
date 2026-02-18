@@ -1,0 +1,16 @@
+{
+  "name": "server",
+  "type": "module",
+  "version": "1.0.0",
+  "description": "Test project for BiS wallet kit",
+  "author": "BestInSlot",
+  "license": "ISC",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "@bestinslot/wallet-kit": "file:../..",
+    "dotenv": "^17.2.4"
+  }
+}
