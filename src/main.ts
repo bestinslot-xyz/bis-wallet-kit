@@ -9,7 +9,6 @@ import {
   init,
   sendBTC,
   setNetwork,
-  setTheme,
   signMessage,
 } from './core/bis'
 
@@ -36,6 +35,10 @@ import {
   textInscription,
 } from './core/mint'
 
+import {
+  modal as modalInner,
+} from './core/modal'
+
 import { saveWallet } from './provider/local'
 
 // -------- Wallet API --------
@@ -58,7 +61,7 @@ export const modal = {
   connect,
   disconnect,
   setNetwork,
-  setTheme,
+  setTheme: modalInner.setTheme,
 }
 
 // -------- BRC20 API --------

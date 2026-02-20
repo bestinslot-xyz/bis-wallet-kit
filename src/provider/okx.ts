@@ -1,13 +1,16 @@
 import type { SignResponse } from '../core/providers'
 import type { BISWallet } from '../main'
 import { Buffer } from 'node:buffer'
+import * as bitcoinjs from 'bitcoinjs-lib'
 import { getNetwork } from '../core/bis'
 import { base64ToHex, hexToBase64 } from '../core/helpers'
 import { getPaymentWallet } from '../core/providers'
-import { bitcoinjs } from '../lib/bitcoin'
 
 /**
+ * PROVIDER: OKX
+ * NOTE: use window.okxwallet.bitcoin for mainnet, window.okxwallet.bitcoinTestnet for testnet, and window.okxwallet.bitcoinSignet for signet
  *
+ * @returns An array of BISWallet objects representing the wallets available in the OKX extension. Each object contains the wallet's address, public key, and purpose (either 'ordinals', 'payment', or 'all').
  */
 export async function getWallets(): Promise<BISWallet[]> {
   if (!window.okxwallet)
@@ -37,29 +40,34 @@ export async function getWallets(): Promise<BISWallet[]> {
 }
 
 /**
+ * Signs a message using the OKX wallet. This function uses the 'bip322-simple' signing scheme, which produces a non-deterministic signature. This is suitable for general message signing purposes, but if you need a deterministic signature (e.g. for signing a PSBT for minting an ordinal), you should use the signMessageDeterministic function instead.
  *
- * @param message
+ * @param message - The message to be signed.
+ * @returns A promise that resolves to the hexadecimal string of the signature.
  */
 export async function signMessage(message: string): Promise<string> {
   if (!window.okxwallet)
     throw new Error('OKX extension not found.')
 
   const network = getNetwork()
-  let signed_message
+  let signedMessage
 
   if (network === 'mainnet')
-    signed_message = await window.okxwallet.bitcoin.signMessage(message, 'bip322-simple')
+    signedMessage = await window.okxwallet.bitcoin.signMessage(message, 'bip322-simple')
   else if (network === 'testnet')
-    signed_message = await window.okxwallet.bitcoinTestnet.signMessage(message, 'bip322-simple')
+    signedMessage = await window.okxwallet.bitcoinTestnet.signMessage(message, 'bip322-simple')
   else if (network === 'signet')
-    signed_message = await window.okxwallet.bitcoinSignet.signMessage(message, 'bip322-simple')
+    signedMessage = await window.okxwallet.bitcoinSignet.signMessage(message, 'bip322-simple')
   else throw new Error('Unsupported network for OKX.')
 
-  return Buffer.from(signed_message, 'base64').toString('hex')
+  return Buffer.from(signedMessage, 'base64').toString('hex')
 }
 /**
+ * Signs a message using the ECDSA scheme, which produces a deterministic signature. This is useful for cases where you want the same message to always produce the same signature, such as when signing a PSBT for minting an ordinal, where the signature needs to be verified locally before broadcasting.
  *
- * @param message
+ * @param message - The message to be signed.
+ * @returns A promise that resolves to an object containing the hexadecimal string of the signature and the address that was used to sign the message.
+ * @throws An error if the OKX extension is not found, if no payment wallet is found, if the payment wallet does not have an address, or if the network is unsupported.
  */
 export async function signMessageDeterministic(
   message: string,

@@ -1996,15 +1996,15 @@ async function send_multi_inscription_with_buffer_all(
     throw new Error('inscription_ids and target_postages must have the same length')
 
   // Get connected wallet
-  const paymentWallet = getPaymentWallet()
-  const inscriptionWallet = getOrdinalsWallet()
-  if (!paymentWallet || !inscriptionWallet)
+  const userPaymentWallet = getPaymentWallet()
+  const userOrdinalsWallet = getOrdinalsWallet()
+  if (!userPaymentWallet || !userOrdinalsWallet)
     throw new Error('Wallets not found')
 
-  const payment_addr = paymentWallet.address
-  const payment_public_key = paymentWallet.pubkey
-  const inscription_address = inscriptionWallet.address
-  const inscription_public_key = inscriptionWallet.pubkey
+  const payment_addr = userPaymentWallet.address
+  const payment_public_key = userPaymentWallet.pubkey
+  const inscription_address = userOrdinalsWallet.address
+  const inscription_public_key = userOrdinalsWallet.pubkey
 
   const payer_wallet = new WalletInfo(false, null, payment_addr, null, payment_public_key)
   const inscription_wallet = new WalletInfo(
@@ -2166,15 +2166,15 @@ export async function send_inscription_all(
   sign_func: SignFunction,
 ): Promise<SendInscriptionAllResult> {
   // Get connected wallet
-  const paymentWallet = getPaymentWallet()
-  const inscriptionWallet = getOrdinalsWallet()
-  if (!paymentWallet || !inscriptionWallet)
+  const userPaymentWallet = getPaymentWallet()
+  const userOrdinalsWallet = getOrdinalsWallet()
+  if (!userPaymentWallet || !userOrdinalsWallet)
     throw new Error('Wallets not found')
 
-  const payment_addr = paymentWallet.address
-  const payment_public_key = paymentWallet.pubkey
-  const inscription_address = inscriptionWallet.address
-  const inscription_public_key = inscriptionWallet.pubkey
+  const payment_addr = userPaymentWallet.address
+  const payment_public_key = userPaymentWallet.pubkey
+  const inscription_address = userOrdinalsWallet.address
+  const inscription_public_key = userOrdinalsWallet.pubkey
 
   const payer_wallet = new WalletInfo(false, null, payment_addr, null, payment_public_key)
   const inscription_wallet = new WalletInfo(
@@ -2327,15 +2327,15 @@ async function send_multi_inscription_with_buffer_fee_rate_all(
     throw new Error('inscription_ids and target_postages must have the same length')
 
   // Get connected wallet
-  const paymentWallet = getPaymentWallet()
-  const inscriptionWallet = getOrdinalsWallet()
-  if (!paymentWallet || !inscriptionWallet)
+  const userPaymentWallet = getPaymentWallet()
+  const userOrdinalsWallet = getOrdinalsWallet()
+  if (!userPaymentWallet || !userOrdinalsWallet)
     throw new Error('Wallets not found')
 
-  const payment_addr = paymentWallet.address
-  const payment_public_key = paymentWallet.pubkey
-  const inscription_address = inscriptionWallet.address
-  const inscription_public_key = inscriptionWallet.pubkey
+  const payment_addr = userPaymentWallet.address
+  const payment_public_key = userPaymentWallet.pubkey
+  const inscription_address = userOrdinalsWallet.address
+  const inscription_public_key = userOrdinalsWallet.pubkey
 
   const payer_wallet = new WalletInfo(false, null, payment_addr, null, payment_public_key)
   const inscription_wallet = new WalletInfo(
@@ -2911,15 +2911,15 @@ export async function mint_all(
   sign_func: SignFunction,
 ) {
   // Get connected wallet
-  const paymentWallet = getPaymentWallet()
-  const inscriptionWallet = getOrdinalsWallet()
-  if (!paymentWallet || !inscriptionWallet)
+  const userPaymentWallet = getPaymentWallet()
+  const userOrdinalsWallet = getOrdinalsWallet()
+  if (!userPaymentWallet || !userOrdinalsWallet)
     throw new Error('Wallets not found')
 
-  const payer_addr = paymentWallet.address
-  const payer_public_key = paymentWallet.pubkey
-  const inscription_address = inscriptionWallet.address
-  const inscription_public_key = inscriptionWallet.pubkey
+  const payer_addr = userPaymentWallet.address
+  const payer_public_key = userPaymentWallet.pubkey
+  const inscription_address = userOrdinalsWallet.address
+  const inscription_public_key = userOrdinalsWallet.pubkey
 
   const payer_wallet = new WalletInfo(false, null, payer_addr, null, payer_public_key)
   const inscription_wallet = new WalletInfo(
@@ -3031,14 +3031,14 @@ export async function mint_all_payment_wallet(
   sign_func: SignFunction,
 ): Promise<InscribeResult> {
   // Get connected wallet
-  const paymentWallet = getPaymentWallet()
-  const inscriptionWallet = getOrdinalsWallet()
-  if (!paymentWallet || !inscriptionWallet)
+  const userPaymentWallet = getPaymentWallet()
+  const userOrdinalsWallet = getOrdinalsWallet()
+  if (!userPaymentWallet || !userOrdinalsWallet)
     throw new Error('Wallets not found')
 
-  const payer_addr = paymentWallet.address
-  const payer_public_key = paymentWallet.pubkey
-  const inscription_address = inscriptionWallet.address
+  const payer_addr = userPaymentWallet.address
+  const payer_public_key = userPaymentWallet.pubkey
+  const inscription_address = userOrdinalsWallet.address
 
   const payer_wallet = new WalletInfo(false, null, payer_addr, null, payer_public_key)
   let payment_wallet = null
@@ -3139,15 +3139,15 @@ export async function mint_all_check_fees(
   payment: number | null,
 ): Promise<InscribeCheckFeesResult> {
   // Get connected wallet
-  const paymentWallet = getPaymentWallet()
-  const inscriptionWallet = getOrdinalsWallet()
-  if (!paymentWallet || !inscriptionWallet)
+  const userPaymentWallet = getPaymentWallet()
+  const userOrdinalsWallet = getOrdinalsWallet()
+  if (!userPaymentWallet || !userOrdinalsWallet)
     throw new Error('Wallets not found')
 
-  const payer_addr = paymentWallet.address
-  const payer_public_key = paymentWallet.pubkey
-  const inscription_address = inscriptionWallet.address
-  const inscription_public_key = inscriptionWallet.pubkey
+  const payer_addr = userPaymentWallet.address
+  const payer_public_key = userPaymentWallet.pubkey
+  const inscription_address = userOrdinalsWallet.address
+  const inscription_public_key = userOrdinalsWallet.pubkey
 
   const payer_wallet = new WalletInfo(false, null, payer_addr, null, payer_public_key)
   const inscription_wallet = new WalletInfo(
@@ -3220,15 +3220,15 @@ export async function send_inscription_to_op_return_all(
   sign_func: SignFunction,
 ): Promise<SignResponse> {
   // Get connected wallet
-  const paymentWallet = getPaymentWallet()
-  const inscriptionWallet = getOrdinalsWallet()
-  if (!paymentWallet || !inscriptionWallet)
+  const userPaymentWallet = getPaymentWallet()
+  const userOrdinalsWallet = getOrdinalsWallet()
+  if (!userPaymentWallet || !userOrdinalsWallet)
     throw new Error('Wallets not found')
 
-  const payment_addr = paymentWallet.address
-  const payment_public_key = paymentWallet.pubkey
-  const inscription_address = inscriptionWallet.address
-  const inscription_public_key = inscriptionWallet.pubkey
+  const payment_addr = userPaymentWallet.address
+  const payment_public_key = userPaymentWallet.pubkey
+  const inscription_address = userOrdinalsWallet.address
+  const inscription_public_key = userOrdinalsWallet.pubkey
 
   const payer_wallet = new WalletInfo(false, null, payment_addr, null, payment_public_key)
   const inscription_wallet = new WalletInfo(
@@ -3328,15 +3328,15 @@ export async function send_inscription_in_payment_wallet_to_op_return_all(
   sign_func: SignFunction,
 ): Promise<SignResponse> {
   // Get connected wallet
-  const paymentWallet = getPaymentWallet()
-  const inscriptionWallet = getOrdinalsWallet()
-  if (!paymentWallet || !inscriptionWallet)
+  const userPaymentWallet = getPaymentWallet()
+  const userOrdinalsWallet = getOrdinalsWallet()
+  if (!userPaymentWallet || !userOrdinalsWallet)
     throw new Error('Wallets not found')
 
-  const payment_addr = paymentWallet.address
-  const payment_public_key = paymentWallet.pubkey
-  const inscription_addr = inscriptionWallet.address
-  const inscription_public_key = inscriptionWallet.pubkey
+  const payment_addr = userPaymentWallet.address
+  const payment_public_key = userPaymentWallet.pubkey
+  const inscription_addr = userOrdinalsWallet.address
+  const inscription_public_key = userOrdinalsWallet.pubkey
 
   const payer_wallet = new WalletInfo(false, null, payment_addr, null, payment_public_key)
   const inscription_wallet = new WalletInfo(
@@ -3441,15 +3441,15 @@ export async function mint_with_parent_all(
   sign_func: SignFunction,
 ): Promise<InscribeResult> {
   // Get connected wallet
-  const paymentWallet = getPaymentWallet()
-  const inscriptionWallet = getOrdinalsWallet()
-  if (!paymentWallet || !inscriptionWallet)
+  const userPaymentWallet = getPaymentWallet()
+  const userOrdinalsWallet = getOrdinalsWallet()
+  if (!userPaymentWallet || !userOrdinalsWallet)
     throw new Error('Wallets not found')
 
-  const payer_addr = paymentWallet.address
-  const payer_public_key = paymentWallet.pubkey
-  const inscription_address = inscriptionWallet.address
-  const inscription_public_key = inscriptionWallet.pubkey
+  const payer_addr = userPaymentWallet.address
+  const payer_public_key = userPaymentWallet.pubkey
+  const inscription_address = userOrdinalsWallet.address
+  const inscription_public_key = userOrdinalsWallet.pubkey
 
   const payer_wallet = new WalletInfo(false, null, payer_addr, null, payer_public_key)
   const inscription_wallet = new WalletInfo(
@@ -3578,15 +3578,15 @@ export async function send_inscription_to_op_return_with_extra_inputs_and_extra_
   sign_func: SignFunction,
 ): Promise<SignResponse> {
   // Get connected wallet
-  const paymentWallet = getPaymentWallet()
-  const inscriptionWallet = getOrdinalsWallet()
-  if (!paymentWallet || !inscriptionWallet)
+  const userPaymentWallet = getPaymentWallet()
+  const userOrdinalsWallet = getOrdinalsWallet()
+  if (!userPaymentWallet || !userOrdinalsWallet)
     throw new Error('Wallets not found')
 
-  const payer_addr = paymentWallet.address
-  const payer_public_key = paymentWallet.pubkey
-  const inscription_address = inscriptionWallet.address
-  const inscription_public_key = inscriptionWallet.pubkey
+  const payer_addr = userPaymentWallet.address
+  const payer_public_key = userPaymentWallet.pubkey
+  const inscription_address = userOrdinalsWallet.address
+  const inscription_public_key = userOrdinalsWallet.pubkey
 
   const payer_wallet = new WalletInfo(false, null, payer_addr, null, payer_public_key)
   const inscription_wallet = new WalletInfo(
@@ -3706,15 +3706,15 @@ export async function send_inscription_to_op_return_with_extra_inputs_and_extra_
   fee_rate: number,
 ): Promise<SendInscriptionFeeRateResult> {
   // Get connected wallet
-  const paymentWallet = getPaymentWallet()
-  const inscriptionWallet = getOrdinalsWallet()
-  if (!paymentWallet || !inscriptionWallet)
+  const userPaymentWallet = getPaymentWallet()
+  const userOrdinalsWallet = getOrdinalsWallet()
+  if (!userPaymentWallet || !userOrdinalsWallet)
     throw new Error('Wallets not found')
 
-  const payer_addr = paymentWallet.address
-  const payer_public_key = paymentWallet.pubkey
-  const inscription_address = inscriptionWallet.address
-  const inscription_public_key = inscriptionWallet.pubkey
+  const payer_addr = userPaymentWallet.address
+  const payer_public_key = userPaymentWallet.pubkey
+  const inscription_address = userOrdinalsWallet.address
+  const inscription_public_key = userOrdinalsWallet.pubkey
 
   const payer_wallet = new WalletInfo(false, null, payer_addr, null, payer_public_key)
   const inscription_wallet = new WalletInfo(
@@ -3803,15 +3803,15 @@ export async function mint_with_extra_input_in_commit_all(
   sign_func: SignFunction,
 ): Promise<InscribeResult> {
   // Get connected wallet
-  const paymentWallet = getPaymentWallet()
-  const inscriptionWallet = getOrdinalsWallet()
-  if (!paymentWallet || !inscriptionWallet)
+  const userPaymentWallet = getPaymentWallet()
+  const userOrdinalsWallet = getOrdinalsWallet()
+  if (!userPaymentWallet || !userOrdinalsWallet)
     throw new Error('Wallets not found')
 
-  const payer_addr = paymentWallet.address
-  const payer_public_key = paymentWallet.pubkey
-  const inscription_address = inscriptionWallet.address
-  const inscription_public_key = inscriptionWallet.pubkey
+  const payer_addr = userPaymentWallet.address
+  const payer_public_key = userPaymentWallet.pubkey
+  const inscription_address = userOrdinalsWallet.address
+  const inscription_public_key = userOrdinalsWallet.pubkey
 
   const payer_wallet = new WalletInfo(false, null, payer_addr, null, payer_public_key)
   const inscription_wallet = new WalletInfo(

@@ -194,8 +194,8 @@ export async function getSwapWalletFromDB(): Promise<SwapWalletInfo | null> {
  */
 export async function generateAndStoreSwapWallet(): Promise<SwapWalletInfo> {
   // 1. Validate Wallet
-  const inscriptionWallet = getOrdinalsWallet()
-  if (!inscriptionWallet?.address) {
+  const userOrdinalsWallet = getOrdinalsWallet()
+  if (!userOrdinalsWallet?.address) {
     throw new Error('Ordinals wallet address not found.')
   }
 
@@ -225,7 +225,7 @@ export async function generateAndStoreSwapWallet(): Promise<SwapWalletInfo> {
 
   // 3. Create Swap Wallet Info and store in DB
   const swapWalletInfo: SwapWalletInfo = {
-    bitcoinAddress: inscriptionWallet.address,
+    bitcoinAddress: userOrdinalsWallet.address,
     swapPubkey: blsPubKeyHex,
     swapPrivkey: blsPrivKeyHex,
   }
@@ -273,15 +273,15 @@ interface CheckSwapAllowanceResponse {
  */
 export async function checkSwapAllowance(tokenAddress: string): Promise<bigint> {
   // 1. Validate Wallet
-  const inscriptionWallet = getOrdinalsWallet()
-  if (!inscriptionWallet?.address) {
+  const userOrdinalsWallet = getOrdinalsWallet()
+  if (!userOrdinalsWallet?.address) {
     throw new Error('Ordinals wallet address not found.')
   }
 
   // 2. Prepare and execute the API call
   const url = getSwapBackendUrl('check_swap_allowance')
   const body = {
-    ordinal_address: inscriptionWallet.address,
+    ordinal_address: userOrdinalsWallet.address,
     token_address: tokenAddress,
   }
 
@@ -345,15 +345,15 @@ interface CheckBRC20BalanceResponse {
  */
 export async function checkBRC20ProgBalance(tokenAddress: string): Promise<bigint> {
   // 1. Validate Wallet
-  const inscriptionWallet = getOrdinalsWallet()
-  if (!inscriptionWallet?.address) {
+  const userOrdinalsWallet = getOrdinalsWallet()
+  if (!userOrdinalsWallet?.address) {
     throw new Error('Ordinals wallet address not found.')
   }
 
   // 2. Prepare and execute the API call
   const url = getSwapBackendUrl('check_brc20_balance')
   const body = {
-    ordinal_address: inscriptionWallet.address,
+    ordinal_address: userOrdinalsWallet.address,
     token_address: tokenAddress,
   }
 
@@ -423,15 +423,15 @@ export async function checkBaseBRC20BalanceOfAddress(
  */
 export async function checkBaseBRC20Balance(tokenAddress: string): Promise<BaseBRC20Balance> {
   // 1. Validate Wallet
-  const inscriptionWallet = getOrdinalsWallet()
-  if (!inscriptionWallet?.address) {
+  const userOrdinalsWallet = getOrdinalsWallet()
+  if (!userOrdinalsWallet?.address) {
     throw new Error('Ordinals wallet address not found.')
   }
 
   // 2. Prepare and execute the API call
   const url = getSwapBackendUrl('check_base_brc20_balance')
   const body = {
-    ordinal_address: inscriptionWallet.address,
+    ordinal_address: userOrdinalsWallet.address,
     token_address: tokenAddress,
   }
 
@@ -460,15 +460,15 @@ export async function checkBaseBRC20Balance(tokenAddress: string): Promise<BaseB
  */
 export async function checkBRC20ProgBalanceOfPaymentWallet(tokenAddress: string): Promise<bigint> {
   // 1. Validate Wallet
-  const paymentWallet = getPaymentWallet()
-  if (!paymentWallet?.address) {
+  const userPaymentWallet = getPaymentWallet()
+  if (!userPaymentWallet?.address) {
     throw new Error('Payment wallet address not found.')
   }
 
   // 2. Prepare and execute the API call
   const url = getSwapBackendUrl('check_brc20_balance')
   const body = {
-    ordinal_address: paymentWallet.address,
+    ordinal_address: userPaymentWallet.address,
     token_address: tokenAddress,
   }
 
@@ -1605,15 +1605,15 @@ export async function checkMinerFeesOfDepositOrder(
 
   // Sign function
   const network = getBitcoinNetwork()
-  const paymentWallet = getPaymentWallet()
+  const userPaymentWallet = getPaymentWallet()
 
-  if (!paymentWallet)
+  if (!userPaymentWallet)
     throw new Error('Payment wallet not found')
-  if (!paymentWallet.address)
+  if (!userPaymentWallet.address)
     throw new Error('Payment wallet address not found')
 
-  const payer_addr = paymentWallet.address
-  const payer_public_key = paymentWallet.pubkey
+  const payer_addr = userPaymentWallet.address
+  const payer_public_key = userPaymentWallet.pubkey
 
   const payer_wallet = new WalletInfo(false, null, payer_addr, null, payer_public_key)
 
@@ -2026,20 +2026,20 @@ export async function createAndBroadcastWrapOrder(
 
   // Sign function
   const signFn = getSignFn(walletInfo.provider)
-  const paymentWallet = getPaymentWallet()
-  const ordinalsWallet = getOrdinalsWallet()
+  const userPaymentWallet = getPaymentWallet()
+  const userOrdinalsWallet = getOrdinalsWallet()
 
-  if (!paymentWallet)
+  if (!userPaymentWallet)
     throw new Error('Payment wallet not found')
-  if (!paymentWallet.address)
+  if (!userPaymentWallet.address)
     throw new Error('Payment wallet address not found')
 
-  if (!ordinalsWallet)
+  if (!userOrdinalsWallet)
     throw new Error('Ordinals wallet not found')
-  if (!ordinalsWallet.address)
+  if (!userOrdinalsWallet.address)
     throw new Error('Ordinals wallet address not found')
 
-  const ordinals_addr = ordinalsWallet.address
+  const ordinals_addr = userOrdinalsWallet.address
 
   const l1_contract_address = getSwapContractAddress()
 
@@ -2219,11 +2219,11 @@ export async function checkMinerFeesOfWrapOrder(
     throw new Error('Wallets not found')
 
   // Sign function
-  const paymentWallet = getPaymentWallet()
+  const userPaymentWallet = getPaymentWallet()
 
-  if (!paymentWallet)
+  if (!userPaymentWallet)
     throw new Error('Payment wallet not found')
-  if (!paymentWallet.address)
+  if (!userPaymentWallet.address)
     throw new Error('Payment wallet address not found')
 
   const L1ContractAddress = getSwapContractAddress()

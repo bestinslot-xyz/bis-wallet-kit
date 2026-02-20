@@ -14,8 +14,6 @@ export {
 export { getWalletInfo as getSession } from './store'
 export { getNetwork, setNetwork } from './store-network'
 
-export const setTheme = modal.setTheme
-
 /**
  * Creates a modal instance without showing it.
  */
