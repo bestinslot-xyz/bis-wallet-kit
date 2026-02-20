@@ -1,6 +1,6 @@
-import { wallet } from '@@/main'
 import * as ecc from '@bitcoinerlab/secp256k1'
 import * as bitcoinjs from 'bitcoinjs-lib'
+import { wallet } from '../main'
 
 // Initialize ECC once
 bitcoinjs.initEccLib(ecc)

@@ -47,6 +47,7 @@ export const wallet = {
   disconnect,
   getCardinalBalance,
   getNetwork,
+  setNetwork,
   getSession,
   getOrdinalsWallet,
   getPaymentWallet,

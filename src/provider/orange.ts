@@ -1,9 +1,9 @@
 import type { SignResponse } from '../core/providers'
 import type { BISWallet } from '../main'
 import { Buffer } from 'node:buffer'
+import * as bitcoinjs from 'bitcoinjs-lib'
 import { getNetwork } from '../core/bis'
 import { createUnsecuredToken, hexToBase64 } from '../core/helpers'
-import { bitcoinjs } from '../lib/bitcoin'
 
 function getNetworkType() {
   const bisNetwork = getNetwork()

@@ -1434,11 +1434,7 @@ export async function createAndBroadcastDepositOrder(
   const extra_utxos = []
   const extra_tx_hexes = []
   if (useBaseAvailableBalanceAmount > 0n) {
-    if (
-      !baseDepositCommitTxHex
-      || !baseDepositRevealTxHex
-      || !baseDepositSendToOpReturnTxHex
-    ) {
+    if (!baseDepositCommitTxHex || !baseDepositRevealTxHex || !baseDepositSendToOpReturnTxHex) {
       throw new Error('Base deposit transaction hexes are missing')
     }
     extra_tx_hexes.push(

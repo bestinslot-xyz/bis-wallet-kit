@@ -1,9 +1,9 @@
 import type { SignResponse } from '../core/providers'
 import type { BISWallet } from '../main'
 import { Buffer } from 'node:buffer'
+import * as bitcoinjs from 'bitcoinjs-lib'
 import { getNetwork } from '../core/bis'
 import { base64ToHex, hexToBase64 } from '../core/helpers'
-import { bitcoinjs } from '../lib/bitcoin'
 
 // @ts-expect-error not in use
 // eslint-disable-next-line unused-imports/no-unused-vars

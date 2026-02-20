@@ -3,15 +3,16 @@ import type { ECPairInterface } from 'ecpair'
 import type { SignResponse } from '../core/providers'
 import type { BISNetwork, BISWallet } from '../main'
 import { Buffer } from 'node:buffer'
-import { memoryStorage } from '@@/core/storage'
-import { saveWalletInfo } from '@@/core/store'
 import { Signer as BIP322Signer } from 'bip322-js'
+import * as bitcoinjs from 'bitcoinjs-lib'
 import * as bitcoinMessage from 'bitcoinjs-message'
 import { ECPairFactory } from 'ecpair'
 import * as tinysecp from 'tiny-secp256k1'
 import { broadcast_txes, hexToBase64 } from '../core/helpers'
-import { bitcoinjs, getBitcoinNetwork } from '../lib/bitcoin'
-import { getNetwork, setNetwork } from '../main'
+import { memoryStorage } from '../core/storage'
+import { saveWalletInfo } from '../core/store'
+import { getBitcoinNetwork } from '../lib/bitcoin'
+import { wallet } from '../main'
 
 // @ts-expect-error not in use
 // eslint-disable-next-line unused-imports/no-unused-vars
@@ -37,7 +38,7 @@ export async function checkNetwork() {
     throw new TypeError('Local provider is only available in Node.js environment.')
   }
 
-  const bisNetwork = getNetwork()
+  const bisNetwork = wallet.getNetwork()
   const walletNetwork = await getWalletNetwork()
 
   if (bisNetwork !== walletNetwork) {
@@ -69,14 +70,14 @@ export async function saveWallet(
     throw new Error('Invalid wallet source. Supported sources are unisat and okx.')
   }
 
-  setNetwork(network)
+  wallet.setNetwork(network)
   localWalletStorage.set(PRIV_KEY, privkey)
   localWalletStorage.set(NETWORK_KEY, network)
   localWalletStorage.set(WALLET_TYPE_KEY, walletType)
   localWalletStorage.set(SOURCE_KEY, sourceWallet)
 
-  const wallet_info = await getWalletInfo()
-  if (!wallet_info) {
+  const walletInfo = await getWalletInfo()
+  if (!walletInfo) {
     throw new Error('Failed to save wallet.')
   }
 
@@ -84,8 +85,8 @@ export async function saveWallet(
     provider: 'local' as const,
     wallets: [
       {
-        address: wallet_info.address,
-        pubkey: Buffer.from(wallet_info.keyPair.publicKey).toString('hex'),
+        address: walletInfo.address,
+        pubkey: Buffer.from(walletInfo.keyPair.publicKey).toString('hex'),
         purpose: 'all' as const,
       },
     ],
@@ -113,19 +114,19 @@ export async function getWalletInfo(): Promise<LocalWalletInfo | null> {
   if (!privkey) {
     return null
   }
-  const wallet_type = (localWalletStorage.get(WALLET_TYPE_KEY) as LocalWalletType) || 'p2wpkh'
+  const walletType = (localWalletStorage.get(WALLET_TYPE_KEY) as LocalWalletType) || 'p2wpkh'
   const keyPair = ECPairFactory(tinysecp).fromWIF(privkey, getBitcoinNetwork())
   const xOnly = tinysecp.xOnlyPointFromPoint(keyPair.publicKey)
   const tweakedKeyPair = keyPair.tweak(bitcoinjs.crypto.taggedHash('TapTweak', Buffer.from(xOnly)))
   let address = null
   try {
-    if (wallet_type === 'p2wpkh') {
+    if (walletType === 'p2wpkh') {
       address = bitcoinjs.payments.p2wpkh({
         pubkey: Buffer.from(keyPair.publicKey),
         network: getBitcoinNetwork(),
       }).address
     }
-    else if (wallet_type === 'p2tr') {
+    else if (walletType === 'p2tr') {
       address = bitcoinjs.payments.p2tr({
         internalPubkey: Buffer.from(xOnly),
         network: getBitcoinNetwork(),

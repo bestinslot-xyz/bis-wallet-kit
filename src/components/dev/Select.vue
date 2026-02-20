@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { cn } from '@@/lib/dev'
+import { cn } from '../../lib/dev'
 
 const props = defineProps<{
   options: Option[]

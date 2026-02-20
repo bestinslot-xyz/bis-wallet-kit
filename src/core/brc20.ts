@@ -1,12 +1,12 @@
 import { Buffer } from 'node:buffer'
-import { getBitcoinNetwork } from '@@/lib/bitcoin'
-import { getWeb3 } from '@@/lib/web3'
 import { encode as nadaEncode } from '@bestinslot/nada'
 import { init as initZstd, compress as zstdCompress } from '@bokuweb/zstd-wasm'
 import { Buff } from '@cmdcode/buff-utils'
 import { Script } from '@cmdcode/tapscript'
 import { encode as base64Encode } from 'base64-arraybuffer'
 import * as bitcoinjs from 'bitcoinjs-lib'
+import { getBitcoinNetwork } from '../lib/bitcoin'
+import { getWeb3 } from '../lib/web3'
 import { broadcast_txes, clearExtraUtxos, saveExtraUtxos } from './helpers'
 import {
   InscriptionDetails,
