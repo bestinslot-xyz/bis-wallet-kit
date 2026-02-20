@@ -18,7 +18,7 @@ const errorMessage = ref<string>()
 const provider = ref<BISWalletProvider>()
 const providerList = ref<HTMLElement>()
 
-const providers: Partial<Record<BISWalletProvider, { name: string, img: string }>> = {
+const providers: Partial<Record<BISWalletProvider, { name: string; img: string }>> = {
   okx: {
     name: 'OKX',
     img: okxLogo,
@@ -48,8 +48,7 @@ const links = {
 }
 
 const providerObj = computed(() => {
-  if (!provider.value)
-    return undefined
+  if (!provider.value) return undefined
 
   return providers[provider.value]
 })
@@ -111,16 +110,14 @@ async function onProviderSelect(providerName: BISWalletProvider) {
     // succcess
     const data = await getWallets(providerName)
 
-    if (!data)
-      throw new Error(`Could not get wallets from the provider:${providerName}`)
+    if (!data) throw new Error(`Could not get wallets from the provider:${providerName}`)
 
     // Resolve the promise with the data
     connectCallbacks?.onSelect(data)
 
     // Hide the modal
     visible.value = false
-  }
-  catch (error: any) {
+  } catch (error: any) {
     console.error('Error connecting to provider.')
     console.error(error)
 
@@ -134,21 +131,24 @@ defineExpose({ showConnect, showError, showConnectConfirmation, hide, setTheme }
 
 <template>
   <Transition name="fade-scale" appear>
-    <div v-if="visible" class="z-10 sm:z-50 fixed inset-0 flex justify-center items-center bg-black/90 font-sans"
+    <div
+      v-if="visible"
+      class="z-10 sm:z-50 fixed inset-0 flex justify-center items-center bg-black/90 font-sans"
       :class="[
         { 'bis-cw-theme-light': theme === 'light' },
         { 'bis-cw-theme-dark': theme === 'dark' },
-      ]">
+      ]"
+    >
       <div
-        class="flex flex-col max-h-[90vh] bg-background shadow-lg border border-border rounded-lg w-[92%] max-w-sm text-foreground">
+        class="flex flex-col max-h-[90vh] bg-background shadow-lg border border-border rounded-lg w-[92%] max-w-sm text-foreground"
+      >
         <!-- Header -->
         <div class="relative flex justify-between items-center p-4 py-3 border-b border-border">
-          <div class="font-semibold text-lg">
-            Connect Wallet
-          </div>
+          <div class="font-semibold text-lg">Connect Wallet</div>
           <button
             class="top-2 right-3 absolute flex -m-2 p-2 text-muted-foreground hover:text-foreground text-2xl transition-colors cursor-pointer"
-            @click="onCloseClick">
+            @click="onCloseClick"
+          >
             &times;
           </button>
         </div>
@@ -157,25 +157,33 @@ defineExpose({ showConnect, showError, showConnectConfirmation, hide, setTheme }
         <div class="overflow-y-auto px-4 sm:px-6 py-6 best-scrollbar">
           <!-- SCREEN: CONNECT -->
           <div v-if="state === 'connect'">
-            <div class="mb-6 font-medium text-xl text-center">
-              Select your Bitcoin wallet
-            </div>
+            <div class="mb-6 font-medium text-xl text-center">Select your Bitcoin wallet</div>
             <div ref="providerList" class="flex flex-col gap-y-3">
               <!-- Provider List -->
               <button
-                v-for="(item, key) in providers" :key="key"
+                v-for="(item, key) in providers"
+                :key="key"
                 class="group flex items-center gap-x-4 p-2 border hover:border-primary border-border rounded-lg w-full text-left transition-colors cursor-pointer duration-300"
-                @click="onProviderSelect(key)">
-                <img :src="item?.img" class="rounded-lg size-10">
+                @click="onProviderSelect(key)"
+              >
+                <img :src="item?.img" class="rounded-lg size-10" />
                 <div class="font-semibold text-lg grow">
                   {{ item?.name }}
                 </div>
                 <svg
                   class="w-auto h-6 text-muted-foreground group-hover:text-foreground transition-colors duration-300"
-                  xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24">
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="32"
+                  height="32"
+                  viewBox="0 0 24 24"
+                >
                   <path
-                    fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"
-                    stroke-width="2" d="m9 18l6-6l-6-6"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="m9 18l6-6l-6-6"
                   />
                 </svg>
               </button>
@@ -189,12 +197,12 @@ defineExpose({ showConnect, showError, showConnectConfirmation, hide, setTheme }
             <div class="mx-auto mb-4 max-w-50 text-muted-foreground text-center">
               Check your extension and confirm the connection...
             </div>
-            <img :src="wooGIF" class="mx-auto size-16">
+            <img :src="wooGIF" class="mx-auto size-16" />
           </div>
           <!-- SCREEN: ERROR -->
           <div v-else-if="state === 'error'">
             <div class="text-center">
-              <img :src="errorImage" class="mx-auto mb-8 w-9 h-9.75">
+              <img :src="errorImage" class="mx-auto mb-8 w-9 h-9.75" />
 
               <div class="mb-8 text-center">
                 {{ errorMessage }}
@@ -202,7 +210,8 @@ defineExpose({ showConnect, showError, showConnectConfirmation, hide, setTheme }
 
               <button
                 class="hover:bg-primary border border-border rounded-lg w-24 h-10 font-semibold text-foreground text-lg text-center transition-colors cursor-pointer"
-                @click="onRetryConnectClick">
+                @click="onRetryConnectClick"
+              >
                 Retry
               </button>
             </div>
@@ -212,14 +221,29 @@ defineExpose({ showConnect, showError, showConnectConfirmation, hide, setTheme }
         <!-- Footer -->
         <div class="p-4 border-t border-border text-muted-foreground text-center">
           <div class="mb-2">
-            Powered by <a class="font-medium text-foreground hover:underline underline-offset-4" :href="links.api"
-              target="_blank">BiS API</a>
+            Powered by
+            <a
+              class="font-medium text-foreground hover:underline underline-offset-4"
+              :href="links.api"
+              target="_blank"
+              >BiS API</a
+            >
           </div>
           <div class="text-sm">
-            By connecting your wallet, you agree to Best in Slot's <a
-              class="text-foreground hover:underline underline-offset-4" :href="links.terms" target="_blank">Terms of
-              Service</a> and <a class="text-foreground hover:underline underline-offset-4" :href="links.privacy"
-              target="_blank">Privacy Policy</a>.
+            By connecting your wallet, you agree to Best in Slot's
+            <a
+              class="text-foreground hover:underline underline-offset-4"
+              :href="links.terms"
+              target="_blank"
+              >Terms of Service</a
+            >
+            and
+            <a
+              class="text-foreground hover:underline underline-offset-4"
+              :href="links.privacy"
+              target="_blank"
+              >Privacy Policy</a
+            >.
           </div>
         </div>
       </div>

@@ -12,6 +12,9 @@ function isInstalled() {
   return typeof window.unisat !== 'undefined'
 }
 
+/**
+ *
+ */
 export async function checkNetwork() {
   // Check UniSat extension
   if (!window.unisat)
@@ -28,6 +31,9 @@ export async function checkNetwork() {
     await window.unisat.switchNetwork('testnet')
 }
 
+/**
+ *
+ */
 export async function getWallets(): Promise<BISWallet[]> {
   // Check extension and network
   await checkNetwork()
@@ -49,6 +55,10 @@ export async function getWallets(): Promise<BISWallet[]> {
   return wallets
 }
 
+/**
+ *
+ * @param message
+ */
 export async function signMessage(message: string): Promise<string> {
   // Check extension and network
   await checkNetwork()
@@ -65,7 +75,13 @@ export async function signMessage(message: string): Promise<string> {
     throw new Error('Failed to sign message.')
   }
 }
-export async function signMessageDeterministic(message: string): Promise<{ signature: string, address: string }> {
+/**
+ *
+ * @param message
+ */
+export async function signMessageDeterministic(
+  message: string,
+): Promise<{ signature: string, address: string }> {
   // Check extension and network
   await checkNetwork()
 
@@ -91,6 +107,11 @@ export async function signMessageDeterministic(message: string): Promise<{ signa
 }
 
 // returns txid
+/**
+ *
+ * @param amountSats
+ * @param toAddress
+ */
 export async function sendBTC(amountSats: string, toAddress: string): Promise<string> {
   // Check extension and network
   await checkNetwork()
@@ -108,11 +129,13 @@ export async function sendBTC(amountSats: string, toAddress: string): Promise<st
   }
 }
 
-export async function signPSBT(
-  psbtBase64: string,
-  broadcast: boolean,
-  inputsToSign: any[],
-) {
+/**
+ *
+ * @param psbtBase64
+ * @param broadcast
+ * @param inputsToSign
+ */
+export async function signPSBT(psbtBase64: string, broadcast: boolean, inputsToSign: any[]) {
   // Check extension and network
   await checkNetwork()
 
@@ -150,6 +173,15 @@ export async function signPSBT(
   return signedPsbt
 }
 
+/**
+ *
+ * @param unsigned_psbt_hex
+ * @param payment_addr
+ * @param ord_addr
+ * @param ord_addr_idxes
+ * @param use_tweak_signer_idxes
+ * @param no_sign_idxes
+ */
 export async function sign(
   unsigned_psbt_hex: string,
   payment_addr: string,

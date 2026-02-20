@@ -10,15 +10,25 @@ const network = ref<BISNetwork>('mainnet')
 // React to network changes
 watch(network, onNetworkChange)
 
+/**
+ *
+ */
 export function getNetwork(): BISNetwork {
   return network.value
 }
 
+/**
+ *
+ * @param newNetwork
+ */
 export function setNetwork(newNetwork: BISNetwork) {
   network.value = newNetwork
 }
 
 // Expose as a ref for reactivity in Vue components
+/**
+ *
+ */
 export function useNetwork() {
   return network
 }

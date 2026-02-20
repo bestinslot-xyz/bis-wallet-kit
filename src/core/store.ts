@@ -5,10 +5,17 @@ const LS_KEY = 'bis-cw-wallets'
 
 const walletStorage = typeof window === 'undefined' ? memoryStorage() : browserStorage
 
+/**
+ *
+ * @param data
+ */
 export function saveWalletInfo(data: BISSession) {
   walletStorage.set(LS_KEY, JSON.stringify(data))
 }
 
+/**
+ *
+ */
 export function getWalletInfo(): BISSession | null {
   const data = walletStorage.get(LS_KEY)
 
@@ -21,6 +28,9 @@ export function getWalletInfo(): BISSession | null {
   return null
 }
 
+/**
+ *
+ */
 export function clearWalletInfo() {
   walletStorage.remove(LS_KEY)
 }
@@ -125,6 +135,10 @@ export interface SwapWalletInfo {
   swapPrivkey: string
   bitcoinAddress: string
 }
+/**
+ *
+ * @param data
+ */
 export async function saveSwapWalletInfo(data: SwapWalletInfo) {
   // SSR-SAFU
   if (typeof window === 'undefined') {
@@ -150,22 +164,18 @@ export async function saveSwapWalletInfo(data: SwapWalletInfo) {
 
   const iv = crypto.getRandomValues(new Uint8Array(12))
 
-  const ciphertext = await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv },
-    key,
-    privKeyBytes,
-  )
+  const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, privKeyBytes)
 
-  await saveWalletToDB(
-    ciphertext,
-    iv,
-    key,
-    data.swapPubkey,
-    data.bitcoinAddress,
-  )
+  await saveWalletToDB(ciphertext, iv, key, data.swapPubkey, data.bitcoinAddress)
 }
 
-export async function readSwapWalletInfo(bitcoinAddressToRead: string): Promise<SwapWalletInfo | null> {
+/**
+ *
+ * @param bitcoinAddressToRead
+ */
+export async function readSwapWalletInfo(
+  bitcoinAddressToRead: string,
+): Promise<SwapWalletInfo | null> {
   // SSR-SAFU
   if (typeof window === 'undefined') {
     return null
@@ -181,11 +191,7 @@ export async function readSwapWalletInfo(bitcoinAddressToRead: string): Promise<
     return null
   }
 
-  const decrypted = await crypto.subtle.decrypt(
-    { name: 'AES-GCM', iv },
-    key,
-    ciphertext,
-  )
+  const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext)
 
   const privKeyHex = `0x${Array.from(new Uint8Array(decrypted))
     .map(b => b.toString(16).padStart(2, '0'))
@@ -198,6 +204,10 @@ export async function readSwapWalletInfo(bitcoinAddressToRead: string): Promise<
   }
 }
 
+/**
+ *
+ * @param bitcoinAddress
+ */
 export async function deleteSwapWalletInfo(bitcoinAddress: string): Promise<void> {
   // SSR-SAFU
   if (typeof window === 'undefined') {

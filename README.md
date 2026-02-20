@@ -2,7 +2,8 @@
 
 ![Best in Slot](https://blog.bestinslot.xyz/img/og.png)
 
-A lightweight JavaScript library for connecting Bitcoin wallets with a unified API. Perfect for Bitcoin-native dApps and web apps needing simple, multi-wallet support.
+A lightweight JavaScript library for connecting Bitcoin wallets with a unified API. Perfect for
+Bitcoin-native dApps and web apps needing simple, multi-wallet support.
 
 ## 🔌 Supported Wallets
 
@@ -21,7 +22,8 @@ Built with Vite, Vue 3, TypeScript and Tailwind CSS 4.
 - [Vue 3](https://vuejs.org/)
 - [Tailwind CSS](https://tailwindcss.com/)
 
-The template uses Vue 3 `<script setup>` SFCs, check out the [script setup docs](https://v3.vuejs.org/api/sfc-script-setup.html#sfc-script-setup) to learn more.
+The template uses Vue 3 `<script setup>` SFCs, check out the
+[script setup docs](https://v3.vuejs.org/api/sfc-script-setup.html#sfc-script-setup) to learn more.
 
 ```bash
 # Install dependencies
@@ -46,36 +48,32 @@ pnpm publish
 ## 📃 Examples
 
 ```ts
-import { connect, disconnect, getSession } from '@bis/wallet-kit'
+import { modal, wallet } from '@bis/wallet-kit'
 
 // Connect wallet
 try {
-  const data = await connect()
+  const data = await modal.connect()
 
   console.log('Connected to wallet: ', data)
-}
-catch (e) {
+} catch (e) {
   console.error('Connection failed: ', e)
 }
 
 // Disconnect from the wallet and clear session
-disconnect()
+modal.disconnect()
 
 // Get stored wallet data
-const data = getSession()
-
-// Get Ordinals wallet
-const wallet = getOrdinalsWallet()
+const data = wallet.getSession()
 
 // Get Payment wallet
-const wallet = getPaymentWallet()
+const paymentWallet = wallet.getPaymentWallet()
 
 // Get BTC network
-const network = getNetwork()
+const network = paymentWallet.getNetwork()
 
 // Set BTC network
-setNetwork('testnet') // defaults to mainnet
+wallet.setNetwork('testnet') // defaults to mainnet
 
 // Theme - defaults to 'system'
-setTheme('dark') // system, dark, light
+wallet.setTheme('dark') // system, dark, light
 ```

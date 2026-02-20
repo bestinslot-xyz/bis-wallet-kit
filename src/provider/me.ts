@@ -19,6 +19,9 @@ function getNetworkType() {
   throw new Error('Unknown BTC network type.')
 }
 
+/**
+ *
+ */
 export async function getWallets(): Promise<BISWallet[]> {
   if (!window.magicEden)
     throw new Error('Magic Eden extension not found.')
@@ -43,6 +46,11 @@ export async function getWallets(): Promise<BISWallet[]> {
   return wallets
 }
 
+/**
+ *
+ * @param message
+ * @param address
+ */
 export async function signMessage(message: string, address: string): Promise<string> {
   if (!window.magicEden)
     throw new Error('Magic Eden extension not found.')
@@ -59,7 +67,13 @@ export async function signMessage(message: string, address: string): Promise<str
 
   return Buffer.from(response, 'base64').toString('hex')
 }
-export async function signMessageDeterministic(message: string): Promise<{ signature: string, address: string }> {
+/**
+ *
+ * @param message
+ */
+export async function signMessageDeterministic(
+  message: string,
+): Promise<{ signature: string, address: string }> {
   if (!window.magicEden)
     throw new Error('Magic Eden extension not found.')
 
@@ -86,6 +100,11 @@ export async function signMessageDeterministic(message: string): Promise<{ signa
 }
 
 // returns txid
+/**
+ *
+ * @param amountSats
+ * @param toAddress
+ */
 export async function sendBTC(amountSats: string, toAddress: string): Promise<string> {
   if (!window.magicEden)
     throw new Error('Magic Eden extension not found.')
@@ -113,6 +132,13 @@ export async function sendBTC(amountSats: string, toAddress: string): Promise<st
   return response.txid
 }
 
+/**
+ *
+ * @param psbtBase64
+ * @param broadcast
+ * @param inputsToSign
+ * @param message
+ */
 export async function signPSBT(
   psbtBase64: string,
   broadcast: boolean,
@@ -136,6 +162,15 @@ export async function signPSBT(
   return response
 }
 
+/**
+ *
+ * @param unsigned_psbt_hex
+ * @param payment_addr
+ * @param ord_addr
+ * @param ord_addr_idxes
+ * @param _use_tweak_signer_idxes
+ * @param no_sign_idxes
+ */
 export async function sign(
   unsigned_psbt_hex: string,
   payment_addr: string,
@@ -154,18 +189,23 @@ export async function sign(
     ins_to_sign.push(i)
   }
 
-  const signed = await signPSBT(hexToBase64(unsigned_psbt_hex), false, [
-    {
-      address: payment_addr,
-      signingIndexes: ins_to_sign,
-      sigHash: bitcoinjs.Transaction.SIGHASH_DEFAULT,
-    },
-    {
-      address: ord_addr,
-      signingIndexes: ord_addr_idxes,
-      sigHash: bitcoinjs.Transaction.SIGHASH_DEFAULT,
-    },
-  ], 'sign this pls')
+  const signed = await signPSBT(
+    hexToBase64(unsigned_psbt_hex),
+    false,
+    [
+      {
+        address: payment_addr,
+        signingIndexes: ins_to_sign,
+        sigHash: bitcoinjs.Transaction.SIGHASH_DEFAULT,
+      },
+      {
+        address: ord_addr,
+        signingIndexes: ord_addr_idxes,
+        sigHash: bitcoinjs.Transaction.SIGHASH_DEFAULT,
+      },
+    ],
+    'sign this pls',
+  )
 
   const signed_psbt = bitcoinjs.Psbt.fromBase64(signed.psbtBase64)
   try {

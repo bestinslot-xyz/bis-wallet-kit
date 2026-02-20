@@ -11,6 +11,9 @@ function isInstalled() {
   return typeof window.LeatherProvider !== 'undefined'
 }
 
+/**
+ *
+ */
 export async function getWallets(): Promise<BISWallet[]> {
   // Check if Leather is available
   if (!window.LeatherProvider)
@@ -21,19 +24,28 @@ export async function getWallets(): Promise<BISWallet[]> {
   if (!response)
     throw new Error('Failed to get wallets.')
 
-  const wallets = (response.result.addresses as Array<{ address: string, publicKey: string, type: string }>)
-    .map((address: { address: string, publicKey: string, type: string }): BISWallet => {
-      return {
-        address: address.address,
-        pubkey: address.publicKey || null,
-        purpose: (address.type === 'p2wpkh') ? 'payment' : (address.type === 'p2tr') ? 'ordinals' : 'stx',
-      } as BISWallet
-    })
+  const wallets = (
+    response.result.addresses as Array<{ address: string, publicKey: string, type: string }>
+  ).map((address: { address: string, publicKey: string, type: string }): BISWallet => {
+    return {
+      address: address.address,
+      pubkey: address.publicKey || null,
+      purpose: address.type === 'p2wpkh' ? 'payment' : address.type === 'p2tr' ? 'ordinals' : 'stx',
+    } as BISWallet
+  })
 
   return wallets
 }
 
-export async function signMessage(message: string, wallet_type: 'ordinals' | 'payment'): Promise<string> {
+/**
+ *
+ * @param message
+ * @param wallet_type
+ */
+export async function signMessage(
+  message: string,
+  wallet_type: 'ordinals' | 'payment',
+): Promise<string> {
   // Check if Leather is available
   if (!window.LeatherProvider)
     throw new Error('Leather extension not found.')
@@ -52,7 +64,13 @@ export async function signMessage(message: string, wallet_type: 'ordinals' | 'pa
     throw new Error(`Failed to sign message: ${error.message}`)
   }
 }
-export async function signMessageDeterministic(message: string): Promise<{ signature: string, address: string }> {
+/**
+ *
+ * @param message
+ */
+export async function signMessageDeterministic(
+  message: string,
+): Promise<{ signature: string, address: string }> {
   // Check if Leather is available
   if (!window.LeatherProvider)
     throw new Error('Leather extension not found.')
@@ -76,6 +94,11 @@ export async function signMessageDeterministic(message: string): Promise<{ signa
 }
 
 // returns txid
+/**
+ *
+ * @param amountSats
+ * @param toAddress
+ */
 export async function sendBTC(amountSats: string, toAddress: string): Promise<string> {
   // Check if Leather is available
   if (!window.LeatherProvider)
@@ -99,11 +122,13 @@ export async function sendBTC(amountSats: string, toAddress: string): Promise<st
   }
 }
 
-export async function signPSBT(
-  psbtBase64: string,
-  broadcast: boolean,
-  inputsToSign: any[],
-) {
+/**
+ *
+ * @param psbtBase64
+ * @param broadcast
+ * @param inputsToSign
+ */
+export async function signPSBT(psbtBase64: string, broadcast: boolean, inputsToSign: any[]) {
   // Check if Leather is available
   if (!window.LeatherProvider)
     throw new Error('Leather extension not found.')
@@ -121,9 +146,18 @@ export async function signPSBT(
     signAtIndex: inscriptionToSign,
   })
 
-  return ((response.result as unknown) as { hex: string })?.hex ?? ''
+  return (response.result as unknown as { hex: string })?.hex ?? ''
 }
 
+/**
+ *
+ * @param unsigned_psbt_hex
+ * @param payment_addr
+ * @param ord_addr
+ * @param ord_addr_idxes
+ * @param _use_tweak_signer_idxes
+ * @param no_sign_idxes
+ */
 export async function sign(
   unsigned_psbt_hex: string,
   payment_addr: string,

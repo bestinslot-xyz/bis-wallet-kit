@@ -29,6 +29,9 @@ const NETWORK_KEY = 'local_network'
 const WALLET_TYPE_KEY = 'local_wallet_type'
 const SOURCE_KEY = 'local_source'
 
+/**
+ *
+ */
 export async function checkNetwork() {
   if (typeof window !== 'undefined') {
     throw new TypeError('Local provider is only available in Node.js environment.')
@@ -45,7 +48,19 @@ export async function checkNetwork() {
 }
 
 // TODO: Add taproot wallet support
-export async function saveWallet(privkey: string, network: BISNetwork, walletType: LocalWalletType = 'p2wpkh', sourceWallet: LocalWalletSource = 'unisat'): Promise<void> {
+/**
+ *
+ * @param privkey
+ * @param network
+ * @param walletType
+ * @param sourceWallet
+ */
+export async function saveWallet(
+  privkey: string,
+  network: BISNetwork,
+  walletType: LocalWalletType = 'p2wpkh',
+  sourceWallet: LocalWalletSource = 'unisat',
+): Promise<void> {
   if (walletType !== 'p2wpkh' && walletType !== 'p2tr') {
     throw new Error('Invalid wallet type. Supported types are p2wpkh and p2tr.')
   }
@@ -67,11 +82,13 @@ export async function saveWallet(privkey: string, network: BISNetwork, walletTyp
 
   const session = {
     provider: 'local' as const,
-    wallets: [{
-      address: wallet_info.address,
-      pubkey: Buffer.from(wallet_info.keyPair.publicKey).toString('hex'),
-      purpose: 'all' as const,
-    }],
+    wallets: [
+      {
+        address: wallet_info.address,
+        pubkey: Buffer.from(wallet_info.keyPair.publicKey).toString('hex'),
+        purpose: 'all' as const,
+      },
+    ],
     signature: null,
   }
 
@@ -88,12 +105,15 @@ interface LocalWalletInfo {
   walletType: LocalWalletType
 }
 
+/**
+ *
+ */
 export async function getWalletInfo(): Promise<LocalWalletInfo | null> {
   const privkey = localWalletStorage.get(PRIV_KEY)
   if (!privkey) {
     return null
   }
-  const wallet_type = localWalletStorage.get(WALLET_TYPE_KEY) as LocalWalletType || 'p2wpkh'
+  const wallet_type = (localWalletStorage.get(WALLET_TYPE_KEY) as LocalWalletType) || 'p2wpkh'
   const keyPair = ECPairFactory(tinysecp).fromWIF(privkey, getBitcoinNetwork())
   const xOnly = tinysecp.xOnlyPointFromPoint(keyPair.publicKey)
   const tweakedKeyPair = keyPair.tweak(bitcoinjs.crypto.taggedHash('TapTweak', Buffer.from(xOnly)))
@@ -123,11 +143,12 @@ export async function getWalletInfo(): Promise<LocalWalletInfo | null> {
   return {
     xOnly: Buffer.from(xOnly),
     keyPair,
-    network: network === 'mainnet'
-      ? bitcoinjs.networks.bitcoin
-      : network === 'testnet'
-        ? bitcoinjs.networks.testnet
-        : bitcoinjs.networks.regtest,
+    network:
+      network === 'mainnet'
+        ? bitcoinjs.networks.bitcoin
+        : network === 'testnet'
+          ? bitcoinjs.networks.testnet
+          : bitcoinjs.networks.regtest,
     address,
     signer: {
       publicKey: Buffer.from(keyPair.publicKey),
@@ -151,6 +172,9 @@ export async function getWalletInfo(): Promise<LocalWalletInfo | null> {
   }
 }
 
+/**
+ *
+ */
 export async function getWalletNetwork(): Promise<string> {
   const network = localWalletStorage.get(NETWORK_KEY)
   if (network)
@@ -158,6 +182,9 @@ export async function getWalletNetwork(): Promise<string> {
   return 'mainnet'
 }
 
+/**
+ *
+ */
 export async function getWallets(): Promise<BISWallet[]> {
   await checkNetwork()
 
@@ -165,15 +192,21 @@ export async function getWallets(): Promise<BISWallet[]> {
   if (!wallet_info)
     throw new Error('No private key found.')
 
-  const wallets = [{
-    address: wallet_info.address,
-    pubkey: wallet_info.keyPair.publicKey.toString(),
-    purpose: 'all',
-  } as BISWallet]
+  const wallets = [
+    {
+      address: wallet_info.address,
+      pubkey: wallet_info.keyPair.publicKey.toString(),
+      purpose: 'all',
+    } as BISWallet,
+  ]
 
   return wallets
 }
 
+/**
+ *
+ * @param message
+ */
 export async function signMessage(message: string): Promise<string> {
   await checkNetwork()
 
@@ -183,7 +216,10 @@ export async function signMessage(message: string): Promise<string> {
       throw new Error('No private key found.')
 
     if (wallet_info.walletType === 'p2wpkh' || wallet_info.walletType === 'p2tr') {
-      const signature = Buffer.from(BIP322Signer.sign(wallet_info.keyPair.toWIF(), wallet_info.address, message), 'base64').toString('hex')
+      const signature = Buffer.from(
+        BIP322Signer.sign(wallet_info.keyPair.toWIF(), wallet_info.address, message),
+        'base64',
+      ).toString('hex')
 
       return signature
     }
@@ -198,7 +234,13 @@ export async function signMessage(message: string): Promise<string> {
   }
 }
 
-export async function signMessageDeterministic(message: string): Promise<{ signature: string, address: string }> {
+/**
+ *
+ * @param message
+ */
+export async function signMessageDeterministic(
+  message: string,
+): Promise<{ signature: string, address: string }> {
   await checkNetwork()
 
   const wallet_info = await getWalletInfo()
@@ -208,7 +250,9 @@ export async function signMessageDeterministic(message: string): Promise<{ signa
 
   try {
     if (wallet_info.walletType === 'p2wpkh' || wallet_info.walletType === 'p2tr') {
-      const response = bitcoinMessage.sign(message, Buffer.from(wallet_info.keyPair.privateKey!), wallet_info.keyPair.compressed).toString('base64')
+      const response = bitcoinMessage
+        .sign(message, Buffer.from(wallet_info.keyPair.privateKey!), wallet_info.keyPair.compressed)
+        .toString('base64')
 
       return {
         signature: Buffer.from(response, 'base64').toString('hex'),
@@ -226,11 +270,13 @@ export async function signMessageDeterministic(message: string): Promise<{ signa
   }
 }
 
-export async function signPSBT(
-  psbtBase64: string,
-  broadcast: boolean,
-  inputsToSign: any[],
-) {
+/**
+ *
+ * @param psbtBase64
+ * @param broadcast
+ * @param inputsToSign
+ */
+export async function signPSBT(psbtBase64: string, broadcast: boolean, inputsToSign: any[]) {
   // Check extension and network
   await checkNetwork()
 
@@ -276,6 +322,15 @@ export async function signPSBT(
   return signed_psbt
 }
 
+/**
+ *
+ * @param unsigned_psbt_hex
+ * @param payment_addr
+ * @param ord_addr
+ * @param ord_addr_idxes
+ * @param use_tweak_signer_idxes
+ * @param no_sign_idxes
+ */
 export async function sign(
   unsigned_psbt_hex: string,
   payment_addr: string,
@@ -350,6 +405,14 @@ export async function sign(
   }
 }
 
-export function sendBTC(_amountSats: string, _toAddress: string): string | PromiseLike<string | undefined> | undefined {
+/**
+ *
+ * @param _amountSats
+ * @param _toAddress
+ */
+export function sendBTC(
+  _amountSats: string,
+  _toAddress: string,
+): string | PromiseLike<string | undefined> | undefined {
   throw new Error('Send BTC not supported.')
 }

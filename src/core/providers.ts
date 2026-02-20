@@ -28,6 +28,10 @@ type ProviderKey = keyof typeof providers
 
 // const allowedProviders = Object.keys(providers)
 
+/**
+ *
+ * @param provider
+ */
 export async function getWallets(provider: BISWalletProvider): Promise<BISSession> {
   // Get wallets
   const wallets = await providers[provider as ProviderKey]?.getWallets().catch((err: any) => {
@@ -80,15 +84,32 @@ function getWallet(walletType: 'payment' | 'ordinals' | 'all'): BISWallet | unde
   return wallet
 }
 
+/**
+ *
+ */
 export function getOrdinalsWallet(): BISWallet | undefined {
   return getWallet('ordinals')
 }
 
+/**
+ *
+ */
 export function getPaymentWallet(): BISWallet | undefined {
   return getWallet('payment')
 }
 
-export type SignFunction = (unsigned_psbt_hex: string, payment_addr: string, ord_addr: string, ord_addr_idxes: number[], use_tweak_signer_idxes?: number[], no_sign_idxes?: number[]) => Promise<SignResponse>
+export type SignFunction = (
+  unsigned_psbt_hex: string,
+  payment_addr: string,
+  ord_addr: string,
+  ord_addr_idxes: number[],
+  use_tweak_signer_idxes?: number[],
+  no_sign_idxes?: number[],
+) => Promise<SignResponse>
+/**
+ *
+ * @param provider
+ */
 export function getSignFn(provider: BISWalletProvider): SignFunction {
   if (!providers[provider as ProviderKey]) {
     throw new Error('Unknown provider')
@@ -97,7 +118,15 @@ export function getSignFn(provider: BISWalletProvider): SignFunction {
   return providers[provider as ProviderKey].sign
 }
 
-export async function signMessage(message: string, walletType: 'payment' | 'ordinals'): Promise<string> {
+/**
+ *
+ * @param message
+ * @param walletType
+ */
+export async function signMessage(
+  message: string,
+  walletType: 'payment' | 'ordinals',
+): Promise<string> {
   const provider = getWalletInfo()?.provider
   let signature: string | undefined
 
@@ -138,7 +167,15 @@ export async function signMessage(message: string, walletType: 'payment' | 'ordi
   return signature
 }
 
-export async function signMessageLocalVerify(message: string, walletType: 'payment' | 'ordinals'): Promise<string> {
+/**
+ *
+ * @param message
+ * @param walletType
+ */
+export async function signMessageLocalVerify(
+  message: string,
+  walletType: 'payment' | 'ordinals',
+): Promise<string> {
   const provider = getWalletInfo()?.provider
   let signature: string | undefined
 
@@ -179,6 +216,10 @@ export async function signMessageLocalVerify(message: string, walletType: 'payme
   return signature
 }
 
+/**
+ *
+ * @param message
+ */
 export async function signMessageLocalVerifyDeterministic(message: string): Promise<string> {
   const provider = getWalletInfo()?.provider
   let signature_res: { signature: string, address: string } | undefined
@@ -218,6 +259,11 @@ export async function signMessageLocalVerifyDeterministic(message: string): Prom
   return signature_res.signature
 }
 
+/**
+ *
+ * @param amountSats
+ * @param toAddress
+ */
 export async function sendBTC(amountSats: string, toAddress: string): Promise<string> {
   const provider = getWalletInfo()?.provider
   let txid: string | undefined
@@ -252,6 +298,13 @@ export async function sendBTC(amountSats: string, toAddress: string): Promise<st
   return txid
 }
 
+/**
+ *
+ * @param psbtBase64
+ * @param broadcast
+ * @param inputsToSign
+ * @param message
+ */
 export async function signPSBT(
   psbtBase64: string,
   broadcast: boolean,

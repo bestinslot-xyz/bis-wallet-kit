@@ -7,6 +7,9 @@ type ModalInstance = InstanceType<typeof Modal>
 
 let modalInstance: ModalInstance | null = null
 
+/**
+ *
+ */
 export function create() {
   // SSR-SAFU
   if (typeof window === 'undefined')

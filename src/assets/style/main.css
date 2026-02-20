@@ -1,4 +1,4 @@
-@import "tailwindcss" source(none);
+@import 'tailwindcss' source(none);
 
 @source "../../components/Modal.vue";
 
@@ -7,7 +7,9 @@
 /* Modal Animation */
 .fade-scale-enter-active,
 .fade-scale-leave-active {
-  transition: opacity 0.35s ease, transform 0.35s ease;
+  transition:
+    opacity 0.35s ease,
+    transform 0.35s ease;
 }
 .fade-scale-enter-from,
 .fade-scale-leave-to {

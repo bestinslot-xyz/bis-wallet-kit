@@ -4,6 +4,9 @@ export interface KeyValueStore {
   remove: (key: string) => void
 }
 
+/**
+ *
+ */
 export function memoryStorage(): KeyValueStore {
   const map = new Map<string, string>()
   return {

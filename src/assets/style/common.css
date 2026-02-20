@@ -1,15 +1,16 @@
 /* :host to make it work with shadow DOM, :root for dev playground */
-:host, :root {
-  --bis-cw-primary: #FF9900;
+:host,
+:root {
+  --bis-cw-primary: #ff9900;
 
   /* Dark theme colors */
   --bis-cw-dark-bg: #0a0a0a; /* #17171C */
-  --bis-cw-dark-fg: #FAFAF9;
-  --bis-cw-dark-muted-fg: #A3A3A3;
+  --bis-cw-dark-fg: #fafaf9;
+  --bis-cw-dark-muted-fg: #a3a3a3;
   --bis-cw-dark-border: hsl(0, 0%, 100%, 0.06); /* #28293D */
 
   /* Light theme colors */
-  --bis-cw-light-bg: #FFF;
+  --bis-cw-light-bg: #fff;
   --bis-cw-light-fg: #0a0a0a;
   --bis-cw-light-muted-fg: #737373;
   --bis-cw-light-border: #e5e5e5;
@@ -27,7 +28,8 @@
 
 /* Light theme for system preference */
 @media (prefers-color-scheme: light) {
-  :host, :root {
+  :host,
+  :root {
     --bis-cw-bg: var(--bis-cw-light-bg);
     --bis-cw-fg: var(--bis-cw-light-fg);
     --bis-cw-muted-fg: var(--bis-cw-light-muted-fg);
@@ -52,7 +54,7 @@
 }
 
 @theme {
-  --color-primary: #FF9900;
+  --color-primary: #ff9900;
 }
 
 @utility bg-background {
@@ -89,7 +91,7 @@
 .best-scrollbar::-webkit-scrollbar-thumb {
   background: white; /* Color of the thumb */ /* v1: black */
   -webkit-border-radius: 1ex; /* Fully rounded corners for the thumb */
-  -webkit-box-shadow: 0 1px 2px rgba(0,0,0,.75); /* Shadow around the thumb */
+  -webkit-box-shadow: 0 1px 2px rgba(0, 0, 0, 0.75); /* Shadow around the thumb */
   border: 1px solid transparent; /* Optional: Border for the thumb */
 }
 

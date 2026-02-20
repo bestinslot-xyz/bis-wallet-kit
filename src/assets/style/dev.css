@@ -1,8 +1,10 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 @source not "../../components/Modal.vue";
 
 @import './common.css';
 
-html, body, #app {
+html,
+body,
+#app {
   @apply h-full;
 }

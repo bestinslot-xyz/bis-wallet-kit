@@ -6,6 +6,9 @@ import { base64ToHex, hexToBase64 } from '../core/helpers'
 import { getPaymentWallet } from '../core/providers'
 import { bitcoinjs } from '../lib/bitcoin'
 
+/**
+ *
+ */
 export async function getWallets(): Promise<BISWallet[]> {
   if (!window.okxwallet)
     throw new Error('OKX extension not found.')
@@ -19,19 +22,24 @@ export async function getWallets(): Promise<BISWallet[]> {
     data = await window.okxwallet.bitcoinTestnet.connect()
   else if (network === 'signet')
     data = await window.okxwallet.bitcoinSignet.connect()
-  else
-    throw new Error('Unsupported network for OKX.')
+  else throw new Error('Unsupported network for OKX.')
 
   if (!data)
     throw new Error('Error fetching wallet data.')
 
-  return [{
-    address: data.address,
-    pubkey: data.publicKey,
-    purpose: 'all',
-  }]
+  return [
+    {
+      address: data.address,
+      pubkey: data.publicKey,
+      purpose: 'all',
+    },
+  ]
 }
 
+/**
+ *
+ * @param message
+ */
 export async function signMessage(message: string): Promise<string> {
   if (!window.okxwallet)
     throw new Error('OKX extension not found.')
@@ -45,12 +53,17 @@ export async function signMessage(message: string): Promise<string> {
     signed_message = await window.okxwallet.bitcoinTestnet.signMessage(message, 'bip322-simple')
   else if (network === 'signet')
     signed_message = await window.okxwallet.bitcoinSignet.signMessage(message, 'bip322-simple')
-  else
-    throw new Error('Unsupported network for OKX.')
+  else throw new Error('Unsupported network for OKX.')
 
   return Buffer.from(signed_message, 'base64').toString('hex')
 }
-export async function signMessageDeterministic(message: string): Promise<{ signature: string, address: string }> {
+/**
+ *
+ * @param message
+ */
+export async function signMessageDeterministic(
+  message: string,
+): Promise<{ signature: string, address: string }> {
   if (!window.okxwallet)
     throw new Error('OKX extension not found.')
 
@@ -68,8 +81,7 @@ export async function signMessageDeterministic(message: string): Promise<{ signa
     signed_message = await window.okxwallet.bitcoinTestnet.signMessage(message, 'ecdsa')
   else if (network === 'signet')
     signed_message = await window.okxwallet.bitcoinSignet.signMessage(message, 'ecdsa')
-  else
-    throw new Error('Unsupported network for OKX.')
+  else throw new Error('Unsupported network for OKX.')
 
   return {
     signature: Buffer.from(signed_message, 'base64').toString('hex'),
@@ -78,6 +90,11 @@ export async function signMessageDeterministic(message: string): Promise<{ signa
 }
 
 // returns txid
+/**
+ *
+ * @param amountSats
+ * @param toAddress
+ */
 export async function sendBTC(amountSats: string, toAddress: string): Promise<string> {
   if (!window.okxwallet)
     throw new Error('OKX extension not found.')
@@ -85,23 +102,32 @@ export async function sendBTC(amountSats: string, toAddress: string): Promise<st
   const network = getNetwork()
   let tx_id
 
-  if (network === 'mainnet')
+  if (network === 'mainnet') {
     tx_id = await window.okxwallet.bitcoin.sendBitcoin(toAddress, Number.parseInt(amountSats))
-  else if (network === 'testnet')
-    tx_id = await window.okxwallet.bitcoinTestnet.sendBitcoin(toAddress, Number.parseInt(amountSats))
-  else if (network === 'signet')
+  }
+  else if (network === 'testnet') {
+    tx_id = await window.okxwallet.bitcoinTestnet.sendBitcoin(
+      toAddress,
+      Number.parseInt(amountSats),
+    )
+  }
+  else if (network === 'signet') {
     tx_id = await window.okxwallet.bitcoinSignet.sendBitcoin(toAddress, Number.parseInt(amountSats))
-  else
+  }
+  else {
     throw new Error('Unsupported network for OKX.')
+  }
 
   return tx_id
 }
 
-export async function signPSBT(
-  psbtBase64: string,
-  broadcast: boolean,
-  inputsToSign: any[],
-) {
+/**
+ *
+ * @param psbtBase64
+ * @param broadcast
+ * @param inputsToSign
+ */
+export async function signPSBT(psbtBase64: string, broadcast: boolean, inputsToSign: any[]) {
   const psbt = base64ToHex(psbtBase64)
 
   let options = null
@@ -166,6 +192,15 @@ export async function signPSBT(
   }
 }
 
+/**
+ *
+ * @param unsigned_psbt_hex
+ * @param payment_addr
+ * @param ord_addr
+ * @param ord_addr_idxes
+ * @param _use_tweak_signer_idxes
+ * @param no_sign_idxes
+ */
 export async function sign(
   unsigned_psbt_hex: string,
   payment_addr: string,

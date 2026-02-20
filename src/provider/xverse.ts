@@ -29,6 +29,9 @@ function getNetworkType() {
   throw new Error('Unknown BTC network type.')
 }
 
+/**
+ *
+ */
 export async function getWallets(): Promise<BISWallet[]> {
   if (!window.XverseProviders?.BitcoinProvider)
     throw new Error('Xverse extension not found.')
@@ -57,6 +60,11 @@ export async function getWallets(): Promise<BISWallet[]> {
   return wallets
 }
 
+/**
+ *
+ * @param message
+ * @param address
+ */
 export async function signMessage(message: string, address: string): Promise<string> {
   if (!window.XverseProviders?.BitcoinProvider)
     throw new Error('Xverse extension not found.')
@@ -70,15 +78,23 @@ export async function signMessage(message: string, address: string): Promise<str
     },
   })
 
-  const response = await window.XverseProviders.BitcoinProvider.signMessage(request).catch((e: any) => {
-    console.error('Failed to sign message.', e)
+  const response = await window.XverseProviders.BitcoinProvider.signMessage(request).catch(
+    (e: any) => {
+      console.error('Failed to sign message.', e)
 
-    throw new Error('Failed to sign message.')
-  })
+      throw new Error('Failed to sign message.')
+    },
+  )
 
   return Buffer.from(response, 'base64').toString('hex')
 }
-export async function signMessageDeterministic(message: string): Promise<{ signature: string, address: string }> {
+/**
+ *
+ * @param message
+ */
+export async function signMessageDeterministic(
+  message: string,
+): Promise<{ signature: string, address: string }> {
   if (!window.XverseProviders?.BitcoinProvider)
     throw new Error('Xverse extension not found.')
 
@@ -96,11 +112,13 @@ export async function signMessageDeterministic(message: string): Promise<{ signa
     },
   })
 
-  const response = await window.XverseProviders.BitcoinProvider.signMessage(request).catch((e: any) => {
-    console.error('Failed to sign message.', e)
+  const response = await window.XverseProviders.BitcoinProvider.signMessage(request).catch(
+    (e: any) => {
+      console.error('Failed to sign message.', e)
 
-    throw new Error('Failed to sign message.')
-  })
+      throw new Error('Failed to sign message.')
+    },
+  )
 
   return {
     signature: Buffer.from(response, 'base64').toString('hex'),
@@ -109,6 +127,11 @@ export async function signMessageDeterministic(message: string): Promise<{ signa
 }
 
 // returns txid
+/**
+ *
+ * @param amountSats
+ * @param toAddress
+ */
 export async function sendBTC(amountSats: string, toAddress: string): Promise<string> {
   if (!window.XverseProviders?.BitcoinProvider)
     throw new Error('Xverse extension not found.')
@@ -125,6 +148,13 @@ export async function sendBTC(amountSats: string, toAddress: string): Promise<st
   return response.result.txid
 }
 
+/**
+ *
+ * @param psbtBase64
+ * @param broadcast
+ * @param inputsToSign
+ * @param message
+ */
 export async function signPSBT(
   psbtBase64: string,
   broadcast: boolean,
@@ -149,6 +179,15 @@ export async function signPSBT(
   return response
 }
 
+/**
+ *
+ * @param unsignedPsbtHex
+ * @param paymentAddr
+ * @param ordAddr
+ * @param ordAddrIndexes
+ * @param _useTweakedSignerIndexes
+ * @param noSignIndexes
+ */
 export async function sign(
   unsignedPsbtHex: string,
   paymentAddr: string,
@@ -168,18 +207,23 @@ export async function sign(
     inscriptionsToSign.push(i)
   }
 
-  const signed = await signPSBT(hexToBase64(unsignedPsbtHex), false, [
-    {
-      address: paymentAddr,
-      signingIndexes: inscriptionsToSign,
-      sigHash: bitcoinjs.Transaction.SIGHASH_DEFAULT,
-    },
-    {
-      address: ordAddr,
-      signingIndexes: ordAddrIndexes,
-      sigHash: bitcoinjs.Transaction.SIGHASH_DEFAULT,
-    },
-  ], 'sign this pls')
+  const signed = await signPSBT(
+    hexToBase64(unsignedPsbtHex),
+    false,
+    [
+      {
+        address: paymentAddr,
+        signingIndexes: inscriptionsToSign,
+        sigHash: bitcoinjs.Transaction.SIGHASH_DEFAULT,
+      },
+      {
+        address: ordAddr,
+        signingIndexes: ordAddrIndexes,
+        sigHash: bitcoinjs.Transaction.SIGHASH_DEFAULT,
+      },
+    ],
+    'sign this pls',
+  )
 
   const signedPsbt = bitcoinjs.Psbt.fromBase64(signed.psbtBase64)
 

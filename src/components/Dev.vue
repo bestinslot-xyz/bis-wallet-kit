@@ -25,40 +25,37 @@ const isConnected = computed(() => !!session.value)
 
 onMounted(async () => {
   // Init once on app mount
-  bis.init()
+  bis.modal.init()
 
   // Force a theme (default is system)
-  bis.setTheme('dark')
+  bis.modal.setTheme('dark')
 
   // Get locally stored wallet info
-  const data = bis.getSession()
+  const data = bis.wallet.getSession()
 
-  if (data)
-    onWalletConnect(data)
+  if (data) onWalletConnect(data)
 
-  //
   testCustomTapscript()
 })
 
 async function onConnectClick() {
-  const data = await bis.connect().catch((e) => {
+  const data = await bis.wallet.connect().catch(e => {
     console.error(e)
     return null
   })
 
   if (data) {
     onWalletConnect(data)
-  }
-  else {
+  } else {
     console.error('Connection failed')
   }
 }
 
-function onWalletConnect(_session: BISSession) {
-  console.log('Connect Data:', _session)
+function onWalletConnect(currentSession: BISSession) {
+  console.log('Session Data:', currentSession)
 
-  const ordinalsWallet = bis.getOrdinalsWallet()
-  const paymentWallet = bis.getPaymentWallet()
+  const ordinalsWallet = bis.wallet.getOrdinalsWallet()
+  const paymentWallet = bis.wallet.getPaymentWallet()
 
   if (!ordinalsWallet || !paymentWallet) {
     console.error('No wallets found')
@@ -67,7 +64,7 @@ function onWalletConnect(_session: BISSession) {
 
   // Set component state
   session.value = {
-    data: _session,
+    data: currentSession,
     wallet: {
       ordinals: ordinalsWallet,
       payment: paymentWallet,
@@ -81,17 +78,16 @@ function onWalletConnect(_session: BISSession) {
 
 function onDisconnectClick() {
   // Disconnect from wallet
-  bis.disconnect()
+  bis.wallet.disconnect()
 
   // Component state
   session.value = undefined
 }
 
 async function getBalance() {
-  if (!session.value)
-    return
+  if (!session.value) return
 
-  session.value.balance = await bis.getCardinalBalance(session.value.wallet.payment.address)
+  session.value.balance = await bis.wallet.getCardinalBalance(session.value.wallet.payment.address)
 }
 
 const networkOpts = [
@@ -108,8 +104,7 @@ function testCustomTapscript() {
 
   if (isOriginal) {
     console.log('❌ Tapscript: Still using original opcode logic (1 → OP_1)')
-  }
-  else {
+  } else {
     console.log('✅ Tapscript: Custom logic confirmed (1 encoded as literal value) ')
   }
 }
@@ -120,25 +115,19 @@ function testCustomTapscript() {
     <div class="mx-auto max-w-4xl border-x border-border border-dashed flex-1 w-full pb-24">
       <!-- DEV -->
       <div class="border-b border-border border-dashed p-2 flex items-center gap-x-4">
-        <img src="/src/assets/dev/chest-dark-bg.png" class="w-12 h-12">
-        <h1 class="text-2xl font-bold">
-          BiS Wallet Kit - DEV
-        </h1>
+        <img src="/src/assets/dev/chest-dark-bg.png" class="w-12 h-12" />
+        <h1 class="text-2xl font-bold">BiS Wallet Kit - DEV</h1>
       </div>
 
       <!-- Guest Functions -->
       <div class="border-b border-border border-dashed p-4 flex gap-x-2">
-        <Button @click="onConnectClick()">
-          Connect Wallet
-        </Button>
+        <Button @click="onConnectClick()"> Connect Wallet </Button>
         <Select v-model="network" :options="networkOpts" />
       </div>
 
       <!-- Session Actions -->
       <div v-if="isConnected" class="border-b border-border border-dashed p-4">
-        <Button @click="onDisconnectClick()">
-          Disconnect
-        </Button>
+        <Button @click="onDisconnectClick()"> Disconnect </Button>
       </div>
 
       <!-- BRC20 -->

@@ -13,14 +13,14 @@ const isConnected = computed(() => !!props.session)
 
 <template>
   <div class="bg-black/20 p-2 overflow-x-auto">
+    <div><span class="font-semibold text-primary">network:</span> {{ network }}</div>
     <div>
-      <span class="font-semibold text-primary">network:</span> {{ network }}
+      <span class="font-semibold text-primary">connected:</span>
+      {{ isConnected ? 'true' : 'false' }}
     </div>
     <div>
-      <span class="font-semibold text-primary">connected:</span> {{ isConnected ? 'true' : 'false' }}
-    </div>
-    <div>
-      <span class="font-semibold text-primary">balance:</span> {{ session ? `${session.balance / 1e8} BTC` : '' }}
+      <span class="font-semibold text-primary">balance:</span>
+      {{ session ? `${session.balance / 1e8} BTC` : '' }}
     </div>
     <div>
       <span class="font-semibold text-primary">session:</span>
