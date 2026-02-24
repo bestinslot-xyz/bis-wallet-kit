@@ -112,6 +112,9 @@ importers:
       tailwindcss:
         specifier: ^4.1.18
         version: 4.1.18
+      ts-morph:
+        specifier: ^27.0.2
+        version: 27.0.2
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -1289,6 +1292,12 @@ packages:
     peerDependencies:
       vite: ^5.2.0 || ^6 || ^7
 
+  '@ts-morph/common@0.28.1':
+    resolution:
+      {
+        integrity: sha512-W74iWf7ILp1ZKNYXY5qbddNaml7e9Sedv5lvU1V8lftlitkc9Pq1A+jlH23ltDgWYeZFFEqGCD1Ies9hqu3O+g==,
+      }
+
   '@types/argparse@1.0.38':
     resolution:
       {
@@ -2157,6 +2166,12 @@ packages:
         integrity: sha512-eYm0QWBtUrBWZWG0d386OGAw16Z995PiOVo2B7bjWSbHedGl5e0ZWaq65kOGgUSNesEIDkB9ISbTg/JK9dhCZA==,
       }
     engines: { node: '>=6' }
+
+  code-block-writer@13.0.3:
+    resolution:
+      {
+        integrity: sha512-Oofo0pq3IKnsFtuHqSF7TqBfr71aeyZDVJ0HpmqB7FBM2qEigL0iPONSCZSO9pE9dZTAxANe5XHG9Uy0YMv8cg==,
+      }
 
   color-convert@2.0.1:
     resolution:
@@ -4772,6 +4787,12 @@ packages:
     peerDependencies:
       typescript: '>=4.0.0'
 
+  ts-morph@27.0.2:
+    resolution:
+      {
+        integrity: sha512-fhUhgeljcrdZ+9DZND1De1029PrE+cMkIP7ooqkLRTrRLTqcki2AstsyJm0vRNbTbVCNJ0idGlbBrfqc7/nA8w==,
+      }
+
   tslib@2.7.0:
     resolution:
       {
@@ -5927,6 +5948,12 @@ snapshots:
       tailwindcss: 4.1.18
       vite: 7.3.0(@types/node@25.0.3)(jiti@2.6.1)(lightningcss@1.30.2)(yaml@2.8.2)
 
+  '@ts-morph/common@0.28.1':
+    dependencies:
+      minimatch: 10.0.3
+      path-browserify: 1.0.1
+      tinyglobby: 0.2.15
+
   '@types/argparse@1.0.38': {}
 
   '@types/debug@4.1.12':
@@ -6531,6 +6558,8 @@ snapshots:
       escape-string-regexp: 1.0.5
 
   clsx@2.1.1: {}
+
+  code-block-writer@13.0.3: {}
 
   color-convert@2.0.1:
     dependencies:
@@ -8313,6 +8342,11 @@ snapshots:
     dependencies:
       picomatch: 4.0.3
       typescript: 5.9.3
+
+  ts-morph@27.0.2:
+    dependencies:
+      '@ts-morph/common': 0.28.1
+      code-block-writer: 13.0.3
 
   tslib@2.7.0: {}
 

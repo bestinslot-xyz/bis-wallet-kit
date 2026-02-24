@@ -15,6 +15,7 @@ export default antfu(
       '**/*.md',
       '**/*.txt',
       '**/*.config.*',
+      'scripts/*',
     ],
     rules: {},
     languageOptions: {

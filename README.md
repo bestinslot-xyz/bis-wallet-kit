@@ -12,7 +12,6 @@ Bitcoin-native dApps and web apps needing simple, multi-wallet support.
 - ✅ Xverse
 - ✅ Leather
 - ✅ Magic Eden
-- 🚧 Orange (coming soon)
 
 ## 🚀 Development & Build
 
