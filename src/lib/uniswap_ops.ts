@@ -302,7 +302,11 @@ async function getReserves(tokenA: string, tokenB: string) {
 const BIG_INT_MIN = (...args: bigint[]) => args.reduce((m, e) => (e < m ? e : m))
 
 async function mint(tokenA: string, tokenB: string, amountA: bigint, amountB: bigint) {
-  const { reserveA: balanceA, reserveB: balanceB, total_supply: totalSupply } = await getReserves(tokenA, tokenB)
+  const {
+    reserveA: balanceA,
+    reserveB: balanceB,
+    total_supply: totalSupply,
+  } = await getReserves(tokenA, tokenB)
   const reserveA = balanceA - amountA
   const reserveB = balanceB - amountB
 
@@ -318,10 +322,7 @@ async function mint(tokenA: string, tokenB: string, amountA: bigint, amountB: bi
     })
   }
   else {
-    liquidity = BIG_INT_MIN(
-      (amountA * totalSupply) / reserveA,
-      (amountB * totalSupply) / reserveB,
-    )
+    liquidity = BIG_INT_MIN((amountA * totalSupply) / reserveA, (amountB * totalSupply) / reserveB)
   }
 
   if (liquidity <= 0n) {
@@ -416,7 +417,11 @@ async function innerAddLiquidity(
 }
 
 async function burn(tokenA: string, tokenB: string, liquidity: bigint) {
-  const { reserveA: balanceA, reserveB: balanceB, total_supply: totalSupply } = await getReserves(tokenA, tokenB)
+  const {
+    reserveA: balanceA,
+    reserveB: balanceB,
+    total_supply: totalSupply,
+  } = await getReserves(tokenA, tokenB)
 
   const amountA = (liquidity * balanceA) / totalSupply
   const amountB = (liquidity * balanceB) / totalSupply
@@ -494,8 +499,10 @@ async function swap(
   const balance0 = (await RESERVES.get(token0, token1)).reserveA
   const balance1 = (await RESERVES.get(token0, token1)).reserveB
 
-  const amount0In = balance0 > reserveAAfter - amount0Out ? balance0 - (reserveAAfter - amount0Out) : 0n
-  const amount1In = balance1 > reserveBAfter - amount1Out ? balance1 - (reserveBAfter - amount1Out) : 0n
+  const amount0In
+    = balance0 > reserveAAfter - amount0Out ? balance0 - (reserveAAfter - amount0Out) : 0n
+  const amount1In
+    = balance1 > reserveBAfter - amount1Out ? balance1 - (reserveBAfter - amount1Out) : 0n
 
   if (amount0In <= 0n && amount1In <= 0n) {
     throw new Error('Insufficient input amount')
@@ -503,7 +510,10 @@ async function swap(
 
   const balance0Adjusted = balance0 * 1000n - amount0In * 3n
   const balance1Adjusted = balance1 * 1000n - amount1In * 3n
-  if (balance0Adjusted * balance1Adjusted < BigInt(reserveAAfter) * BigInt(reserveBAfter) * 1000n * 1000n) {
+  if (
+    balance0Adjusted * balance1Adjusted
+    < BigInt(reserveAAfter) * BigInt(reserveBAfter) * 1000n * 1000n
+  ) {
     throw new Error('K')
   }
 }

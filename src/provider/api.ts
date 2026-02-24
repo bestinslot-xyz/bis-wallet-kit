@@ -56,7 +56,11 @@ export interface BISProvider {
    * @param message The message to be signed as a string. This message will be sent to the provider for signing, and the resulting signature will be returned as a hexadecimal string.
    * @returns A promise that resolves to the signature of the message as a hexadecimal string. This allows developers to use the signature for verification or other purposes. If there is an error in signing the message, the promise will be rejected with a descriptive error message.
    */
-  signMessage: (message: string, walletType: 'ordinals' | 'payment', walletAddress: string) => Promise<string>
+  signMessage: (
+    message: string,
+    walletType: 'ordinals' | 'payment',
+    walletAddress: string,
+  ) => Promise<string>
 
   /**
    * Signs a message using the provider with a deterministic signing method. The signMessageDeterministic method takes a message as a string and returns a promise that resolves to an object containing the signature of the message as a hexadecimal string and the address of the wallet used for signing. This method allows developers to sign messages in a deterministic way, which can be useful for certain applications where the same message should produce the same signature. If there is an error in signing the message, the promise will be rejected with an appropriate error message.
@@ -83,7 +87,12 @@ export interface BISProvider {
    *
    * @returns A promise that resolves to the signed PSBT as a hexadecimal string if broadcast is false, or the transaction ID (txid) of the broadcasted transaction if broadcast is true. This allows developers to use the signed PSBT for further processing or to track the transaction on the blockchain. If there is an error in signing the PSBT or broadcasting it, the promise will be rejected with a descriptive error message.
    */
-  signPSBT: (psbtBase64: string, broadcast: boolean, inputsToSign: any[], message?: string) => Promise<string>
+  signPSBT: (
+    psbtBase64: string,
+    broadcast: boolean,
+    inputsToSign: any[],
+    message?: string,
+  ) => Promise<string>
 
   /**
    * Signs a PSBT (Partially Signed Bitcoin Transaction) with specific handling for inscriptions using the provider. The sign function takes an unsigned PSBT in hexadecimal format, payment and ordinal addresses, indexes for inputs to sign, and optional parameters for tweaking and excluding certain indexes from signing. It constructs the necessary data for signing the PSBT with the provider and returns the signed transaction details, including the transaction ID and signed transaction hex. If the provider is not found or if the signing process fails, the function throws an error with an appropriate message.

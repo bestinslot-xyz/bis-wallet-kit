@@ -43,7 +43,11 @@ async function getWallets(): Promise<BISWallet[]> {
   return wallets
 }
 
-async function signMessage(message: string, _walletType: 'ordinals' | 'payment', address: string): Promise<string> {
+async function signMessage(
+  message: string,
+  _walletType: 'ordinals' | 'payment',
+  address: string,
+): Promise<string> {
   if (!window.magicEden)
     throw new Error('Magic Eden extension not found.')
 

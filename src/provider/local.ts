@@ -380,10 +380,7 @@ async function sign(
  *
  * @throws An error indicating that sending BTC is not supported in the local provider implementation. This is a placeholder function that can be implemented in the future if there is a need for sending BTC directly from the locally stored wallet, but currently it does not provide any functionality for creating or broadcasting transactions.
  */
-export function sendBTC(
-  _amountSats: string,
-  _toAddress: string,
-): Promise<string> {
+function sendBTC(_amountSats: string, _toAddress: string): Promise<string> {
   throw new Error('Send BTC not supported.')
 }
 
