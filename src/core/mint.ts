@@ -1,4 +1,5 @@
 import type { SignFunction, SignResponse } from '../provider/api'
+import type { PaymentOpts } from '../types/common'
 import type { APIOrdinalUtxoInfo } from './helpers'
 import { Buffer } from 'node:buffer'
 import { Buff } from '@cmdcode/buff-utils'
@@ -62,7 +63,6 @@ export class InscriptionDetails {
   /**
    * Creates an instance of InscriptionDetails.
    *
-   * @constructor
    * @param {Buff|null} mimeType - The MIME type of the inscription content, or null if not specified.
    * @param {Buff|null} metadata - Additional metadata associated with the inscription, or null if not specified.
    * @param {Buff|null} metaprotocol - The metaprotocol information for the inscription, or null if not specified.
@@ -509,15 +509,6 @@ export async function getInscribeMultipleFee(
     paymentOpts?.paymentAddress || null,
     paymentOpts?.paymentAmount || null,
   )
-}
-
-/**
- * Payment options for an inscription, the payment address is where the payment for the inscription will be sent,
- * and the payment amount is the amount to be paid for the inscription in satoshis.
- */
-export interface PaymentOpts {
-  paymentAddress: string
-  paymentAmount: number
 }
 
 export interface InscribeMultipleResult {

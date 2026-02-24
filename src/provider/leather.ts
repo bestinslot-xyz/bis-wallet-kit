@@ -1,4 +1,4 @@
-import type { BISWallet } from '../main'
+import type { BISWallet, BISWalletPurpose } from '../main'
 import type { BISProvider, SignResponse } from './api'
 import { Buffer } from 'node:buffer'
 import * as bitcoinjs from 'bitcoinjs-lib'
@@ -36,7 +36,7 @@ async function getWallets(): Promise<BISWallet[]> {
 
 async function signMessage(
   message: string,
-  walletType: 'ordinals' | 'payment' | undefined,
+  walletType: BISWalletPurpose,
 ): Promise<string> {
   // Check if Leather is available
   if (!window.LeatherProvider)

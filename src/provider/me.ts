@@ -1,4 +1,4 @@
-import type { BISWallet } from '../main'
+import type { BISWallet, BISWalletPurpose } from '../main'
 import type { BISProvider, SignResponse } from './api'
 import { Buffer } from 'node:buffer'
 import * as bitcoinjs from 'bitcoinjs-lib'
@@ -45,7 +45,7 @@ async function getWallets(): Promise<BISWallet[]> {
 
 async function signMessage(
   message: string,
-  _walletType: 'ordinals' | 'payment',
+  _walletType: BISWalletPurpose, // not used in Magic Eden since it determines wallet type internally based on address
   address: string,
 ): Promise<string> {
   if (!window.magicEden)

@@ -1,5 +1,5 @@
 import type { UniswapInfoProxy } from '../lib/uniswap_ops'
-import type { SwapWalletInfo } from './store'
+import type { BISSwapWalletInfo } from './store'
 import { Buffer } from 'node:buffer'
 import { Buff } from '@cmdcode/buff-utils'
 import { Script } from '@cmdcode/tapscript'
@@ -174,9 +174,9 @@ function getSwapContractInterface(): ethers.Interface {
 /**
  * Checks IndexedDB for an existing swap wallet associated with the current ordinals wallet address.
  *
- * @returns {Promise<SwapWalletInfo | null>} Resolves with the SwapWalletInfo if found, or null if no wallet is stored for the current ordinals address.
+ * @returns {Promise<BISSwapWalletInfo | null>} Resolves with the SwapWalletInfo if found, or null if no wallet is stored for the current ordinals address.
  */
-export async function getSwapWalletFromDB(): Promise<SwapWalletInfo | null> {
+export async function getSwapWalletFromDB(): Promise<BISSwapWalletInfo | null> {
   const walletInfo = await readSwapWalletInfo(getOrdinalsWallet()?.address || '')
   return walletInfo
 }
@@ -190,9 +190,9 @@ export async function getSwapWalletFromDB(): Promise<SwapWalletInfo | null> {
  * 3. Computing the corresponding BLS public key.
  * 4. Storing the swap wallet information (Bitcoin address, BLS public key, and BLS private key) in IndexedDB for future use.
  *
- * @returns {Promise<SwapWalletInfo>} Resolves with the generated SwapWalletInfo containing the Bitcoin address, BLS public key, and BLS private key.
+ * @returns {Promise<BISSwapWalletInfo>} Resolves with the generated SwapWalletInfo containing the Bitcoin address, BLS public key, and BLS private key.
  */
-export async function generateAndStoreSwapWallet(): Promise<SwapWalletInfo> {
+export async function generateAndStoreSwapWallet(): Promise<BISSwapWalletInfo> {
   // 1. Validate Wallet
   const userOrdinalsWallet = getOrdinalsWallet()
   if (!userOrdinalsWallet?.address) {
@@ -224,7 +224,7 @@ export async function generateAndStoreSwapWallet(): Promise<SwapWalletInfo> {
   const blsPrivKeyHex = `0x${blsPrivKey.toString('hex')}`
 
   // 3. Create Swap Wallet Info and store in DB
-  const swapWalletInfo: SwapWalletInfo = {
+  const swapWalletInfo: BISSwapWalletInfo = {
     bitcoinAddress: userOrdinalsWallet.address,
     swapPubkey: blsPubKeyHex,
     swapPrivkey: blsPrivKeyHex,

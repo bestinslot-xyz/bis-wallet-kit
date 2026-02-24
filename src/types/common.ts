@@ -12,7 +12,7 @@ export interface ConnectCallbacks {
 
 /* Wallet */
 export type BISWalletProvider = 'okx' | 'unisat' | 'xverse' | 'leather' | 'me' | 'local'
-export type BISWalletPurpose = 'ordinals' | 'payment' | 'all' | 'stacks'
+export type BISWalletPurpose = 'ordinals' | 'payment' | 'all'
 
 export interface BISSession {
   provider: BISWalletProvider
@@ -24,4 +24,9 @@ export interface BISWallet {
   address: string
   pubkey: string | null
   purpose: BISWalletPurpose
+}
+
+export interface PaymentOpts {
+  paymentAddress: string
+  paymentAmount: number
 }

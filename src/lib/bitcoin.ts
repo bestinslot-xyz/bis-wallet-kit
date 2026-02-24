@@ -1,6 +1,6 @@
 import * as ecc from '@bitcoinerlab/secp256k1'
 import * as bitcoinjs from 'bitcoinjs-lib'
-import { wallet } from '../main'
+import { getNetwork } from '../core/store-network'
 
 // Initialize ECC once
 bitcoinjs.initEccLib(ecc)
@@ -12,7 +12,7 @@ bitcoinjs.initEccLib(ecc)
  * @returns {bitcoinjs.Network} The Bitcoin network parameters for the current network.
  */
 export function getBitcoinNetwork(): bitcoinjs.Network {
-  const network = wallet.getNetwork()
+  const network = getNetwork()
 
   if (network === 'mainnet')
     return bitcoinjs.networks.bitcoin

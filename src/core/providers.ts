@@ -1,4 +1,4 @@
-import type { BISSession, BISWallet, BISWalletProvider } from '../main'
+import type { BISSession, BISWallet, BISWalletProvider, BISWalletPurpose } from '../main'
 import type { BISProvider, SignFunction } from '../provider/api'
 import { LEATHER } from '../provider/leather'
 import { LOCAL } from '../provider/local'
@@ -53,7 +53,7 @@ export async function getWallets(provider: BISWalletProvider): Promise<BISSessio
   return resp
 }
 
-function getWallet(walletType: 'payment' | 'ordinals' | 'all'): BISWallet | undefined {
+function getWallet(walletType: BISWalletPurpose): BISWallet | undefined {
   const walletInfo = getWalletInfo()
 
   if (!walletInfo) {
@@ -125,7 +125,7 @@ export function getSignFn(provider: BISWalletProvider): SignFunction {
  */
 export async function signMessage(
   message: string,
-  walletType: 'payment' | 'ordinals',
+  walletType: BISWalletPurpose,
 ): Promise<string> {
   const provider = getWalletInfo()?.provider
   let signature: string | undefined
@@ -177,7 +177,7 @@ export async function signMessage(
  */
 export async function signMessageLocalVerify(
   message: string,
-  walletType: 'payment' | 'ordinals',
+  walletType: BISWalletPurpose,
 ): Promise<string> {
   const provider = getWalletInfo()?.provider
   let signature: string | undefined

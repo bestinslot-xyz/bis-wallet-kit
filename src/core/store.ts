@@ -131,7 +131,7 @@ async function loadWalletFromDB(bitcoinAddressToRead: string): Promise<{
   })
 }
 
-export interface SwapWalletInfo {
+export interface BISSwapWalletInfo {
   swapPubkey: string
   swapPrivkey: string
   bitcoinAddress: string
@@ -141,7 +141,7 @@ export interface SwapWalletInfo {
  *
  * @param data The SwapWalletInfo object containing the swap public key, private key, and associated Bitcoin address. The function encrypts the private key using AES-GCM encryption with a randomly generated key and IV, and then stores the encrypted data along with the necessary information for decryption in IndexedDB. This allows for secure storage of sensitive wallet information while still enabling retrieval when needed.
  */
-export async function saveSwapWalletInfo(data: SwapWalletInfo) {
+export async function saveSwapWalletInfo(data: BISSwapWalletInfo) {
   // SSR-SAFU
   if (typeof window === 'undefined') {
     return
@@ -179,7 +179,7 @@ export async function saveSwapWalletInfo(data: SwapWalletInfo) {
  */
 export async function readSwapWalletInfo(
   bitcoinAddressToRead: string,
-): Promise<SwapWalletInfo | null> {
+): Promise<BISSwapWalletInfo | null> {
   // SSR-SAFU
   if (typeof window === 'undefined') {
     return null
