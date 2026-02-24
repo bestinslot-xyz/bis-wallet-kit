@@ -3254,7 +3254,7 @@ function btcAddressToEvmAddress(btcAddr: string): string {
  *
  * @returns A promise that resolves to an object containing the amount withdrawn, represented as a bigint.
  */
-export async function getWithdrawWithdrawToOrdinalWalletResult(
+export async function getWithdrawToOrdinalWalletResult(
   tokenAddress: string,
   ordinalAddress: string,
   amt: bigint,
@@ -3308,7 +3308,7 @@ export async function getWithdrawWithdrawToOrdinalWalletResult(
  *
  * @returns A promise that resolves to an object containing the amount withdrawn, represented as a bigint.
  */
-export async function getWithdrawWithdrawToSelfOrdinalWalletResult(
+export async function getWithdrawToSelfOrdinalWalletResult(
   tokenAddress: string,
   amt: bigint,
 ): Promise<{ amt: bigint }> {
