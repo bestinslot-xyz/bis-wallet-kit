@@ -15,6 +15,9 @@ export * as brc20 from './core/brc20'
 // -------- Mint API --------
 export * as mint from './core/mint'
 
+// -------- Balances API --------
+export * as balances from './core/balances'
+
 // ---- Types ----
 export type { BISSwapWalletInfo as SwapWalletInfo } from './core/store'
 

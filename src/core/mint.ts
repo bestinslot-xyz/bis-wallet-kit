@@ -385,7 +385,7 @@ export interface InscribeFees {
   secret: string
 }
 
-async function checkMintMultipleFeeAll(
+async function getMintMultipleFeeAll(
   inscriptionDetailsArray: InscriptionDetails[],
   feeRate: number,
   postage: number | null,
@@ -455,7 +455,7 @@ export async function getInscribeFee(
   feeRate: number,
   postage: number | null,
 ): Promise<InscribeFees> {
-  return await checkMintMultipleFeeAll([inscriptionDetails], feeRate, postage, null, null)
+  return await getMintMultipleFeeAll([inscriptionDetails], feeRate, postage, null, null)
 }
 
 /**
@@ -502,7 +502,7 @@ export async function getInscribeMultipleFee(
     }
   }
 
-  return await checkMintMultipleFeeAll(
+  return await getMintMultipleFeeAll(
     inscriptionDetailsArray,
     feeRate,
     postage,

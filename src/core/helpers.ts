@@ -624,3 +624,67 @@ export async function getChainTip(): Promise<number> {
     throw new Error('Failed to get chain tip.')
   }
 }
+
+/**
+ * A generic helper function to handle fetch requests with consistent error handling.
+ * It automatically checks for non-ok HTTP responses and for an 'error' field
+ * in the JSON response body, throwing a descriptive error in either case.
+ *
+ * @param url The URL to fetch.
+ * @param options The standard RequestInit options for the fetch call.
+ * @returns A promise that resolves with the parsed JSON data of type T.
+ * @throws {Error} Throws an error if the network request fails, the HTTP
+ * status is not ok, or the response body contains an error field.
+ */
+export async function fetchWithErrors<T>(url: string, options: RequestInit): Promise<T> {
+  try {
+    const response = await fetch(url, options)
+
+    // Handle HTTP errors (e.g., 404, 500)
+    if (!response.ok) {
+      let errorDetails = `HTTP Error: ${response.status} ${response.statusText}`
+      try {
+        // Attempt to get a more specific error message from the response body
+        const errorBody = await response.json()
+        errorDetails = errorBody.error || JSON.stringify(errorBody)
+      }
+      catch {
+        // Body is not JSON or is empty, fall back to the status text
+      }
+      throw new Error(errorDetails)
+    }
+
+    const data = await response.json()
+
+    // Handle API-level errors returned in a 200 OK response
+    if (data && data.error) {
+      throw new Error(String(data.error))
+    }
+
+    return data as T
+  }
+  catch (error) {
+    // Re-throw with a consistent prefix to identify the source of the error
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    throw new Error(`API Request Failed: ${errorMessage}`)
+  }
+}
+
+/**
+ * Constructs the appropriate backend URL for a given API path based on the current network (signet or mainnet). The function checks the current network using the getNetwork function and returns the corresponding URL for the swap backend API. If the network is not supported, it throws an error indicating that the network is unsupported for the orderbook backend URL.
+ *
+ * @param path The specific API path to append to the base URL for the swap backend.
+ * @returns The full URL for the swap backend API corresponding to the current network and the provided path.
+ */
+export function getSwapBackendUrl(path: string): string {
+  const network = getNetwork()
+  if (network === 'signet') {
+    return `https://sas-proxy.bestinslot.xyz/${path}`
+  }
+  else if (network === 'mainnet') {
+    return `https://sa-proxy.bestinslot.xyz/${path}`
+  }
+  else {
+    throw new Error('Unsupported network for orderbook backend URL')
+  }
+}

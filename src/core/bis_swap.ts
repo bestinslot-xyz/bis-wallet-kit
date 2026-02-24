@@ -235,7 +235,7 @@ export async function generateAndStoreSwapWallet(): Promise<BISSwapWalletInfo> {
   return swapWalletInfo
 }
 
-interface CheckSwapStatusResponse {
+interface GetSwapStatusResponse {
   reorg_handler_running: boolean
   emergency_stop: boolean
 }
@@ -244,15 +244,15 @@ interface CheckSwapStatusResponse {
  *
  * This function is useful for the frontend to determine if the swap functionalities are currently operational or if there are any issues with the backend that users should be aware of.
  *
- * @returns {Promise<CheckSwapStatusResponse>} An object containing the status of the reorg handler and emergency stop.
+ * @returns {Promise<GetSwapStatusResponse>} An object containing the status of the reorg handler and emergency stop.
  */
-export async function checkSwapStatus(): Promise<CheckSwapStatusResponse> {
+export async function getSwapStatus(): Promise<GetSwapStatusResponse> {
   // 2. Prepare and execute the API call
   const url = getSwapBackendUrl('status')
 
   // The helper handles the fetch and error checking.
   // We expect the API to return a string or number that can be converted to BigInt.
-  const result = await fetchWithErrors<CheckSwapStatusResponse>(url, {
+  const result = await fetchWithErrors<GetSwapStatusResponse>(url, {
     method: 'GET',
   })
 
@@ -260,7 +260,7 @@ export async function checkSwapStatus(): Promise<CheckSwapStatusResponse> {
   return result
 }
 
-interface CheckSwapAllowanceResponse {
+interface GetSwapAllowanceResponse {
   success: boolean
   result: string
 }
@@ -271,7 +271,7 @@ interface CheckSwapAllowanceResponse {
  *
  * @returns {Promise<bigint>} A promise that resolves to a bigint representing the swap allowance for the specified token address. The allowance is returned as a string from the API and converted to bigint in this function.
  */
-export async function checkSwapAllowance(tokenAddress: string): Promise<bigint> {
+export async function getSwapAllowance(tokenAddress: string): Promise<bigint> {
   // 1. Validate Wallet
   const userOrdinalsWallet = getOrdinalsWallet()
   if (!userOrdinalsWallet?.address) {
@@ -287,7 +287,7 @@ export async function checkSwapAllowance(tokenAddress: string): Promise<bigint> 
 
   // The helper handles the fetch and error checking.
   // We expect the API to return a string or number that can be converted to BigInt.
-  const result = await fetchWithErrors<CheckSwapAllowanceResponse>(url, {
+  const result = await fetchWithErrors<GetSwapAllowanceResponse>(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -332,7 +332,7 @@ async function getSwapInfo(): Promise<SwapInfo> {
   return swapInfoCache
 }
 
-interface CheckBRC20BalanceResponse {
+interface GetBRC20BalanceResponse {
   success: boolean
   result: string
 }
@@ -343,7 +343,7 @@ interface CheckBRC20BalanceResponse {
  * @param tokenAddress The address of the BRC-20 token to check the balance for.
  * @returns {Promise<bigint>} A promise that resolves to a bigint representing the BRC-20 token balance for the current ordinals wallet address. The balance is returned as a string from the API and converted to bigint in this function.
  */
-export async function checkBRC20ProgBalance(tokenAddress: string): Promise<bigint> {
+export async function getBRC20ProgBalance(tokenAddress: string): Promise<bigint> {
   // 1. Validate Wallet
   const userOrdinalsWallet = getOrdinalsWallet()
   if (!userOrdinalsWallet?.address) {
@@ -357,7 +357,7 @@ export async function checkBRC20ProgBalance(tokenAddress: string): Promise<bigin
     token_address: tokenAddress,
   }
 
-  const result = await fetchWithErrors<CheckBRC20BalanceResponse>(url, {
+  const result = await fetchWithErrors<GetBRC20BalanceResponse>(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -369,59 +369,19 @@ export async function checkBRC20ProgBalance(tokenAddress: string): Promise<bigin
   return BigInt(result.result)
 }
 
-export interface BaseBRC20Balance {
+interface BaseBRC20Balance {
   available_balance_in_18_dec: bigint
   transferrable_balance_in_18_dec: bigint
   decimals: number
   ticker: string
 }
 
-interface CheckBaseBRC20BalanceResponse {
+interface GetBaseBRC20BalanceResponse {
   success: boolean
   result: BaseBRC20Balance
 }
 
-/**
- * Checks the base BRC-20 token balance for a given Bitcoin address and token address by making an API call to the swap backend.
- *
- * @param btcAddress The Bitcoin address to check the BRC-20 balance for.
- * @param tokenAddress The address of the BRC-20 token to check the balance for.
- *
- * @returns {Promise<BaseBRC20Balance>} A promise that resolves to an object containing the available balance, transferrable balance, decimals, and ticker for the specified Bitcoin address and BRC-20 token address. The balances are returned as strings from the API and converted to bigint in this function.
- */
-export async function checkBaseBRC20BalanceOfAddress(
-  btcAddress: string,
-  tokenAddress: string,
-): Promise<BaseBRC20Balance> {
-  const url = getSwapBackendUrl('check_base_brc20_balance')
-  const body = {
-    ordinal_address: btcAddress,
-    token_address: tokenAddress,
-  }
-
-  const result = await fetchWithErrors<CheckBaseBRC20BalanceResponse>(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body),
-  })
-
-  return {
-    available_balance_in_18_dec: BigInt(result.result.available_balance_in_18_dec),
-    transferrable_balance_in_18_dec: BigInt(result.result.transferrable_balance_in_18_dec),
-    decimals: result.result.decimals,
-    ticker: result.result.ticker,
-  }
-}
-
-/**
- * Checks the base BRC-20 token balance for the current ordinals wallet address and a given token address by making an API call to the swap backend.
- *
- * @param tokenAddress The address of the BRC-20 token to check the balance for.
- * @returns {Promise<BaseBRC20Balance>} A promise that resolves to an object containing the available balance, transferrable balance, decimals, and ticker for the current ordinals wallet address and specified BRC-20 token address. The balances are returned as strings from the API and converted to bigint in this function.
- */
-export async function checkBaseBRC20Balance(tokenAddress: string): Promise<BaseBRC20Balance> {
+async function getBaseBRC20Balance(tokenAddress: string): Promise<BaseBRC20Balance> {
   // 1. Validate Wallet
   const userOrdinalsWallet = getOrdinalsWallet()
   if (!userOrdinalsWallet?.address) {
@@ -435,7 +395,7 @@ export async function checkBaseBRC20Balance(tokenAddress: string): Promise<BaseB
     token_address: tokenAddress,
   }
 
-  const result = await fetchWithErrors<CheckBaseBRC20BalanceResponse>(url, {
+  const result = await fetchWithErrors<GetBaseBRC20BalanceResponse>(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -452,39 +412,7 @@ export async function checkBaseBRC20Balance(tokenAddress: string): Promise<BaseB
   }
 }
 
-/**
- * Checks the BRC-20 token balance for the payment wallet address and a given token address by making an API call to the swap backend.
- *
- * @param tokenAddress The address of the BRC-20 token to check the balance for.
- * @returns {Promise<bigint>} A promise that resolves to a bigint representing the BRC-20 token balance for the payment wallet address and specified token address. The balance is returned as a string from the API and converted to bigint in this function.
- */
-export async function checkBRC20ProgBalanceOfPaymentWallet(tokenAddress: string): Promise<bigint> {
-  // 1. Validate Wallet
-  const userPaymentWallet = getPaymentWallet()
-  if (!userPaymentWallet?.address) {
-    throw new Error('Payment wallet address not found.')
-  }
-
-  // 2. Prepare and execute the API call
-  const url = getSwapBackendUrl('check_brc20_balance')
-  const body = {
-    ordinal_address: userPaymentWallet.address,
-    token_address: tokenAddress,
-  }
-
-  const result = await fetchWithErrors<CheckBRC20BalanceResponse>(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body),
-  })
-
-  // 3. Convert the result to a BigInt
-  return BigInt(result.result)
-}
-
-export interface CheckSwapBalancesItem {
+export interface SwapBalance {
   token_address: string
   balance: string
   ticker: string
@@ -500,16 +428,16 @@ export interface CheckSwapBalancesItem {
 
 interface GetAllBalancesResponse {
   success: boolean
-  result: CheckSwapBalancesItem[]
+  result: SwapBalance[]
 }
 
 /**
  * Checks the swap balances for all tokens associated with the current ordinals wallet address by making an API call to the swap backend.
  *
  * @param ordinalsAddress The ordinals wallet address to check the swap balances for.
- * @returns {Promise<CheckSwapBalancesItem[]>} A promise that resolves to an array of CheckSwapBalancesItem objects, each containing details about the token address, balance, ticker, decimals, whether it's an LP token, price in sats, and optionally reserve amounts and decimals for LP tokens. The balances are returned as strings from the API and can be converted to bigint if needed.
+ * @returns {Promise<SwapBalance[]>} A promise that resolves to an array of SwapBalance objects, each containing details about the token address, balance, ticker, decimals, whether it's an LP token, price in sats, and optionally reserve amounts and decimals for LP tokens. The balances are returned as strings from the API and can be converted to bigint if needed.
  */
-export async function checkSwapBalances(ordinalsAddress: string): Promise<CheckSwapBalancesItem[]> {
+export async function getSwapBalances(ordinalsAddress: string): Promise<SwapBalance[]> {
   // 2. Prepare and execute the API call
   const url = getSwapBackendUrl('get_all_balances')
   const body = {
@@ -528,7 +456,7 @@ export async function checkSwapBalances(ordinalsAddress: string): Promise<CheckS
   return result.result
 }
 
-interface CheckSwapBalanceResponse {
+interface GetSwapBalanceResponse {
   success: boolean
   result: string
 }
@@ -538,7 +466,7 @@ interface CheckSwapBalanceResponse {
  * @param tokenAddress The address of the token to check the swap balance for.
  * @returns {Promise<bigint>} A promise that resolves to a bigint representing the swap balance for the specified token address and current ordinals wallet address. The balance is returned as a string from the API and converted to bigint in this function.
  */
-export async function checkSwapBalance(tokenAddress: string): Promise<bigint> {
+export async function getSwapBalance(tokenAddress: string): Promise<bigint> {
   // 1. Validate Wallet
   const swapWallet = await getSwapWalletFromDB()
   if (!swapWallet?.swapPubkey) {
@@ -553,7 +481,7 @@ export async function checkSwapBalance(tokenAddress: string): Promise<bigint> {
     token_addr: tokenAddress,
   }
 
-  const result = await fetchWithErrors<CheckSwapBalanceResponse>(url, {
+  const result = await fetchWithErrors<GetSwapBalanceResponse>(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -564,7 +492,7 @@ export async function checkSwapBalance(tokenAddress: string): Promise<bigint> {
   // 3. Convert the result to a BigInt
   return BigInt(result.result)
 }
-async function checkSwapBalanceOf(pubkey: string, tokenAddress: string): Promise<bigint> {
+async function getSwapBalanceOf(pubkey: string, tokenAddress: string): Promise<bigint> {
   // 2. Prepare and execute the API call
   const url = getSwapBackendUrl('get_balance')
   const body = {
@@ -572,7 +500,7 @@ async function checkSwapBalanceOf(pubkey: string, tokenAddress: string): Promise
     token_addr: tokenAddress,
   }
 
-  const result = await fetchWithErrors<CheckSwapBalanceResponse>(url, {
+  const result = await fetchWithErrors<GetSwapBalanceResponse>(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -599,7 +527,7 @@ interface GetPairReservesResponse {
  * @param pairAddress The address of the token pair to check the reserves for.
  * @returns {Promise<PairReserves>} A promise that resolves to an object containing the reserves of token A, token B, and the total supply of liquidity tokens for the specified pair address. The reserves and total supply are returned as strings from the API and converted to bigint in this function.
  */
-export async function checkPairReserves(pairAddress: string): Promise<PairReserves> {
+export async function getPairReserves(pairAddress: string): Promise<PairReserves> {
   // 2. Prepare and execute the API call
   const url = getSwapBackendUrl('get_pair_reserves')
   const body = {
@@ -1158,9 +1086,9 @@ export async function createAndBroadcastDepositOrder(
   let useBaseAvailableBalanceAmount = 0n
   let baseTokenDecimals = 0
   let baseTokenTicker = ''
-  const currentTokenAmount = await checkBRC20ProgBalance(tokenAddress)
+  const currentTokenAmount = await getBRC20ProgBalance(tokenAddress)
   if (currentTokenAmount < tokenAmount) {
-    const currentBaseAvailableTokenInfo = await checkBaseBRC20Balance(tokenAddress)
+    const currentBaseAvailableTokenInfo = await getBaseBRC20Balance(tokenAddress)
     const currentBaseAvailableTokenAmount
       = currentBaseAvailableTokenInfo.available_balance_in_18_dec
     baseTokenDecimals = currentBaseAvailableTokenInfo.decimals
@@ -1174,7 +1102,7 @@ export async function createAndBroadcastDepositOrder(
     }
   }
 
-  const currentAllowance = await checkSwapAllowance(tokenAddress)
+  const currentAllowance = await getSwapAllowance(tokenAddress)
   let needsAllowance = false
   if (
     currentAllowance < BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')
@@ -1578,7 +1506,7 @@ export async function createAndBroadcastDepositOrder(
  * - deposit_fees_total: The total miner fees for creating and sending the deposit inscription to OP_RETURN.
  * - fee_rate: The fee rate used for the calculations, in sats/vbyte.
  */
-export async function checkMinerFeesOfDepositOrder(
+export async function getMinerFeesOfDepositOrder(
   tokenAddress: string,
   tokenAmount: bigint,
   feeRate: number,
@@ -1613,9 +1541,9 @@ export async function checkMinerFeesOfDepositOrder(
   let useBaseAvailableBalanceAmt = 0n
   let baseTokenDecimals = 0
   let baseTokenTicker = ''
-  const currentTokenAmount = await checkBRC20ProgBalance(tokenAddress)
+  const currentTokenAmount = await getBRC20ProgBalance(tokenAddress)
   if (currentTokenAmount < tokenAmount) {
-    const currentBaseAvailableTokenInfo = await checkBaseBRC20Balance(tokenAddress)
+    const currentBaseAvailableTokenInfo = await getBaseBRC20Balance(tokenAddress)
     const currentBaseAvailableTokenAmount
       = currentBaseAvailableTokenInfo.available_balance_in_18_dec
     baseTokenDecimals = currentBaseAvailableTokenInfo.decimals
@@ -1629,7 +1557,7 @@ export async function checkMinerFeesOfDepositOrder(
     }
   }
 
-  const currentAllowance = await checkSwapAllowance(tokenAddress)
+  const currentAllowance = await getSwapAllowance(tokenAddress)
   let needsAllowance = false
   if (
     currentAllowance < BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')
@@ -2191,7 +2119,7 @@ export async function createAndBroadcastWrapOrder(
  *
  * @returns A promise that resolves to an object containing the total miner fees for creating and sending the inscriptions related to the wrap order, as well as the fee rate used for the calculations.
  */
-export async function checkMinerFeesOfWrapOrder(
+export async function getMinerFeesOfWrapOrder(
   btcAmount: bigint,
   feeRate: number,
 ): Promise<{ total_fee: number, fee_rate: number }> {
@@ -2342,8 +2270,8 @@ export async function getAddLiquidityResult(
   }
 
   const proxy: UniswapInfoProxy = {
-    balanceOf: checkSwapBalanceOf,
-    reservesOf: checkPairReserves,
+    balanceOf: getSwapBalanceOf,
+    reservesOf: getPairReserves,
   }
 
   const btcFee = await requestMinerFee('add_liquidity')
@@ -2596,8 +2524,8 @@ export async function getRemoveLiquidityResult(
   }
 
   const proxy: UniswapInfoProxy = {
-    balanceOf: checkSwapBalanceOf,
-    reservesOf: checkPairReserves,
+    balanceOf: getSwapBalanceOf,
+    reservesOf: getPairReserves,
   }
 
   const btcFee = await requestMinerFee('remove_liquidity')
@@ -2864,8 +2792,8 @@ export async function getSwapResult(
   }
 
   const proxy: UniswapInfoProxy = {
-    balanceOf: checkSwapBalanceOf,
-    reservesOf: checkPairReserves,
+    balanceOf: getSwapBalanceOf,
+    reservesOf: getPairReserves,
   }
 
   const btcFee = await requestMinerFee('swap')
@@ -3099,8 +3027,8 @@ export async function getSwap2Result(
   }
 
   const proxy: UniswapInfoProxy = {
-    balanceOf: checkSwapBalanceOf,
-    reservesOf: checkPairReserves,
+    balanceOf: getSwapBalanceOf,
+    reservesOf: getPairReserves,
   }
 
   const btcFee = await requestMinerFee('swap')
@@ -3343,8 +3271,8 @@ export async function getWithdrawWithdrawToOrdinalWalletResult(
   const targetAddress = btcAddressToEvmAddress(targetBtcAddr)
 
   const proxy: UniswapInfoProxy = {
-    balanceOf: checkSwapBalanceOf,
-    reservesOf: checkPairReserves,
+    balanceOf: getSwapBalanceOf,
+    reservesOf: getPairReserves,
   }
 
   const btcFee = await requestMinerFee('withdraw')
@@ -3402,8 +3330,8 @@ export async function getWithdrawWithdrawToSelfOrdinalWalletResult(
   const targetAddress = btcAddressToEvmAddress(targetBtcAddr)
 
   const proxy: UniswapInfoProxy = {
-    balanceOf: checkSwapBalanceOf,
-    reservesOf: checkPairReserves,
+    balanceOf: getSwapBalanceOf,
+    reservesOf: getPairReserves,
   }
 
   const btcFee = await requestMinerFee('withdraw')
@@ -3661,8 +3589,8 @@ export async function getUnwrapResult(pkscript: string, amt: bigint): Promise<{ 
   }
 
   const proxy: UniswapInfoProxy = {
-    balanceOf: checkSwapBalanceOf,
-    reservesOf: checkPairReserves,
+    balanceOf: getSwapBalanceOf,
+    reservesOf: getPairReserves,
   }
 
   const btcFee = await requestMinerFee('unwrap')
