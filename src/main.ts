@@ -33,6 +33,10 @@ export type {
   ModalTheme,
 } from './types/common'
 
+// ---- Re-exports ----
+export * as bitcoinjs from 'bitcoinjs-lib'
+export * as Buff from '@cmdcode/buff-utils'
+
 // Set up dev mode
 if (import.meta.env.DEV) {
   // Mount Vue
