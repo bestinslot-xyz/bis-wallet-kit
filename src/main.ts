@@ -15,14 +15,14 @@ import {
 import { checkBaseBRC20Balance, checkSwapBalance } from './core/bis_swap'
 
 import {
-  call_smart_contract as callSmartContract,
-  call_smart_contract_abi as callSmartContractAbi,
-  call_smart_contract_abi_from_payment_wallet as callSmartContractAbiFromPaymentWallet,
+  callSmartContract,
+  callSmartContractAbi,
+  callSmartContractAbiFromPaymentWallet,
   deploySmartContract,
-  deploy_smart_contract_abi as deploySmartContractAbi,
-  deposit_to_brc20_prog as depositToBrc20Prog,
+  deploySmartContractAbi,
+  depositToBrc20Prog,
   getEvmAddressFromBitcoinAddress as getEvmAddressFromBtcAddress,
-  withdraw_from_brc20_prog as withdrawFromBrc20Prog,
+  withdrawFromBrc20Prog,
 } from './core/brc20'
 
 import {
@@ -35,9 +35,7 @@ import {
   textInscription,
 } from './core/mint'
 
-import {
-  modal as modalInner,
-} from './core/modal'
+import { modal as modalInner } from './core/modal'
 
 import { saveWallet } from './provider/local'
 

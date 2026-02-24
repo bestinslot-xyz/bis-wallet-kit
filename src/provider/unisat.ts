@@ -1,5 +1,5 @@
-import type { SignResponse } from '../core/providers'
 import type { BISWallet } from '../main'
+import type { BISProvider, SignResponse } from './api'
 import { Buffer } from 'node:buffer'
 import * as bitcoinjs from 'bitcoinjs-lib'
 import { getNetwork } from '../core/bis'
@@ -12,10 +12,7 @@ function isInstalled() {
   return typeof window.unisat !== 'undefined'
 }
 
-/**
- *
- */
-export async function checkNetwork() {
+async function checkNetwork() {
   // Check UniSat extension
   if (!window.unisat)
     throw new Error('UniSat not found.')
@@ -31,10 +28,7 @@ export async function checkNetwork() {
     await window.unisat.switchNetwork('testnet')
 }
 
-/**
- *
- */
-export async function getWallets(): Promise<BISWallet[]> {
+async function getWallets(): Promise<BISWallet[]> {
   // Check extension and network
   await checkNetwork()
 
@@ -55,11 +49,7 @@ export async function getWallets(): Promise<BISWallet[]> {
   return wallets
 }
 
-/**
- *
- * @param message
- */
-export async function signMessage(message: string): Promise<string> {
+async function signMessage(message: string): Promise<string> {
   // Check extension and network
   await checkNetwork()
 
@@ -75,11 +65,8 @@ export async function signMessage(message: string): Promise<string> {
     throw new Error('Failed to sign message.')
   }
 }
-/**
- *
- * @param message
- */
-export async function signMessageDeterministic(
+
+async function signMessageDeterministic(
   message: string,
 ): Promise<{ signature: string, address: string }> {
   // Check extension and network
@@ -106,13 +93,7 @@ export async function signMessageDeterministic(
   }
 }
 
-// returns txid
-/**
- *
- * @param amountSats
- * @param toAddress
- */
-export async function sendBTC(amountSats: string, toAddress: string): Promise<string> {
+async function sendBTC(amountSats: string, toAddress: string): Promise<string> {
   // Check extension and network
   await checkNetwork()
 
@@ -129,13 +110,7 @@ export async function sendBTC(amountSats: string, toAddress: string): Promise<st
   }
 }
 
-/**
- *
- * @param psbtBase64
- * @param broadcast
- * @param inputsToSign
- */
-export async function signPSBT(psbtBase64: string, broadcast: boolean, inputsToSign: any[]) {
+async function signPSBT(psbtBase64: string, broadcast: boolean, inputsToSign: any[]) {
   // Check extension and network
   await checkNetwork()
 
@@ -173,73 +148,64 @@ export async function signPSBT(psbtBase64: string, broadcast: boolean, inputsToS
   return signedPsbt
 }
 
-/**
- *
- * @param unsigned_psbt_hex
- * @param payment_addr
- * @param ord_addr
- * @param ord_addr_idxes
- * @param use_tweak_signer_idxes
- * @param no_sign_idxes
- */
-export async function sign(
-  unsigned_psbt_hex: string,
-  payment_addr: string,
-  ord_addr: string,
-  ord_addr_idxes: number[],
-  use_tweak_signer_idxes?: number[],
-  no_sign_idxes?: number[],
+async function sign(
+  unsignedPsbtHex: string,
+  paymentAddr: string,
+  ordAddr: string,
+  ordAddrIdxes: number[],
+  useTweakSignerIdxes?: number[],
+  noSignIdxes?: number[],
 ): Promise<SignResponse> {
   let signed = null
-  if (!payment_addr) {
-    signed = await signPSBT(hexToBase64(unsigned_psbt_hex), false, [])
+  if (!paymentAddr) {
+    signed = await signPSBT(hexToBase64(unsignedPsbtHex), false, [])
   }
   else {
-    const psbt = bitcoinjs.Psbt.fromHex(unsigned_psbt_hex)
-    const ins_to_sign = []
-    const use_tweak_signer_payment = []
-    const use_tweak_signer_ord = []
+    const psbt = bitcoinjs.Psbt.fromHex(unsignedPsbtHex)
+    const insToSign = []
+    const useTweakSignerPayment = []
+    const useTweakSignerOrd = []
     for (let i = 0; i < psbt.inputCount; i++) {
-      if (no_sign_idxes && no_sign_idxes.includes(i))
+      if (noSignIdxes && noSignIdxes.includes(i))
         continue
-      if (ord_addr_idxes.includes(i)) {
-        if (use_tweak_signer_idxes && use_tweak_signer_idxes.includes(i)) {
-          use_tweak_signer_ord.push(true)
+      if (ordAddrIdxes.includes(i)) {
+        if (useTweakSignerIdxes && useTweakSignerIdxes.includes(i)) {
+          useTweakSignerOrd.push(true)
         }
-        else if (use_tweak_signer_idxes) {
-          use_tweak_signer_ord.push(false)
+        else if (useTweakSignerIdxes) {
+          useTweakSignerOrd.push(false)
         }
         continue
       }
-      ins_to_sign.push(i)
-      if (use_tweak_signer_idxes && use_tweak_signer_idxes.includes(i)) {
-        use_tweak_signer_payment.push(true)
+      insToSign.push(i)
+      if (useTweakSignerIdxes && useTweakSignerIdxes.includes(i)) {
+        useTweakSignerPayment.push(true)
       }
-      else if (use_tweak_signer_idxes) {
-        use_tweak_signer_payment.push(false)
+      else if (useTweakSignerIdxes) {
+        useTweakSignerPayment.push(false)
       }
     }
-    signed = await signPSBT(hexToBase64(unsigned_psbt_hex), false, [
+    signed = await signPSBT(hexToBase64(unsignedPsbtHex), false, [
       {
-        address: payment_addr,
-        signingIndexes: ins_to_sign,
-        useTweakedSigner: use_tweak_signer_payment,
+        address: paymentAddr,
+        signingIndexes: insToSign,
+        useTweakedSigner: useTweakSignerPayment,
       },
       {
-        address: ord_addr,
-        signingIndexes: ord_addr_idxes,
-        useTweakedSigner: use_tweak_signer_ord,
+        address: ordAddr,
+        signingIndexes: ordAddrIdxes,
+        useTweakedSigner: useTweakSignerOrd,
       },
     ])
   }
 
-  const signed_psbt = bitcoinjs.Psbt.fromHex(signed)
+  const signedPsbt = bitcoinjs.Psbt.fromHex(signed)
 
   try {
-    for (let i = 0; i < signed_psbt.inputCount; i++) {
-      if (no_sign_idxes && no_sign_idxes.includes(i))
+    for (let i = 0; i < signedPsbt.inputCount; i++) {
+      if (noSignIdxes && noSignIdxes.includes(i))
         continue
-      signed_psbt.finalizeInput(i)
+      signedPsbt.finalizeInput(i)
     }
   }
   catch (e) {
@@ -247,11 +213,21 @@ export async function sign(
     console.error(e)
   }
 
-  const signed_tx = signed_psbt.extractTransaction()
-  const signed_tx_hex = signed_tx.toHex()
+  const signedTx = signedPsbt.extractTransaction()
+  const signedTxHex = signedTx.toHex()
 
   return {
-    txid: signed_tx.getId(),
-    signed_tx_hex,
+    txId: signedTx.getId(),
+    signedPsbtHex: signedTxHex,
   }
+}
+
+export const UNISAT: BISProvider = {
+  checkNetwork,
+  getWallets,
+  signMessage,
+  signMessageDeterministic,
+  sendBTC,
+  signPSBT,
+  sign,
 }

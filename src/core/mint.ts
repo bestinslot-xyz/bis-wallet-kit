@@ -1,5 +1,5 @@
+import type { SignFunction, SignResponse } from '../provider/api'
 import type { APIOrdinalUtxoInfo } from './helpers'
-import type { SignFunction, SignResponse } from './providers'
 import { Buffer } from 'node:buffer'
 import { Buff } from '@cmdcode/buff-utils'
 import {
@@ -10,11 +10,11 @@ import { Address, Script, Signer, Tap, Tx } from '@cmdcode/tapscript'
 import * as bitcoinjs from 'bitcoinjs-lib'
 import { getBitcoinNetwork } from '../lib/bitcoin'
 import {
-  broadcast_txes,
+  broadcastTxes,
   clearExtraUtxos,
-  get_ordinal_utxos,
-  get_txhex,
   getCardinalUtxos,
+  getOrdinalUtxos,
+  getTxhex,
   saveExtraUtxos,
   txHexByIdCache,
   validateTxes,
@@ -372,7 +372,7 @@ function calculateAdditionalFee(scriptType: string, feeRate: number): number {
   return 0
 }
 
-const toXOnly = (pubKey: Buffer) => (pubKey.length === 32 ? pubKey : pubKey.slice(1, 33))
+const TO_X_ONLY = (pubKey: Buffer) => (pubKey.length === 32 ? pubKey : pubKey.slice(1, 33))
 
 /**
  * Inscribe fees for a single inscription, including total fee, commit fee, reveal fee, postage, and secret.
@@ -421,7 +421,7 @@ async function checkMintMultipleFeeAll(
   }
 
   const secret = createSecretToken()
-  const commitTx = await build_commit_tx_multiple(
+  const commitTx = await buildCommitTxMultiple(
     payerWallet,
     inscriptionWallet,
     secret,
@@ -730,7 +730,7 @@ async function mintMultipleAll(
   }
 
   const secret = createSecretToken()
-  const commitTx = await build_commit_tx_multiple(
+  const commitTx = await buildCommitTxMultiple(
     payerWallet,
     inscriptionWallet,
     secret,
@@ -746,7 +746,7 @@ async function mintMultipleAll(
     inscriptionAddress,
     [],
   )
-  const commitTxId = signedCommitTx.txid
+  const commitTxId = signedCommitTx.txId
   const revealTx = await buildRevealTxMultiple(
     inscriptionWallet,
     commitTxId,
@@ -757,7 +757,7 @@ async function mintMultipleAll(
     paymentWallet,
     payment,
   )
-  const isValid = await validateTxes([signedCommitTx.signed_tx_hex, revealTx.signed_reveal_tx_hex])
+  const isValid = await validateTxes([signedCommitTx.signedPsbtHex, revealTx.signed_reveal_tx_hex])
 
   for (const entry of isValid) {
     if (!entry.allowed) {
@@ -772,8 +772,8 @@ async function mintMultipleAll(
 
   if (dryRun) {
     return {
-      commitTxId: signedCommitTx.txid,
-      signedCommitTxHex: signedCommitTx.signed_tx_hex,
+      commitTxId: signedCommitTx.txId,
+      signedCommitTxHex: signedCommitTx.signedPsbtHex,
       revealTxId: revealTx.txid,
       signedRevealTxHex: revealTx.signed_reveal_tx_hex,
       inscriptionIds,
@@ -782,11 +782,11 @@ async function mintMultipleAll(
     }
   }
 
-  await broadcast_txes([signedCommitTx.signed_tx_hex, revealTx.signed_reveal_tx_hex])
+  await broadcastTxes([signedCommitTx.signedPsbtHex, revealTx.signed_reveal_tx_hex])
 
   return {
-    commitTxId: signedCommitTx.txid,
-    signedCommitTxHex: signedCommitTx.signed_tx_hex,
+    commitTxId: signedCommitTx.txId,
+    signedCommitTxHex: signedCommitTx.signedPsbtHex,
     revealTxId: revealTx.txid,
     signedRevealTxHex: revealTx.signed_reveal_tx_hex,
     inscriptionIds,
@@ -1259,38 +1259,38 @@ interface TransactionInOuts {
 async function buildPsbtFromTx(
   tx: TransactionInOuts,
   cardinalUtxos: UtxoInfo[],
-  payer_wallet: WalletInfo,
-  force_in_utxos: UtxoInfoWithWallet[],
+  payerWallet: WalletInfo,
+  forceInUtxos: UtxoInfoWithWallet[],
 ): Promise<bitcoinjs.Psbt> {
-  const network_type = getBitcoinNetwork()
+  const networkType = getBitcoinNetwork()
 
-  const res_psbt = new bitcoinjs.Psbt({ network: network_type })
+  const resPsbt = new bitcoinjs.Psbt({ network: networkType })
 
-  const will_be_added_sigs: { idx: number, signature: Buffer }[] = []
+  const willBeAddedSigs: { idx: number, signature: Buffer }[] = []
   for (const input of tx.ins) {
     // get corresponding cardinal utxo
     const utxo = `${input.hash.toString('hex')}:${input.index}`
-    let utxo_obj = null
-    let signer_wallet = payer_wallet
+    let utxoObj = null
+    let signerWallet = payerWallet
     for (const cardinalUtxoObj of cardinalUtxos) {
       if (cardinalUtxoObj.utxo === utxo) {
-        utxo_obj = cardinalUtxoObj
+        utxoObj = cardinalUtxoObj
         break
       }
     }
-    if (utxo_obj == null && force_in_utxos) {
-      for (const forcedInUtxoObj of force_in_utxos) {
+    if (utxoObj == null && forceInUtxos) {
+      for (const forcedInUtxoObj of forceInUtxos) {
         if (forcedInUtxoObj.utxo === utxo) {
-          utxo_obj = forcedInUtxoObj
-          signer_wallet = forcedInUtxoObj.wallet
+          utxoObj = forcedInUtxoObj
+          signerWallet = forcedInUtxoObj.wallet
           break
         }
       }
     }
-    if (utxo_obj == null)
+    if (utxoObj == null)
       throw new Error('Cannot find utxo in cardinal_utxos')
 
-    const txhex = await get_txhex(input.hash.toString('hex'))
+    const txhex = await getTxhex(input.hash.toString('hex'))
     const tx = bitcoinjs.Transaction.fromHex(txhex)
     for (const output in tx.outs) {
       // TODO: what tf this is doing man?!?
@@ -1300,13 +1300,13 @@ async function buildPsbtFromTx(
       catch {}
     }
 
-    if (utxo_obj.script_type === 'pubkeyhash') {
+    if (utxoObj.script_type === 'pubkeyhash') {
       // P2PKH
-      if (signer_wallet.publicKey == null) {
+      if (signerWallet.publicKey == null) {
         throw new Error('publicKey is null on p2pkh input')
       }
 
-      res_psbt.addInput({
+      resPsbt.addInput({
         hash: input.hash.toString('hex'),
         index: input.index,
         sequence: ENABLE_RBF_NO_LOCKTIME,
@@ -1314,88 +1314,88 @@ async function buildPsbtFromTx(
         nonWitnessUtxo: tx.toBuffer(),
       })
     }
-    else if (utxo_obj.script_type === 'scripthash') {
+    else if (utxoObj.script_type === 'scripthash') {
       // P2SH
-      if (signer_wallet.getRedeemScript() == null) {
+      if (signerWallet.getRedeemScript() == null) {
         throw new Error('Redeem script is null on p2sh input')
       }
 
-      res_psbt.addInput({
+      resPsbt.addInput({
         hash: input.hash.toString('hex'),
         index: input.index,
         sequence: ENABLE_RBF_NO_LOCKTIME,
         // witnessUtxo: tx.outs[input.index],
         nonWitnessUtxo: tx.toBuffer(),
-        redeemScript: signer_wallet.getRedeemScript(),
+        redeemScript: signerWallet.getRedeemScript(),
       })
     }
-    else if (utxo_obj.script_type === 'witness_v0_keyhash') {
+    else if (utxoObj.script_type === 'witness_v0_keyhash') {
       // P2WPKH
-      if (signer_wallet.publicKey == null) {
+      if (signerWallet.publicKey == null) {
         throw new Error('publicKey is null on p2wpkh input')
       }
 
-      res_psbt.addInput({
+      resPsbt.addInput({
         hash: input.hash.toString('hex'),
         index: input.index,
         sequence: ENABLE_RBF_NO_LOCKTIME,
         witnessUtxo: tx.outs[input.index],
       })
     }
-    else if (utxo_obj.script_type === 'witness_v0_scripthash') {
+    else if (utxoObj.script_type === 'witness_v0_scripthash') {
       // P2WSH
-      if (signer_wallet.getRedeemScript() == null) {
+      if (signerWallet.getRedeemScript() == null) {
         throw new Error('Redeem script is null on p2wsh input')
       }
 
-      res_psbt.addInput({
+      resPsbt.addInput({
         hash: input.hash.toString('hex'),
         index: input.index,
         sequence: ENABLE_RBF_NO_LOCKTIME,
         witnessUtxo: tx.outs[input.index],
-        witnessScript: signer_wallet.getRedeemScript(), // TODO: is this correct??
+        witnessScript: signerWallet.getRedeemScript(), // TODO: is this correct??
       })
     }
-    else if (utxo_obj.script_type === 'witness_v1_taproot') {
+    else if (utxoObj.script_type === 'witness_v1_taproot') {
       // P2TR
       const witnessUtxo = tx.outs[input.index]
-      if (utxo_obj.witnessUtxoScript != null) {
-        witnessUtxo!.script = utxo_obj.witnessUtxoScript
+      if (utxoObj.witnessUtxoScript != null) {
+        witnessUtxo!.script = utxoObj.witnessUtxoScript
       }
 
       let sequence = ENABLE_RBF_NO_LOCKTIME
-      if (utxo_obj.sequence != null) {
-        sequence = utxo_obj.sequence
+      if (utxoObj.sequence != null) {
+        sequence = utxoObj.sequence
       }
 
-      if (!signer_wallet.publicKey)
+      if (!signerWallet.publicKey)
         throw new Error('publicKey is null on p2tr input')
 
-      if (utxo_obj.tapLeafScript == null) {
+      if (utxoObj.tapLeafScript == null) {
         // only add tapInternalKey if its key spend path
-        res_psbt.addInput({
+        resPsbt.addInput({
           hash: input.hash.toString('hex'),
           index: input.index,
           sequence,
           witnessUtxo,
-          tapInternalKey: toXOnly(Buffer.from(signer_wallet.publicKey, 'hex')),
+          tapInternalKey: TO_X_ONLY(Buffer.from(signerWallet.publicKey, 'hex')),
         })
       }
       else {
-        res_psbt.addInput({
+        resPsbt.addInput({
           hash: input.hash.toString('hex'),
           index: input.index,
           sequence,
           witnessUtxo,
-          tapLeafScript: utxo_obj.tapLeafScript,
+          tapLeafScript: utxoObj.tapLeafScript,
           // tapInternalKey: toXOnly(__Buffer.from(signer_wallet.publicKey, 'hex')),
           // NOTE: XVerse only works with no tapInternalKey!!
         })
 
-        if (utxo_obj.finalScriptWitness != null) {
-          will_be_added_sigs.push({
-            idx: res_psbt.inputCount - 1,
-            signature: utxo_obj.finalScriptWitness,
+        if (utxoObj.finalScriptWitness != null) {
+          willBeAddedSigs.push({
+            idx: resPsbt.inputCount - 1,
+            signature: utxoObj.finalScriptWitness,
           })
         }
       }
@@ -1406,14 +1406,14 @@ async function buildPsbtFromTx(
   }
 
   for (const output of tx.outs) {
-    res_psbt.addOutput(output)
+    resPsbt.addOutput(output)
   }
 
-  for (const sig of will_be_added_sigs) {
-    res_psbt.updateInput(sig.idx, { finalScriptWitness: sig.signature })
+  for (const sig of willBeAddedSigs) {
+    resPsbt.updateInput(sig.idx, { finalScriptWitness: sig.signature })
   }
 
-  return res_psbt
+  return resPsbt
 }
 
 interface BuildCommitTxResult {
@@ -1423,57 +1423,57 @@ interface BuildCommitTxResult {
   commit_fee: number
   reveal_fee: number
 }
-async function build_commit_tx(
-  payer_wallet: WalletInfo,
-  inscription_wallet: WalletInfo,
+async function buildCommitTx(
+  payerWallet: WalletInfo,
+  inscriptionWallet: WalletInfo,
   secret: string,
-  inscription_details: InscriptionDetails,
-  fee_rate: number,
+  inscriptionDetails: InscriptionDetails,
+  feeRate: number,
   postage: number,
-  payment_wallet: WalletInfo | null,
+  paymentWallet: WalletInfo | null,
   payment: number | null,
-  force_in_utxos: UtxoInfoWithWallet[],
+  forceInUtxos: UtxoInfoWithWallet[],
 ): Promise<BuildCommitTxResult> {
   if (payment == null || payment < 0)
     payment = 0
-  const change_wallet = payer_wallet
+  const changeWallet = payerWallet
 
-  if (!payer_wallet.addr)
+  if (!payerWallet.addr)
     throw new Error('Payer wallet address is not set.')
 
-  const cardinal_utxos = await getCardinalUtxos(payer_wallet.addr)
+  const cardinalUtxos = await getCardinalUtxos(payerWallet.addr)
 
   const seckey = get_seckey(secret)
   const pubkey = get_pubkey(seckey, true)
 
-  const script = buildRevealScript(pubkey, inscription_details)
+  const script = buildRevealScript(pubkey, inscriptionDetails)
   const tapleaf = Tap.encodeScript(script)
 
   const [tpubkey, cblock] = Tap.getPubKey(pubkey, { target: tapleaf })
 
-  const network_type = getBitcoinNetwork()
+  const networkType = getBitcoinNetwork()
 
-  const commit_tx_address = bitcoinjs.payments.p2tr({
+  const commitTxAddress = bitcoinjs.payments.p2tr({
     pubkey: Buffer.from(tpubkey, 'hex'),
-    network: network_type,
+    network: networkType,
   })
 
-  const dummy_reveal_vout = [
+  const dummyRevealVout = [
     {
       value: 0,
-      scriptPubKey: inscription_wallet.outputScript,
+      scriptPubKey: inscriptionWallet.outputScript,
     },
   ]
   if (payment > 0) {
-    if (!payment_wallet)
+    if (!paymentWallet)
       throw new Error('Payment wallet is not available.')
 
-    dummy_reveal_vout.push({
+    dummyRevealVout.push({
       value: 0,
-      scriptPubKey: payment_wallet.outputScript,
+      scriptPubKey: paymentWallet.outputScript,
     })
   }
-  const dummy_reveal_tx = Tx.create({
+  const dummyRevealTx = Tx.create({
     vin: [
       {
         // Use the txid of the funding transaction used to send the sats.
@@ -1489,9 +1489,9 @@ async function build_commit_tx(
         },
       },
     ],
-    vout: dummy_reveal_vout,
+    vout: dummyRevealVout,
   })
-  dummy_reveal_tx.vin[0]!.witness = [
+  dummyRevealTx.vin[0]!.witness = [
     Buff.hex(
       '00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000',
     ),
@@ -1499,39 +1499,39 @@ async function build_commit_tx(
     cblock,
   ]
 
-  const reveal_fee = Tx.util.getTxSize(dummy_reveal_tx).vsize * fee_rate // TODO: check new version: dummy_reveal_tx.virtualSize() * fee_rate
+  const revealFee = Tx.util.getTxSize(dummyRevealTx).vsize * feeRate // TODO: check new version: dummy_reveal_tx.virtualSize() * fee_rate
 
   // get change addr pk
-  const commit_wallet = new WalletInfo(false, null, commit_tx_address.address, null, tpubkey)
-  const unsigned_commit_tx_resp = buildTransaction(
-    cardinal_utxos,
-    force_in_utxos,
-    payer_wallet,
+  const commitWallet = new WalletInfo(false, null, commitTxAddress.address, null, tpubkey)
+  const unsignedCommitTxResp = buildTransaction(
+    cardinalUtxos,
+    forceInUtxos,
+    payerWallet,
     [],
-    commit_wallet,
-    change_wallet,
-    fee_rate,
-    postage + reveal_fee + payment,
+    commitWallet,
+    changeWallet,
+    feeRate,
+    postage + revealFee + payment,
     null,
     null,
   )
-  const unsigned_commit_tx = unsigned_commit_tx_resp.tx
-  const commit_fee = unsigned_commit_tx_resp.tx_fee
+  const unsignedCommitTx = unsignedCommitTxResp.tx
+  const commitFee = unsignedCommitTxResp.tx_fee
 
   // psbt test for commit tx
-  const unsigned_commit_psbt = await buildPsbtFromTx(
-    unsigned_commit_tx,
-    cardinal_utxos,
-    payer_wallet,
-    force_in_utxos,
+  const unsignedCommitPsbt = await buildPsbtFromTx(
+    unsignedCommitTx,
+    cardinalUtxos,
+    payerWallet,
+    forceInUtxos,
   )
 
   return {
-    unsigned_commit_tx,
-    unsigned_psbt_hex: unsigned_commit_psbt.toHex(),
-    output_value: unsigned_commit_tx.outs[0]!.value,
-    commit_fee,
-    reveal_fee,
+    unsigned_commit_tx: unsignedCommitTx,
+    unsigned_psbt_hex: unsignedCommitPsbt.toHex(),
+    output_value: unsignedCommitTx.outs[0]!.value,
+    commit_fee: commitFee,
+    reveal_fee: revealFee,
   }
 }
 
@@ -1541,46 +1541,46 @@ interface BuildCommitTxMultipleResult {
   commit_fee: number
   reveal_fee: number
 }
-async function build_commit_tx_multiple(
-  payer_wallet: WalletInfo,
-  inscription_wallet: WalletInfo,
+async function buildCommitTxMultiple(
+  payerWallet: WalletInfo,
+  inscriptionWallet: WalletInfo,
   secret: string,
-  inscription_details_array: InscriptionDetails[],
-  fee_rate: number,
+  inscriptionDetailsArray: InscriptionDetails[],
+  feeRate: number,
   postage: number,
-  payment_wallet: WalletInfo | null,
+  paymentWallet: WalletInfo | null,
   payment: number | null,
 ): Promise<BuildCommitTxMultipleResult> {
   if (!payment || payment < 0)
     payment = 0
 
-  const change_wallet = payer_wallet
-  const cardinal_utxos = await getCardinalUtxos(payer_wallet.addr as string)
+  const changeWallet = payerWallet
+  const cardinalUtxos = await getCardinalUtxos(payerWallet.addr as string)
   const seckey = get_seckey(secret)
   const pubkey = get_pubkey(seckey, true)
-  const script = buildRevealScriptMultiple(pubkey, inscription_details_array, postage)
+  const script = buildRevealScriptMultiple(pubkey, inscriptionDetailsArray, postage)
   const tapleaf = Tap.encodeScript(script)
   const [tpubkey, cblock] = Tap.getPubKey(pubkey, { target: tapleaf })
-  const network_type = getBitcoinNetwork()
-  const commit_tx_address = bitcoinjs.payments.p2tr({
+  const networkType = getBitcoinNetwork()
+  const commitTxAddress = bitcoinjs.payments.p2tr({
     pubkey: Buffer.from(tpubkey, 'hex'),
-    network: network_type,
+    network: networkType,
   })
 
-  const dummy_reveal_vout = []
-  for (let i = 0; i < inscription_details_array.length; i++) {
-    dummy_reveal_vout.push({
+  const dummyRevealVout = []
+  for (let i = 0; i < inscriptionDetailsArray.length; i++) {
+    dummyRevealVout.push({
       value: 0,
-      scriptPubKey: inscription_wallet.outputScript,
+      scriptPubKey: inscriptionWallet.outputScript,
     })
   }
   if (payment && payment > 0) {
-    dummy_reveal_vout.push({
+    dummyRevealVout.push({
       value: 0,
-      scriptPubKey: payment_wallet?.outputScript,
+      scriptPubKey: paymentWallet?.outputScript,
     })
   }
-  const dummy_reveal_tx = Tx.create({
+  const dummyRevealTx = Tx.create({
     vin: [
       {
         // Use the txid of the funding transaction used to send the sats.
@@ -1596,9 +1596,9 @@ async function build_commit_tx_multiple(
         },
       },
     ],
-    vout: dummy_reveal_vout,
+    vout: dummyRevealVout,
   })
-  dummy_reveal_tx.vin[0]!.witness = [
+  dummyRevealTx.vin[0]!.witness = [
     Buff.hex(
       '00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000',
     ),
@@ -1606,38 +1606,33 @@ async function build_commit_tx_multiple(
     cblock,
   ]
 
-  const reveal_fee = Tx.util.getTxSize(dummy_reveal_tx).vsize * fee_rate // TODO: check new version: dummy_reveal_tx.virtualSize() * fee_rate
+  const revealFee = Tx.util.getTxSize(dummyRevealTx).vsize * feeRate // TODO: check new version: dummy_reveal_tx.virtualSize() * fee_rate
 
   // get change addr pk
-  const commit_wallet = new WalletInfo(false, null, commit_tx_address.address, null, tpubkey)
-  const unsigned_commit_tx_resp = buildTransaction(
-    cardinal_utxos,
+  const commitWallet = new WalletInfo(false, null, commitTxAddress.address, null, tpubkey)
+  const unsignedCommitTxResp = buildTransaction(
+    cardinalUtxos,
     [],
-    payer_wallet,
+    payerWallet,
     [],
-    commit_wallet,
-    change_wallet,
-    fee_rate,
-    postage * inscription_details_array.length + reveal_fee + (payment || 0),
+    commitWallet,
+    changeWallet,
+    feeRate,
+    postage * inscriptionDetailsArray.length + revealFee + (payment || 0),
     null,
     null,
   )
-  const unsigned_commit_tx = unsigned_commit_tx_resp.tx
-  const commit_fee = unsigned_commit_tx_resp.tx_fee
+  const unsignedCommitTx = unsignedCommitTxResp.tx
+  const commitFee = unsignedCommitTxResp.tx_fee
 
   // psbt test for commit tx
-  const unsigned_commit_psbt = await buildPsbtFromTx(
-    unsigned_commit_tx,
-    cardinal_utxos,
-    payer_wallet,
-    [],
-  )
+  const unsignedCommitPsbt = await buildPsbtFromTx(unsignedCommitTx, cardinalUtxos, payerWallet, [])
 
   return {
-    unsigned_psbt_hex: unsigned_commit_psbt.toHex(),
-    output_value: unsigned_commit_tx.outs[0]!.value,
-    commit_fee,
-    reveal_fee,
+    unsigned_psbt_hex: unsignedCommitPsbt.toHex(),
+    output_value: unsignedCommitTx.outs[0]!.value,
+    commit_fee: commitFee,
+    reveal_fee: revealFee,
   }
 }
 
@@ -1646,108 +1641,106 @@ interface BuildCommitTxWithParentResult {
   output_value: number
   commit_fee: number
 }
-async function build_commit_tx_with_parent(
-  payer_wallet: WalletInfo,
-  inscription_wallet: WalletInfo,
+async function buildCommitTxWithParent(
+  payerWallet: WalletInfo,
+  inscriptionWallet: WalletInfo,
   secret: string,
-  inscription_details: InscriptionDetails,
-  fee_rate: number,
+  inscriptionDetails: InscriptionDetails,
+  feeRate: number,
   postage: number,
-  parent_inscription_id: string,
+  parentInscriptionId: string,
 ): Promise<BuildCommitTxWithParentResult> {
-  const change_wallet = payer_wallet
-  const parent_inscription_id_buff = convertInscriptionIdToBuffer(parent_inscription_id)
+  const changeWallet = payerWallet
+  const parentInscriptionIdBuff = convertInscriptionIdToBuffer(parentInscriptionId)
 
-  if (!payer_wallet.addr)
+  if (!payerWallet.addr)
     throw new Error('Payer wallet address is not set.')
 
-  if (!inscription_wallet.addr)
+  if (!inscriptionWallet.addr)
     throw new Error('Inscription wallet address is not set.')
 
-  const ordinal_utxos = await get_ordinal_utxos(inscription_wallet.addr)
-  let parent_utxo = null
-  for (const utxo of ordinal_utxos) {
-    for (const inscr_id of utxo.inscription_ids) {
-      if (inscr_id === parent_inscription_id) {
-        parent_utxo = utxo
+  const ordinalUtxos = await getOrdinalUtxos(inscriptionWallet.addr)
+  let parentUtxo = null
+  for (const utxo of ordinalUtxos) {
+    for (const inscrId of utxo.inscription_ids) {
+      if (inscrId === parentInscriptionId) {
+        parentUtxo = utxo
         break
       }
     }
-    if (parent_utxo)
+    if (parentUtxo)
       break
   }
-  if (!parent_utxo)
+  if (!parentUtxo)
     throw new Error('Parent inscription utxo not found in ordinal utxos')
 
-  const cardinal_utxos = await getCardinalUtxos(payer_wallet.addr)
+  const cardinalUtxos = await getCardinalUtxos(payerWallet.addr)
 
   const seckey = get_seckey(secret)
   const pubkey = get_pubkey(seckey, true)
 
-  const script = buildRevealScript(pubkey, inscription_details, parent_inscription_id_buff)
+  const script = buildRevealScript(pubkey, inscriptionDetails, parentInscriptionIdBuff)
   const tapleaf = Tap.encodeScript(script)
 
   const [tpubkey] = Tap.getPubKey(pubkey, { target: tapleaf })
 
-  const network_type = getBitcoinNetwork()
+  const networkType = getBitcoinNetwork()
 
-  const commit_tx_address = bitcoinjs.payments.p2tr({
+  const commitTxAddress = bitcoinjs.payments.p2tr({
     pubkey: Buffer.from(tpubkey, 'hex'),
-    network: network_type,
+    network: networkType,
   })
 
   // get change addr pk
-  const commit_wallet = new WalletInfo(false, null, commit_tx_address.address, null, tpubkey)
-  const unsigned_commit_tx_resp = buildTransaction(
-    cardinal_utxos,
+  const commitWallet = new WalletInfo(false, null, commitTxAddress.address, null, tpubkey)
+  const unsignedCommitTxResp = buildTransaction(
+    cardinalUtxos,
     [],
-    payer_wallet,
+    payerWallet,
     [],
-    commit_wallet,
-    change_wallet,
-    fee_rate,
+    commitWallet,
+    changeWallet,
+    feeRate,
     postage,
     null,
     null,
   )
-  const unsigned_commit_tx = unsigned_commit_tx_resp.tx
-  const commit_fee = unsigned_commit_tx_resp.tx_fee
+  const unsignedCommitTx = unsignedCommitTxResp.tx
+  const commitFee = unsignedCommitTxResp.tx_fee
 
   // psbt test for commit tx
-  const unsigned_commit_psbt = await buildPsbtFromTx(
-    unsigned_commit_tx,
-    cardinal_utxos,
-    payer_wallet,
-    [],
-  )
+  const unsignedCommitPsbt = await buildPsbtFromTx(unsignedCommitTx, cardinalUtxos, payerWallet, [])
 
   return {
-    unsigned_psbt_hex: unsigned_commit_psbt.toHex(),
-    output_value: unsigned_commit_tx.outs[0]!.value,
-    commit_fee,
+    unsigned_psbt_hex: unsignedCommitPsbt.toHex(),
+    output_value: unsignedCommitTx.outs[0]!.value,
+    commit_fee: commitFee,
   }
 }
 
 /**
+ * Builds a transaction with multiple outputs. This is used for batch minting or batch sending.
  *
- * @param utxoArray
- * @param force_in_utxos
- * @param payer_wallet
- * @param output_wallets
- * @param amounts
- * @param change_wallet
- * @param fee_rate
+ * @param utxoArray - array of UTXOs to select from
+ * @param forceInUtxos - array of UTXOs that must be included in the transaction (e.g. for minting, the UTXO with the inscription must be included)
+ * @param payerWallet - the wallet that will pay for the transaction (must be the same for all inputs)
+ * @param outputWallets - array of wallets to send the outputs to (must be the same length as amounts)
+ * @param amounts - array of amounts to send to each output wallet (must be the same length as outputWallets)
+ * @param changeWallet - the wallet to send the change to
+ * @param feeRate - the fee rate in sat/vbyte
+ *
+ * @returns an object containing the built transaction and the fee paid for the transaction
  */
-export function build_transaction_multi_output(
+export function buildTransactionMultiOutput(
   utxoArray: UtxoInfo[],
-  force_in_utxos: UtxoInfoWithWallet[],
-  payer_wallet: WalletInfo,
-  output_wallets: WalletInfo[],
+  forceInUtxos: UtxoInfoWithWallet[],
+  payerWallet: WalletInfo,
+  outputWallets: WalletInfo[],
   amounts: number[],
-  change_wallet: WalletInfo,
-  fee_rate: number,
+  changeWallet: WalletInfo,
+  feeRate: number,
 ): BuildTransactionResult {
-  if (output_wallets.length !== amounts.length)
+  if (outputWallets.length !== amounts.length)
     throw new Error('output_wallets and amounts must have the same length')
   const utxos = utxoArray.slice()
 
@@ -1755,24 +1748,24 @@ export function build_transaction_multi_output(
   const inputs = []
   const outputs = []
 
-  for (let i = 0; i < output_wallets.length; i++) {
+  for (let i = 0; i < outputWallets.length; i++) {
     outputs.push({
-      wallet: output_wallets[i]!,
-      out_script: output_wallets[i]!.outputScript,
+      wallet: outputWallets[i]!,
+      out_script: outputWallets[i]!.outputScript,
       value: amounts[i]!,
     })
   }
 
-  let total_target_amount = 0
+  let totalTargetAmount = 0
   for (let i = 0; i < amounts.length; i++) {
-    total_target_amount += amounts[i]!
+    totalTargetAmount += amounts[i]!
   }
 
-  let total_input_amount = 0
-  for (const utxo of force_in_utxos) {
+  let totalInputAmount = 0
+  for (const utxo of forceInUtxos) {
     // TODO: these may also come from output_wallet (e.g. rune_mint)
     inputs.push({ utxo, wallet: utxo.wallet })
-    total_input_amount += utxo.value
+    totalInputAmount += utxo.value
     for (let i = 0; i < utxos.length; i++) {
       if (utxos[i]!.utxo === utxo.utxo) {
         utxos.splice(i, 1)
@@ -1781,24 +1774,24 @@ export function build_transaction_multi_output(
     }
   }
 
-  let fee = estimateFee(inputs, outputs, fee_rate)
-  while (total_input_amount < total_target_amount + fee) {
-    let deficit = total_target_amount + fee - total_input_amount
+  let fee = estimateFee(inputs, outputs, feeRate)
+  while (totalInputAmount < totalTargetAmount + fee) {
+    let deficit = totalTargetAmount + fee - totalInputAmount
     // const additional_fee = Math.ceil(is_payer_p2sh ? bis.ADDITIONAL_INPUT_P2SH_VBYTES : bis.ADDITIONAL_INPUT_P2TR_VBYTES) * fee_rate // TODO: fix here!!
     while (deficit > 0) {
       if (utxos.length === 0)
         throw new Error('Not enough funds')
 
       const lastUtxo = utxos[utxos.length - 1]!
-      const requiredAmount = deficit + calculateAdditionalFee(lastUtxo.script_type, fee_rate)
+      const requiredAmount = deficit + calculateAdditionalFee(lastUtxo.script_type, feeRate)
 
       if (lastUtxo.value >= requiredAmount) {
         // First try to find a "good" UTXO (value > 10000)
         for (const utxo of utxos.filter(utxo => utxo.value > 10000)) {
-          const needed = deficit + calculateAdditionalFee(utxo.script_type, fee_rate)
+          const needed = deficit + calculateAdditionalFee(utxo.script_type, feeRate)
           if (utxo.value >= needed) {
-            inputs.push({ utxo, wallet: payer_wallet })
-            total_input_amount += utxo.value
+            inputs.push({ utxo, wallet: payerWallet })
+            totalInputAmount += utxo.value
             deficit = 0
             utxos.splice(utxos.indexOf(utxo), 1)
             break
@@ -1808,10 +1801,10 @@ export function build_transaction_multi_output(
         // Only if deficit is still not covered, try all UTXOs
         if (deficit > 0) {
           for (const utxo of utxos) {
-            const needed = deficit + calculateAdditionalFee(utxo.script_type, fee_rate)
+            const needed = deficit + calculateAdditionalFee(utxo.script_type, feeRate)
             if (utxo.value >= needed) {
-              inputs.push({ utxo, wallet: payer_wallet })
-              total_input_amount += utxo.value
+              inputs.push({ utxo, wallet: payerWallet })
+              totalInputAmount += utxo.value
               deficit = 0
               utxos.splice(utxos.indexOf(utxo), 1)
               break
@@ -1822,30 +1815,30 @@ export function build_transaction_multi_output(
       else {
         const benefit
           = utxos[utxos.length - 1]!.value
-            - calculateAdditionalFee(utxos[utxos.length - 1]!.script_type, fee_rate)
+            - calculateAdditionalFee(utxos[utxos.length - 1]!.script_type, feeRate)
         deficit -= benefit
-        inputs.push({ utxo: utxos.pop()!, wallet: payer_wallet })
-        total_input_amount += inputs[inputs.length - 1]!.utxo.value
+        inputs.push({ utxo: utxos.pop()!, wallet: payerWallet })
+        totalInputAmount += inputs[inputs.length - 1]!.utxo.value
       }
     }
   }
 
-  if (!change_wallet.outputScript)
+  if (!changeWallet.outputScript)
     throw new Error('build_transaction_multi_output change_wallet.outputScript is null')
 
-  const additional_change_output_fee = Math.ceil(change_wallet.outputScript.length + 9) * fee_rate // TODO: fix here!! is it done???
-  fee = estimateFee(inputs, outputs, fee_rate)
-  const excess = total_input_amount - fee - total_target_amount
-  let fee_payer_output_idx = -1
-  if (excess > getDustValue(change_wallet) + additional_change_output_fee) {
+  const additionalChangeOutputFee = Math.ceil(changeWallet.outputScript.length + 9) * feeRate // TODO: fix here!! is it done???
+  fee = estimateFee(inputs, outputs, feeRate)
+  const excess = totalInputAmount - fee - totalTargetAmount
+  let feePayerOutputIdx = -1
+  if (excess > getDustValue(changeWallet) + additionalChangeOutputFee) {
     // we have enough to output to change
-    const to_strip = total_input_amount - total_target_amount
+    const toStrip = totalInputAmount - totalTargetAmount
     outputs.push({
-      wallet: change_wallet,
-      out_script: change_wallet.outputScript,
-      value: to_strip,
+      wallet: changeWallet,
+      out_script: changeWallet.outputScript,
+      value: toStrip,
     })
-    fee_payer_output_idx = outputs.length - 1
+    feePayerOutputIdx = outputs.length - 1
   }
 
   // op_returns
@@ -1853,34 +1846,34 @@ export function build_transaction_multi_output(
   // payment_wallet <- payment (may not exist)
   // change_wallet <- change (may not exist)
 
-  fee = estimateFee(inputs, outputs, fee_rate)
-  if (fee_payer_output_idx === -1) {
-    if (total_input_amount - total_target_amount < fee) {
+  fee = estimateFee(inputs, outputs, feeRate)
+  if (feePayerOutputIdx === -1) {
+    if (totalInputAmount - totalTargetAmount < fee) {
       throw new Error('Not enough funds to pay fee')
     }
   }
   else {
     if (
-      outputs[fee_payer_output_idx]!.value - fee
-      < getDustValue(outputs[fee_payer_output_idx]!.wallet)
+      outputs[feePayerOutputIdx]!.value - fee
+      < getDustValue(outputs[feePayerOutputIdx]!.wallet)
     ) {
       throw new Error('Fee payer output cannot pay the fee')
     }
-    outputs[fee_payer_output_idx]!.value -= fee
+    outputs[feePayerOutputIdx]!.value -= fee
   }
 
-  const final_tx = constructTxFromInOuts(inputs, outputs)
-  let tx_fee = 0
+  const finalTx = constructTxFromInOuts(inputs, outputs)
+  let txFee = 0
   for (const input of inputs) {
-    tx_fee += input.utxo.value
+    txFee += input.utxo.value
   }
   for (const output of outputs) {
-    tx_fee -= output.value
+    txFee -= output.value
   }
 
   return {
-    tx: final_tx,
-    tx_fee,
+    tx: finalTx,
+    tx_fee: txFee,
   }
 }
 
@@ -1893,25 +1886,28 @@ interface SendMultiInscriptionWithBufferResult {
   buffer_output_value: number
 }
 /**
+ * Sends multiple inscriptions in one transaction with a buffer output. This is used for batch minting or batch sending.
  *
- * @param inscription_ids
- * @param target_postages
- * @param target_addr
- * @param buffer_value
- * @param fee_rate
- * @param payment_addr
- * @param payment
- * @param dry_run
+ * @param inscriptionIds - array of inscription IDs to send
+ * @param targetPostages - array of target postages for each inscription
+ * @param targetAddr - address to send the inscriptions to
+ * @param bufferValue - value of the buffer output
+ * @param feeRate - fee rate in sat/vbyte
+ * @param paymentAddr - address to send the payment to (if payment is not null)
+ * @param payment - amount to pay (if payment is not null)
+ * @param dryRun - if true, the transaction will not be broadcasted and the signed transaction hex will be returned for inspection
+ *
+ * @returns an object containing the transaction ID, signed transaction hex, output UTXOs, output values, buffer UTXO, and buffer output value
  */
 export async function sendMultiInscriptionWithBuffer(
-  inscription_ids: string[],
-  target_postages: number[],
-  target_addr: string,
-  buffer_value: number,
-  fee_rate: number,
-  payment_addr: string | null,
+  inscriptionIds: string[],
+  targetPostages: number[],
+  targetAddr: string,
+  bufferValue: number,
+  feeRate: number,
+  paymentAddr: string | null,
   payment: number | null,
-  dry_run: boolean,
+  dryRun: boolean,
 ): Promise<SendMultiInscriptionWithBufferResult> {
   // Get connected wallet
   const walletInfo = getWalletInfo()
@@ -1921,78 +1917,78 @@ export async function sendMultiInscriptionWithBuffer(
 
   // set to null if 0
   if (payment === 0) {
-    payment_addr = null
+    paymentAddr = null
     payment = null
   }
 
-  if (!Array.isArray(inscription_ids))
+  if (!Array.isArray(inscriptionIds))
     throw new Error('inscription_ids must be an array')
-  if (!Array.isArray(target_postages))
+  if (!Array.isArray(targetPostages))
     throw new Error('target_postages must be an array')
-  if (inscription_ids.length !== target_postages.length)
+  if (inscriptionIds.length !== targetPostages.length)
     throw new Error('inscription_ids and target_postages must have the same length')
-  for (const tp of target_postages) {
+  for (const tp of targetPostages) {
     if (tp != null && (typeof tp != 'number' || !Number.isInteger(tp)))
       throw new Error('target_postages must be an array of integers or null')
   }
-  for (const inscr_id of inscription_ids) {
-    if (typeof inscr_id != 'string')
+  for (const inscrId of inscriptionIds) {
+    if (typeof inscrId != 'string')
       throw new Error('inscription_ids must be an array of strings')
   }
-  if (typeof fee_rate != 'number' || !Number.isInteger(fee_rate))
+  if (typeof feeRate != 'number' || !Number.isInteger(feeRate))
     throw new Error('fee_rate must be an integer')
-  if (typeof buffer_value != 'number' || !Number.isInteger(buffer_value))
+  if (typeof bufferValue != 'number' || !Number.isInteger(bufferValue))
     throw new Error('buffer_value must be an integer')
-  if (typeof target_addr != 'string')
+  if (typeof targetAddr != 'string')
     throw new Error('target_addr must be a string')
-  if (typeof dry_run != 'boolean')
+  if (typeof dryRun != 'boolean')
     throw new Error('dry_run must be a boolean')
   if (payment != null && (typeof payment != 'number' || !Number.isInteger(payment)))
     throw new Error('payment must be an integer or null')
-  if (payment_addr != null && typeof payment_addr != 'string')
+  if (paymentAddr != null && typeof paymentAddr != 'string')
     throw new Error('payment_addr must be a string or null')
-  if (payment != null && payment_addr == null)
+  if (payment != null && paymentAddr == null)
     throw new Error('payment_addr must be provided if payment is provided')
-  if (payment == null && payment_addr != null)
+  if (payment == null && paymentAddr != null)
     throw new Error('payment must be provided if payment_addr is provided')
 
-  const target_wallet = new WalletInfo(false, null, target_addr, null, null)
+  const targetWallet = new WalletInfo(false, null, targetAddr, null, null)
 
-  let payment_wallet = null
+  let paymentWallet = null
   if (payment != null) {
-    payment_wallet = new WalletInfo(false, null, payment_addr, null, null)
-    if (payment < getDustValue(payment_wallet))
+    paymentWallet = new WalletInfo(false, null, paymentAddr, null, null)
+    if (payment < getDustValue(paymentWallet))
       throw new Error('payment must be bigger than dust')
   }
 
   // Sign function
   const signFn = getSignFn(walletInfo.provider)
 
-  return await send_multi_inscription_with_buffer_all(
-    inscription_ids,
-    target_postages,
-    target_wallet,
-    buffer_value,
-    fee_rate,
-    payment_wallet,
+  return await sendMultiInscriptionWithBufferAll(
+    inscriptionIds,
+    targetPostages,
+    targetWallet,
+    bufferValue,
+    feeRate,
+    paymentWallet,
     payment,
-    dry_run,
+    dryRun,
     signFn,
   )
 }
 
-async function send_multi_inscription_with_buffer_all(
-  inscription_ids: string[],
-  target_postages: number[],
-  target_wallet: WalletInfo,
-  buffer_value: number,
-  fee_rate: number,
-  payment_wallet: WalletInfo | null,
+async function sendMultiInscriptionWithBufferAll(
+  inscriptionIds: string[],
+  targetPostages: number[],
+  targetWallet: WalletInfo,
+  bufferValue: number,
+  feeRate: number,
+  paymentWallet: WalletInfo | null,
   payment: number | null,
-  dry_run: boolean,
-  sign_func: SignFunction,
+  dryRun: boolean,
+  signFunc: SignFunction,
 ): Promise<SendMultiInscriptionWithBufferResult> {
-  if (inscription_ids.length !== target_postages.length)
+  if (inscriptionIds.length !== targetPostages.length)
     throw new Error('inscription_ids and target_postages must have the same length')
 
   // Get connected wallet
@@ -2001,144 +1997,139 @@ async function send_multi_inscription_with_buffer_all(
   if (!userPaymentWallet || !userOrdinalsWallet)
     throw new Error('Wallets not found')
 
-  const payment_addr = userPaymentWallet.address
-  const payment_public_key = userPaymentWallet.pubkey
-  const inscription_address = userOrdinalsWallet.address
-  const inscription_public_key = userOrdinalsWallet.pubkey
+  const paymentAddr = userPaymentWallet.address
+  const paymentPublicKey = userPaymentWallet.pubkey
+  const inscriptionAddress = userOrdinalsWallet.address
+  const inscriptionPublicKey = userOrdinalsWallet.pubkey
 
-  const payer_wallet = new WalletInfo(false, null, payment_addr, null, payment_public_key)
-  const inscription_wallet = new WalletInfo(
+  const payerWallet = new WalletInfo(false, null, paymentAddr, null, paymentPublicKey)
+  const inscriptionWallet = new WalletInfo(
     false,
     null,
-    inscription_address,
+    inscriptionAddress,
     null,
-    inscription_public_key,
+    inscriptionPublicKey,
   )
 
-  const input_utxos: UtxoInfoWithWallet[] = []
-  const target_wallets: WalletInfo[] = []
+  const inputUtxos: UtxoInfoWithWallet[] = []
+  const targetWallets: WalletInfo[] = []
   const amounts: number[] = []
-  const inscr_wallet_sign_idxes: number[] = []
+  const inscrWalletSignIdxes: number[] = []
 
-  if (!inscription_wallet.addr)
+  if (!inscriptionWallet.addr)
     throw new Error('inscription_wallet is null')
 
-  for (let i = 0; i < inscription_ids.length; i++) {
-    const inscription_details = await get_inscription_details(
-      inscription_ids[i]!,
-      inscription_wallet.addr,
+  for (let i = 0; i < inscriptionIds.length; i++) {
+    const inscriptionDetails = await getInscriptionDetails(
+      inscriptionIds[i]!,
+      inscriptionWallet.addr,
     )
-    if (inscription_details == null) {
+    if (inscriptionDetails == null) {
       throw new Error('Inscription cannot be found in wallet')
     }
-    if (inscription_details.satpoint.split(':')[2] !== '0') {
+    if (inscriptionDetails.satpoint.split(':')[2] !== '0') {
       // TODO: implement this case as well
       throw new Error('Inscription is at the first sat of utxo')
     }
-    let target_postage = target_postages[i]!
-    if (target_postage <= 0 || target_postage == null) {
-      target_postage = inscription_details.value // NOTE: do not change the inscription_value
+    let targetPostage = targetPostages[i]!
+    if (targetPostage <= 0 || targetPostage == null) {
+      targetPostage = inscriptionDetails.value // NOTE: do not change the inscription_value
     }
 
-    if (i !== inscription_ids.length - 1) {
-      if (target_postage !== inscription_details.value) {
+    if (i !== inscriptionIds.length - 1) {
+      if (targetPostage !== inscriptionDetails.value) {
         throw new Error('All inscriptions except the last one must have the same output value')
       }
     }
 
-    if (target_postage < getDustValue(target_wallet)) {
+    if (targetPostage < getDustValue(targetWallet)) {
       throw new Error('Target postage is below dust value')
     }
 
-    const inscr_utxo = {
-      utxo: `${inscription_details.satpoint.split(':')[0]}:${inscription_details.satpoint.split(':')[1]}`,
-      value: inscription_details.value,
-      script_type: inscription_details.script_type,
-      wallet: inscription_wallet,
+    const inscrUtxo = {
+      utxo: `${inscriptionDetails.satpoint.split(':')[0]}:${inscriptionDetails.satpoint.split(':')[1]}`,
+      value: inscriptionDetails.value,
+      script_type: inscriptionDetails.script_type,
+      wallet: inscriptionWallet,
     }
-    input_utxos.push(inscr_utxo)
-    target_wallets.push(target_wallet)
-    amounts.push(target_postage)
-    inscr_wallet_sign_idxes.push(i)
+    inputUtxos.push(inscrUtxo)
+    targetWallets.push(targetWallet)
+    amounts.push(targetPostage)
+    inscrWalletSignIdxes.push(i)
   }
-  target_wallets.push(target_wallet)
-  amounts.push(buffer_value)
+  targetWallets.push(targetWallet)
+  amounts.push(bufferValue)
   if (payment != null) {
-    target_wallets.push(payment_wallet as WalletInfo)
+    targetWallets.push(paymentWallet as WalletInfo)
     amounts.push(payment)
   }
 
-  if (!payer_wallet.addr)
+  if (!payerWallet.addr)
     throw new Error('payer_wallet.addr is null')
 
-  const cardinal_utxos = await getCardinalUtxos(payer_wallet.addr)
+  const cardinalUtxos = await getCardinalUtxos(payerWallet.addr)
 
-  const unsigned_tx_resp = build_transaction_multi_output(
-    cardinal_utxos,
-    input_utxos,
-    payer_wallet,
-    target_wallets,
+  const unsignedTxResp = buildTransactionMultiOutput(
+    cardinalUtxos,
+    inputUtxos,
+    payerWallet,
+    targetWallets,
     amounts,
-    payer_wallet,
-    fee_rate,
+    payerWallet,
+    feeRate,
   )
-  const unsigned_tx = unsigned_tx_resp.tx
+  const unsignedTx = unsignedTxResp.tx
 
-  const unsigned_psbt = await buildPsbtFromTx(
-    unsigned_tx,
-    cardinal_utxos,
-    payer_wallet,
-    input_utxos,
-  )
-  const unsigned_psbt_hex = unsigned_psbt.toHex()
+  const unsignedPsbt = await buildPsbtFromTx(unsignedTx, cardinalUtxos, payerWallet, inputUtxos)
+  const unsignedPsbtHex = unsignedPsbt.toHex()
 
-  const signed_tx = await sign_func(
-    unsigned_psbt_hex,
-    payer_wallet.addr,
-    inscription_wallet.addr,
-    inscr_wallet_sign_idxes,
+  const signedTx = await signFunc(
+    unsignedPsbtHex,
+    payerWallet.addr,
+    inscriptionWallet.addr,
+    inscrWalletSignIdxes,
   )
 
-  const isValid = await validateTxes([signed_tx.signed_tx_hex])
+  const isValid = await validateTxes([signedTx.signedPsbtHex])
   for (const entry of isValid) {
     if (!entry.allowed) {
       throw new Error(entry['reject-reason'])
     }
   }
 
-  const output_utxos: string[] = []
-  const output_values: number[] = []
-  let buffer_utxo: string | null = null
-  let buffer_output_value: number | null = null
-  for (let i = 0; i < inscription_ids.length; i++) {
-    output_utxos.push(`${signed_tx.txid}:${i}`)
-    output_values.push(unsigned_tx.outs[i]!.value)
+  const outputUtxos: string[] = []
+  const outputValues: number[] = []
+  let bufferUtxo: string | null = null
+  let bufferOutputValue: number | null = null
+  for (let i = 0; i < inscriptionIds.length; i++) {
+    outputUtxos.push(`${signedTx.txId}:${i}`)
+    outputValues.push(unsignedTx.outs[i]!.value)
   }
-  buffer_utxo = `${signed_tx.txid}:${inscription_ids.length}`
-  buffer_output_value = unsigned_tx.outs[inscription_ids.length]!.value
+  bufferUtxo = `${signedTx.txId}:${inscriptionIds.length}`
+  bufferOutputValue = unsignedTx.outs[inscriptionIds.length]!.value
 
-  if (dry_run) {
+  if (dryRun) {
     // TODO: hacky part, change or remove
-    txHexByIdCache[signed_tx.txid] = signed_tx.signed_tx_hex
+    txHexByIdCache[signedTx.txId] = signedTx.signedPsbtHex
     return {
-      txid: signed_tx.txid,
-      signed_tx_hex: signed_tx.signed_tx_hex,
-      output_utxos,
-      output_values,
-      buffer_utxo,
-      buffer_output_value,
+      txid: signedTx.txId,
+      signed_tx_hex: signedTx.signedPsbtHex,
+      output_utxos: outputUtxos,
+      output_values: outputValues,
+      buffer_utxo: bufferUtxo,
+      buffer_output_value: bufferOutputValue,
     }
   }
 
-  await broadcast_txes([signed_tx.signed_tx_hex])
+  await broadcastTxes([signedTx.signedPsbtHex])
 
   return {
-    txid: signed_tx.txid,
-    signed_tx_hex: signed_tx.signed_tx_hex,
-    output_utxos,
-    output_values,
-    buffer_utxo,
-    buffer_output_value,
+    txid: signedTx.txId,
+    signed_tx_hex: signedTx.signedPsbtHex,
+    output_utxos: outputUtxos,
+    output_values: outputValues,
+    buffer_utxo: bufferUtxo,
+    buffer_output_value: bufferOutputValue,
   }
 }
 
@@ -2149,21 +2140,24 @@ interface SendInscriptionAllResult {
   output_value: number
 }
 /**
+ * Sends an inscription to a target address with specified postage and fee rate. This function is used for sending a single inscription, but it can also be used for batch sending by calling it multiple times with different inscription IDs and the same target address.
  *
- * @param inscription_id
- * @param target_wallet
- * @param target_postage
- * @param fee_rate
- * @param dry_run
- * @param sign_func
+ * @param inscriptionId - the ID of the inscription to send
+ * @param targetWallet - the wallet to send the inscription to (only the address field is used)
+ * @param targetPostage - the amount of satoshis to send with the inscription (must be greater than or equal to the dust value for the target wallet)
+ * @param feeRate - the fee rate in sat/vbyte to use for the transaction
+ * @param dryRun - if true, the transaction will not be broadcasted and the signed transaction hex will be returned for inspection
+ * @param signFunc - the function to use for signing the transaction, which takes the unsigned PSBT hex, payer address, inscription address, and an array of input indexes that belong to the inscription wallet, and returns an object containing the signed transaction hex and transaction ID
+ *
+ * @returns an object containing the transaction ID, signed transaction hex, vout index of the output containing the inscription, and the value of the output containing the inscription
  */
-export async function send_inscription_all(
-  inscription_id: string,
-  target_wallet: WalletInfo,
-  target_postage: number | null,
-  fee_rate: number,
-  dry_run: boolean,
-  sign_func: SignFunction,
+export async function sendInscriptionAll(
+  inscriptionId: string,
+  targetWallet: WalletInfo,
+  targetPostage: number | null,
+  feeRate: number,
+  dryRun: boolean,
+  signFunc: SignFunction,
 ): Promise<SendInscriptionAllResult> {
   // Get connected wallet
   const userPaymentWallet = getPaymentWallet()
@@ -2171,98 +2165,91 @@ export async function send_inscription_all(
   if (!userPaymentWallet || !userOrdinalsWallet)
     throw new Error('Wallets not found')
 
-  const payment_addr = userPaymentWallet.address
-  const payment_public_key = userPaymentWallet.pubkey
-  const inscription_address = userOrdinalsWallet.address
-  const inscription_public_key = userOrdinalsWallet.pubkey
+  const paymentAddr = userPaymentWallet.address
+  const paymentPublicKey = userPaymentWallet.pubkey
+  const inscriptionAddress = userOrdinalsWallet.address
+  const inscriptionPublicKey = userOrdinalsWallet.pubkey
 
-  const payer_wallet = new WalletInfo(false, null, payment_addr, null, payment_public_key)
-  const inscription_wallet = new WalletInfo(
+  const payerWallet = new WalletInfo(false, null, paymentAddr, null, paymentPublicKey)
+  const inscriptionWallet = new WalletInfo(
     false,
     null,
-    inscription_address,
+    inscriptionAddress,
     null,
-    inscription_public_key,
+    inscriptionPublicKey,
   )
 
-  if (!inscription_wallet.addr)
+  if (!inscriptionWallet.addr)
     throw new Error('inscription_wallet is null')
 
-  const inscription_details = await get_inscription_details(inscription_id, inscription_wallet.addr)
-  if (inscription_details == null) {
+  const inscriptionDetails = await getInscriptionDetails(inscriptionId, inscriptionWallet.addr)
+  if (inscriptionDetails == null) {
     throw new Error('Inscription cannot be found in wallet')
   }
-  if (inscription_details.satpoint.split(':')[2] !== '0') {
+  if (inscriptionDetails.satpoint.split(':')[2] !== '0') {
     // TODO: implement this case as well
     throw new Error('Inscription is at the first sat of utxo')
   }
 
-  if (!payer_wallet.addr)
+  if (!payerWallet.addr)
     throw new Error('payer_wallet.addr is null')
 
-  const cardinal_utxos = await getCardinalUtxos(payer_wallet.addr)
+  const cardinalUtxos = await getCardinalUtxos(payerWallet.addr)
 
-  if (target_postage == null || target_postage <= 0) {
-    target_postage = getDustValue(target_wallet)
+  if (targetPostage == null || targetPostage <= 0) {
+    targetPostage = getDustValue(targetWallet)
   }
 
-  const inscr_utxo: UtxoInfoWithWallet = {
-    utxo: `${inscription_details.satpoint.split(':')[0]}:${inscription_details.satpoint.split(':')[1]}`,
-    value: inscription_details.value,
-    script_type: inscription_details.script_type,
-    wallet: inscription_wallet,
+  const inscrUtxo: UtxoInfoWithWallet = {
+    utxo: `${inscriptionDetails.satpoint.split(':')[0]}:${inscriptionDetails.satpoint.split(':')[1]}`,
+    value: inscriptionDetails.value,
+    script_type: inscriptionDetails.script_type,
+    wallet: inscriptionWallet,
   }
 
-  const unsigned_tx_resp = buildTransaction(
-    cardinal_utxos,
-    [inscr_utxo],
-    payer_wallet,
+  const unsignedTxResp = buildTransaction(
+    cardinalUtxos,
+    [inscrUtxo],
+    payerWallet,
     [],
-    target_wallet,
-    payer_wallet,
-    fee_rate,
-    target_postage,
+    targetWallet,
+    payerWallet,
+    feeRate,
+    targetPostage,
     null,
     null,
   )
-  const unsigned_tx = unsigned_tx_resp.tx
+  const unsignedTx = unsignedTxResp.tx
 
-  const unsigned_psbt = await buildPsbtFromTx(unsigned_tx, cardinal_utxos, payer_wallet, [
-    inscr_utxo,
-  ])
-  const unsigned_psbt_hex = unsigned_psbt.toHex()
+  const unsignedPsbt = await buildPsbtFromTx(unsignedTx, cardinalUtxos, payerWallet, [inscrUtxo])
+  const unsignedPsbtHex = unsignedPsbt.toHex()
 
-  const signed_tx = await sign_func(
-    unsigned_psbt_hex,
-    payer_wallet.addr,
-    inscription_wallet.addr,
-    [0],
-  )
+  const signedTx = await signFunc(unsignedPsbtHex, payerWallet.addr, inscriptionWallet.addr, [0])
 
-  const isValid = await validateTxes([signed_tx.signed_tx_hex])
+  const isValid = await validateTxes([signedTx.signedPsbtHex])
   for (const entry of isValid) {
     if (!entry.allowed) {
       throw new Error(entry['reject-reason'])
     }
   }
 
-  if (dry_run) {
-    txHexByIdCache[signed_tx.txid] = signed_tx.signed_tx_hex
+  if (dryRun) {
+    txHexByIdCache[signedTx.txId] = signedTx.signedPsbtHex
     return {
-      txid: signed_tx.txid,
-      signed_tx_hex: signed_tx.signed_tx_hex,
+      txid: signedTx.txId,
+      signed_tx_hex: signedTx.signedPsbtHex,
       vout: 0,
-      output_value: unsigned_tx.outs[0]!.value,
+      output_value: unsignedTx.outs[0]!.value,
     }
   }
 
-  await broadcast_txes([signed_tx.signed_tx_hex])
+  await broadcastTxes([signedTx.signedPsbtHex])
 
   return {
-    txid: signed_tx.txid,
-    signed_tx_hex: signed_tx.signed_tx_hex,
+    txid: signedTx.txId,
+    signed_tx_hex: signedTx.signedPsbtHex,
     vout: 0,
-    output_value: unsigned_tx.outs[0]!.value,
+    output_value: unsignedTx.outs[0]!.value,
   }
 }
 
@@ -2284,22 +2271,22 @@ interface InscriptionUTXODetails {
   block_height: number | null
   utxo: string
 }
-async function get_inscription_details(
-  inscription_id: string,
-  inscription_addr: string,
-  ordinal_utxos?: APIOrdinalUtxoInfo[],
+async function getInscriptionDetails(
+  inscriptionId: string,
+  inscriptionAddr: string,
+  ordinalUtxos?: APIOrdinalUtxoInfo[],
 ): Promise<InscriptionUTXODetails | null> {
   let utxos = null
-  if (ordinal_utxos) {
-    utxos = ordinal_utxos
+  if (ordinalUtxos) {
+    utxos = ordinalUtxos
   }
   else {
-    utxos = await get_ordinal_utxos(inscription_addr)
+    utxos = await getOrdinalUtxos(inscriptionAddr)
   }
 
   for (const utxo of utxos) {
     for (let i = 0; i < utxo.inscription_ids.length; i++) {
-      if (utxo.inscription_ids[i]! === inscription_id) {
+      if (utxo.inscription_ids[i]! === inscriptionId) {
         return {
           satpoint: utxo.satpoints[i]!,
           value: utxo.value,
@@ -2314,16 +2301,16 @@ async function get_inscription_details(
   return null
 }
 
-async function send_multi_inscription_with_buffer_fee_rate_all(
-  inscription_ids: string[],
-  target_postages: number[],
-  target_wallet: WalletInfo,
-  buffer_value: number,
-  fee_rate: number,
-  payment_wallet: WalletInfo | null,
+async function sendMultiInscriptionWithBufferFeeRateAll(
+  inscriptionIds: string[],
+  targetPostages: number[],
+  targetWallet: WalletInfo,
+  bufferValue: number,
+  feeRate: number,
+  paymentWallet: WalletInfo | null,
   payment: number | null,
 ): Promise<number> {
-  if (inscription_ids.length !== target_postages.length)
+  if (inscriptionIds.length !== targetPostages.length)
     throw new Error('inscription_ids and target_postages must have the same length')
 
   // Get connected wallet
@@ -2332,173 +2319,175 @@ async function send_multi_inscription_with_buffer_fee_rate_all(
   if (!userPaymentWallet || !userOrdinalsWallet)
     throw new Error('Wallets not found')
 
-  const payment_addr = userPaymentWallet.address
-  const payment_public_key = userPaymentWallet.pubkey
-  const inscription_address = userOrdinalsWallet.address
-  const inscription_public_key = userOrdinalsWallet.pubkey
+  const paymentAddr = userPaymentWallet.address
+  const paymentPublicKey = userPaymentWallet.pubkey
+  const inscriptionAddress = userOrdinalsWallet.address
+  const inscriptionPublicKey = userOrdinalsWallet.pubkey
 
-  const payer_wallet = new WalletInfo(false, null, payment_addr, null, payment_public_key)
-  const inscription_wallet = new WalletInfo(
+  const payerWallet = new WalletInfo(false, null, paymentAddr, null, paymentPublicKey)
+  const inscriptionWallet = new WalletInfo(
     false,
     null,
-    inscription_address,
+    inscriptionAddress,
     null,
-    inscription_public_key,
+    inscriptionPublicKey,
   )
 
-  const input_utxos: UtxoInfoWithWallet[] = []
-  const target_wallets: WalletInfo[] = []
+  const inputUtxos: UtxoInfoWithWallet[] = []
+  const targetWallets: WalletInfo[] = []
   const amounts: number[] = []
-  const inscr_wallet_sign_idxes: number[] = []
+  const inscrWalletSignIdxes: number[] = []
 
-  if (!inscription_wallet.addr)
+  if (!inscriptionWallet.addr)
     throw new Error('Inscription wallet address is not set.')
 
-  for (let i = 0; i < inscription_ids.length; i++) {
-    const inscription_details = await get_inscription_details(
-      inscription_ids[i]!,
-      inscription_wallet.addr,
+  for (let i = 0; i < inscriptionIds.length; i++) {
+    const inscriptionDetails = await getInscriptionDetails(
+      inscriptionIds[i]!,
+      inscriptionWallet.addr,
     )
-    if (inscription_details == null) {
+    if (inscriptionDetails == null) {
       throw new Error('Inscription cannot be found in wallet')
     }
-    if (inscription_details.satpoint.split(':')[2] !== '0') {
+    if (inscriptionDetails.satpoint.split(':')[2] !== '0') {
       // TODO: implement this case as well
       throw new Error('Inscription is at the first sat of utxo')
     }
-    let target_postage = target_postages[i]!
-    if (target_postage <= 0 || target_postage == null) {
-      target_postage = inscription_details.value // NOTE: do not change the inscription_value
+    let targetPostage = targetPostages[i]!
+    if (targetPostage <= 0 || targetPostage == null) {
+      targetPostage = inscriptionDetails.value // NOTE: do not change the inscription_value
     }
 
-    if (i !== inscription_ids.length - 1) {
-      if (target_postage !== inscription_details.value) {
+    if (i !== inscriptionIds.length - 1) {
+      if (targetPostage !== inscriptionDetails.value) {
         throw new Error('All inscriptions except the last one must have the same output value')
       }
     }
 
-    if (target_postage < getDustValue(target_wallet)) {
+    if (targetPostage < getDustValue(targetWallet)) {
       throw new Error('Target postage is below dust value')
     }
 
-    const inscr_utxo: UtxoInfoWithWallet = {
-      utxo: `${inscription_details.satpoint.split(':')[0]}:${inscription_details.satpoint.split(':')[1]}`,
-      value: inscription_details.value,
-      script_type: inscription_details.script_type,
-      wallet: inscription_wallet,
+    const inscrUtxo: UtxoInfoWithWallet = {
+      utxo: `${inscriptionDetails.satpoint.split(':')[0]}:${inscriptionDetails.satpoint.split(':')[1]}`,
+      value: inscriptionDetails.value,
+      script_type: inscriptionDetails.script_type,
+      wallet: inscriptionWallet,
     }
-    input_utxos.push(inscr_utxo)
-    target_wallets.push(target_wallet)
-    amounts.push(target_postage)
-    inscr_wallet_sign_idxes.push(i)
+    inputUtxos.push(inscrUtxo)
+    targetWallets.push(targetWallet)
+    amounts.push(targetPostage)
+    inscrWalletSignIdxes.push(i)
   }
-  target_wallets.push(target_wallet)
-  amounts.push(buffer_value)
+  targetWallets.push(targetWallet)
+  amounts.push(bufferValue)
   if (payment != null) {
-    target_wallets.push(payment_wallet as WalletInfo)
+    targetWallets.push(paymentWallet as WalletInfo)
     amounts.push(payment)
   }
 
-  if (!payer_wallet.addr)
+  if (!payerWallet.addr)
     throw new Error('payer_wallet.addr is null')
 
-  const cardinal_utxos = await getCardinalUtxos(payer_wallet.addr)
+  const cardinalUtxos = await getCardinalUtxos(payerWallet.addr)
 
-  const unsigned_tx_resp = build_transaction_multi_output(
-    cardinal_utxos,
-    input_utxos,
-    payer_wallet,
-    target_wallets,
+  const unsignedTxResp = buildTransactionMultiOutput(
+    cardinalUtxos,
+    inputUtxos,
+    payerWallet,
+    targetWallets,
     amounts,
-    payer_wallet,
-    fee_rate,
+    payerWallet,
+    feeRate,
   )
-  return unsigned_tx_resp.tx_fee
+  return unsignedTxResp.tx_fee
 }
 
-// send_multi_inscription_with_buffer_fee_rate
 /**
+ * Sends multiple inscriptions in one transaction with a buffer output and returns the fee paid for the transaction. This is used for batch minting or batch sending when the user wants to know the fee before actually sending the transaction.
  *
- * @param inscription_ids
- * @param target_postages
- * @param target_addr
- * @param buffer_value
- * @param fee_rate
- * @param payment_addr
- * @param payment
+ * @param inscriptionIds - array of inscription IDs to send
+ * @param targetPostages - array of target postages for each inscription
+ * @param targetAddr - address to send the inscriptions to
+ * @param bufferValue - value of the buffer output
+ * @param feeRate - fee rate in sat/vbyte
+ * @param paymentAddr - address to send the payment to (if payment is not null)
+ * @param payment - amount to pay (if payment is not null)
+ *
+ * @returns the fee paid for the transaction in satoshis
  */
 export async function getMultiInscriptionWithBufferFeeRate(
-  inscription_ids: string[],
-  target_postages: number[],
-  target_addr: string,
-  buffer_value: number,
-  fee_rate: number,
-  payment_addr: string | null,
+  inscriptionIds: string[],
+  targetPostages: number[],
+  targetAddr: string,
+  bufferValue: number,
+  feeRate: number,
+  paymentAddr: string | null,
   payment: number | null,
 ): Promise<number> {
   if (payment === 0) {
-    payment_addr = null
+    paymentAddr = null
     payment = null
   }
 
-  if (!Array.isArray(inscription_ids))
+  if (!Array.isArray(inscriptionIds))
     throw new Error('inscription_ids must be an array')
-  if (!Array.isArray(target_postages))
+  if (!Array.isArray(targetPostages))
     throw new Error('target_postages must be an array')
-  if (inscription_ids.length !== target_postages.length)
+  if (inscriptionIds.length !== targetPostages.length)
     throw new Error('inscription_ids and target_postages must have the same length')
-  for (const tp of target_postages) {
+  for (const tp of targetPostages) {
     if (tp != null && (typeof tp != 'number' || !Number.isInteger(tp)))
       throw new Error('target_postages must be an array of integers or null')
   }
-  for (const inscr_id of inscription_ids) {
-    if (typeof inscr_id != 'string')
+  for (const inscrId of inscriptionIds) {
+    if (typeof inscrId != 'string')
       throw new Error('inscription_ids must be an array of strings')
   }
-  if (typeof fee_rate != 'number' || !Number.isInteger(fee_rate))
+  if (typeof feeRate != 'number' || !Number.isInteger(feeRate))
     throw new Error('fee_rate must be an integer')
-  if (typeof buffer_value != 'number' || !Number.isInteger(buffer_value))
+  if (typeof bufferValue != 'number' || !Number.isInteger(bufferValue))
     throw new Error('buffer_value must be an integer')
-  if (typeof target_addr != 'string')
+  if (typeof targetAddr != 'string')
     throw new Error('target_addr must be a string')
   if (payment != null && (typeof payment != 'number' || !Number.isInteger(payment)))
     throw new Error('payment must be an integer or null')
-  if (payment_addr != null && typeof payment_addr != 'string')
+  if (paymentAddr != null && typeof paymentAddr != 'string')
     throw new Error('payment_addr must be a string or null')
-  if (payment != null && payment_addr == null)
+  if (payment != null && paymentAddr == null)
     throw new Error('payment_addr must be provided if payment is provided')
-  if (payment == null && payment_addr != null)
+  if (payment == null && paymentAddr != null)
     throw new Error('payment must be provided if payment_addr is provided')
 
-  const target_wallet = new WalletInfo(false, null, target_addr, null, null)
+  const targetWallet = new WalletInfo(false, null, targetAddr, null, null)
 
-  let payment_wallet = null
+  let paymentWallet = null
   if (payment != null) {
-    payment_wallet = new WalletInfo(false, null, payment_addr, null, null)
-    if (payment < getDustValue(payment_wallet))
+    paymentWallet = new WalletInfo(false, null, paymentAddr, null, null)
+    if (payment < getDustValue(paymentWallet))
       throw new Error('payment must be bigger than dust')
   }
 
-  return await send_multi_inscription_with_buffer_fee_rate_all(
-    inscription_ids,
-    target_postages,
-    target_wallet,
-    buffer_value,
-    fee_rate,
-    payment_wallet,
+  return await sendMultiInscriptionWithBufferFeeRateAll(
+    inscriptionIds,
+    targetPostages,
+    targetWallet,
+    bufferValue,
+    feeRate,
+    paymentWallet,
     payment,
   )
 }
 
-async function build_reveal_tx(
-  inscription_wallet: WalletInfo,
-  commit_txid: string,
-  commit_output_value: number,
+async function buildRevealTx(
+  inscriptionWallet: WalletInfo,
+  commitTxid: string,
+  commitOutputValue: number,
   secret: string,
-  inscription_details: InscriptionDetails,
-  _fee_rate: number /* NOTE: UNUSED */,
+  inscriptionDetails: InscriptionDetails,
+  _feeRate: number /* NOTE: UNUSED */,
   postage: number,
-  payment_wallet: WalletInfo | null,
+  paymentWallet: WalletInfo | null,
   payment: number | null,
 ): Promise<SignResponse> {
   if (payment == null || payment < 0)
@@ -2507,31 +2496,31 @@ async function build_reveal_tx(
   const seckey = get_seckey(secret)
   const pubkey = get_pubkey(seckey, true)
 
-  const script = buildRevealScript(pubkey, inscription_details)
+  const script = buildRevealScript(pubkey, inscriptionDetails)
   const tapleaf = Tap.encodeScript(script)
 
   const [tpubkey, cblock] = Tap.getPubKey(pubkey, { target: tapleaf })
 
   const inputs = [
     {
-      txid: commit_txid,
+      txid: commitTxid,
       vout: 0,
     },
   ]
 
-  const txdata_vout = [
+  const txdataVout = [
     {
       value: postage,
-      scriptPubKey: inscription_wallet.outputScript,
+      scriptPubKey: inscriptionWallet.outputScript,
     },
   ]
   if (payment > 0) {
-    if (!payment_wallet)
+    if (!paymentWallet)
       throw new Error('Payment wallet is not available.')
 
-    txdata_vout.push({
+    txdataVout.push({
       value: payment,
-      scriptPubKey: payment_wallet.outputScript,
+      scriptPubKey: paymentWallet.outputScript,
     })
   }
   const txdata = Tx.create({
@@ -2544,13 +2533,13 @@ async function build_reveal_tx(
         // Also include the value and script of that ouput.
         prevout: {
           // Feel free to change this if you sent a different amount.
-          value: commit_output_value,
+          value: commitOutputValue,
           // This is what our address looks like in script form.
           scriptPubKey: ['OP_1', tpubkey],
         },
       },
     ],
-    vout: txdata_vout,
+    vout: txdataVout,
   })
 
   const sig = Signer.taproot.sign(seckey, txdata, 0, { extension: tapleaf })
@@ -2561,8 +2550,8 @@ async function build_reveal_tx(
     throw new Error('Invalid signature')
 
   return {
-    txid: Tx.util.getTxid(txdata),
-    signed_tx_hex: Tx.encode(txdata).hex,
+    txId: Tx.util.getTxid(txdata),
+    signedPsbtHex: Tx.encode(txdata).hex,
   }
 }
 
@@ -2570,49 +2559,49 @@ interface BuildRevealTxWithParentResult {
   txid: string
   partially_signed_psbt_hex: string
 }
-async function build_reveal_tx_with_parent(
-  payer_wallet: WalletInfo,
-  inscription_wallet: WalletInfo,
-  commit_txid: string,
-  commit_output_value: number,
+async function buildRevealTxWithParent(
+  payerWallet: WalletInfo,
+  inscriptionWallet: WalletInfo,
+  commitTxid: string,
+  commitOutputValue: number,
   secret: string,
-  inscription_details: InscriptionDetails,
-  parent_inscription_id: string,
-  fee_rate: number,
-  payment_wallet: WalletInfo | null,
+  inscriptionDetails: InscriptionDetails,
+  parentInscriptionId: string,
+  feeRate: number,
+  paymentWallet: WalletInfo | null,
   payment: number | null,
 ): Promise<BuildRevealTxWithParentResult> {
   if (payment == null || payment < 0)
     payment = 0
-  const change_wallet = payer_wallet
-  const parent_inscription_id_buff = convertInscriptionIdToBuffer(parent_inscription_id)
+  const changeWallet = payerWallet
+  const parentInscriptionIdBuff = convertInscriptionIdToBuffer(parentInscriptionId)
 
-  if (!inscription_wallet.addr)
+  if (!inscriptionWallet.addr)
     throw new Error('Inscription wallet address is not set.')
-  if (!payer_wallet.addr)
+  if (!payerWallet.addr)
     throw new Error('Payer wallet address is not set.')
 
-  const ordinal_utxos = await get_ordinal_utxos(inscription_wallet.addr)
-  let parent_utxo = null
-  for (const utxo of ordinal_utxos) {
-    for (const inscr_id of utxo.inscription_ids) {
-      if (inscr_id === parent_inscription_id) {
-        parent_utxo = utxo
+  const ordinalUtxos = await getOrdinalUtxos(inscriptionWallet.addr)
+  let parentUtxo = null
+  for (const utxo of ordinalUtxos) {
+    for (const inscrId of utxo.inscription_ids) {
+      if (inscrId === parentInscriptionId) {
+        parentUtxo = utxo
         break
       }
     }
-    if (parent_utxo)
+    if (parentUtxo)
       break
   }
-  if (!parent_utxo)
+  if (!parentUtxo)
     throw new Error('Parent inscription utxo not found in ordinal utxos')
 
-  const cardinal_utxos = await getCardinalUtxos(payer_wallet.addr)
+  const cardinalUtxos = await getCardinalUtxos(payerWallet.addr)
 
   const seckey = get_seckey(secret)
   const pubkey = get_pubkey(seckey, true)
 
-  const script = buildRevealScript(pubkey, inscription_details, parent_inscription_id_buff)
+  const script = buildRevealScript(pubkey, inscriptionDetails, parentInscriptionIdBuff)
 
   const scriptBuf = Buffer.from(Script.encode(script, false))
 
@@ -2625,21 +2614,21 @@ async function build_reveal_tx_with_parent(
     controlBlock: Buffer.from(cblock, 'hex'),
   }
 
-  const network_type = getBitcoinNetwork()
-  const commit_tx_address = bitcoinjs.payments.p2tr({
+  const networkType = getBitcoinNetwork()
+  const commitTxAddress = bitcoinjs.payments.p2tr({
     pubkey: Buffer.from(tpubkey, 'hex'),
-    network: network_type,
+    network: networkType,
   })
 
-  const commit_wallet = new WalletInfo(false, null, commit_tx_address.address, null, tpubkey)
-  const utxos = cardinal_utxos.slice()
+  const commitWallet = new WalletInfo(false, null, commitTxAddress.address, null, tpubkey)
+  const utxos = cardinalUtxos.slice()
   utxos.sort((a, b) => a.value - b.value)
 
   const inputs: TxInput[] = [
     {
       utxo: {
         script_type: 'witness_v1_taproot',
-        utxo: `${commit_txid}:0`,
+        utxo: `${commitTxid}:0`,
         tapLeafScript: [
           {
             leafVersion: 192,
@@ -2647,55 +2636,55 @@ async function build_reveal_tx_with_parent(
             controlBlock: Buffer.from(cblock, 'hex'),
           },
         ],
-        value: commit_output_value,
+        value: commitOutputValue,
       },
-      wallet: commit_wallet,
+      wallet: commitWallet,
     },
     {
       utxo: {
         script_type: 'witness_v1_taproot',
-        utxo: `${parent_utxo.txid}:${parent_utxo.vout}`,
-        value: parent_utxo.value,
+        utxo: `${parentUtxo.txid}:${parentUtxo.vout}`,
+        value: parentUtxo.value,
       },
-      wallet: inscription_wallet,
+      wallet: inscriptionWallet,
     },
   ]
   const outputs: TxOutput[] = [
     {
-      out_script: inscription_wallet.outputScript,
-      value: commit_output_value,
+      out_script: inscriptionWallet.outputScript,
+      value: commitOutputValue,
     },
     {
-      out_script: inscription_wallet.outputScript,
-      value: parent_utxo.value,
+      out_script: inscriptionWallet.outputScript,
+      value: parentUtxo.value,
     },
   ]
   if (payment > 0) {
-    if (!payment_wallet)
+    if (!paymentWallet)
       throw new Error('Payment wallet is not available.')
 
     outputs.push({
-      out_script: payment_wallet.outputScript,
+      out_script: paymentWallet.outputScript,
       value: payment,
     })
   }
 
-  let fee = estimateFee(inputs, outputs, fee_rate)
-  let current_miner_fee = -payment
-  while (current_miner_fee < fee) {
-    let deficit = fee - current_miner_fee
+  let fee = estimateFee(inputs, outputs, feeRate)
+  let currentMinerFee = -payment
+  while (currentMinerFee < fee) {
+    let deficit = fee - currentMinerFee
     while (deficit > 0) {
       if (utxos.length === 0)
         throw new Error('Not enough funds')
 
       if (
         utxos[utxos.length - 1]!.value
-        >= deficit + calculateAdditionalFee(utxos[utxos.length - 1]!.script_type, fee_rate)
+        >= deficit + calculateAdditionalFee(utxos[utxos.length - 1]!.script_type, feeRate)
       ) {
         for (const utxo of utxos.filter(utxo => utxo.value > 10000)) {
-          if (utxo.value >= deficit + calculateAdditionalFee(utxo.script_type, fee_rate)) {
-            inputs.push({ utxo, wallet: payer_wallet })
-            current_miner_fee += utxo.value
+          if (utxo.value >= deficit + calculateAdditionalFee(utxo.script_type, feeRate)) {
+            inputs.push({ utxo, wallet: payerWallet })
+            currentMinerFee += utxo.value
             deficit = 0
             utxos.splice(utxos.indexOf(utxo), 1)
             break
@@ -2703,9 +2692,9 @@ async function build_reveal_tx_with_parent(
         }
         if (deficit > 0) {
           for (const utxo of utxos) {
-            if (utxo.value >= deficit + calculateAdditionalFee(utxo.script_type, fee_rate)) {
-              inputs.push({ utxo, wallet: payer_wallet })
-              current_miner_fee += utxo.value
+            if (utxo.value >= deficit + calculateAdditionalFee(utxo.script_type, feeRate)) {
+              inputs.push({ utxo, wallet: payerWallet })
+              currentMinerFee += utxo.value
               deficit = 0
               utxos.splice(utxos.indexOf(utxo), 1)
               break
@@ -2716,82 +2705,82 @@ async function build_reveal_tx_with_parent(
       else {
         const benefit
           = utxos[utxos.length - 1]!.value
-            - calculateAdditionalFee(utxos[utxos.length - 1]!.script_type, fee_rate)
+            - calculateAdditionalFee(utxos[utxos.length - 1]!.script_type, feeRate)
         deficit -= benefit
         const utxo = utxos.pop()!
-        inputs.push({ utxo, wallet: payer_wallet })
-        current_miner_fee += utxo.value
+        inputs.push({ utxo, wallet: payerWallet })
+        currentMinerFee += utxo.value
       }
     }
-    fee = estimateFee(inputs, outputs, fee_rate)
+    fee = estimateFee(inputs, outputs, feeRate)
   }
 
-  if (!change_wallet.outputScript)
+  if (!changeWallet.outputScript)
     throw new Error('Change wallet output script is not set.')
 
-  const change_output_fee = Math.ceil(change_wallet.outputScript.length + 9) * fee_rate
-  const minimum_change = getDustValue(change_wallet)
-  const excess = current_miner_fee - fee
+  const changeOutputFee = Math.ceil(changeWallet.outputScript.length + 9) * feeRate
+  const minimumChange = getDustValue(changeWallet)
+  const excess = currentMinerFee - fee
 
-  if (excess > minimum_change + change_output_fee) {
-    const change_value = excess - change_output_fee
+  if (excess > minimumChange + changeOutputFee) {
+    const changeValue = excess - changeOutputFee
     outputs.push({
-      out_script: change_wallet.outputScript,
-      value: change_value,
+      out_script: changeWallet.outputScript,
+      value: changeValue,
     })
-    current_miner_fee -= change_value
+    currentMinerFee -= changeValue
   }
 
-  fee = estimateFee(inputs, outputs, fee_rate)
-  if (current_miner_fee < fee) {
+  fee = estimateFee(inputs, outputs, feeRate)
+  if (currentMinerFee < fee) {
     throw new Error('Not enough funds to cover the fee')
   }
 
-  if (!inscription_wallet.outputScript)
+  if (!inscriptionWallet.outputScript)
     throw new Error('Inscription wallet output script is not set.')
 
-  const txdata_vin = [
+  const txdataVin = [
     {
-      txid: commit_txid,
+      txid: commitTxid,
       vout: 0,
       prevout: {
-        value: commit_output_value,
+        value: commitOutputValue,
         scriptPubKey: ['OP_1', tpubkey],
       },
     },
     {
-      txid: parent_utxo.txid,
-      vout: parent_utxo.vout,
+      txid: parentUtxo.txid,
+      vout: parentUtxo.vout,
       prevout: {
-        value: parent_utxo.value,
-        scriptPubKey: inscription_wallet.outputScript,
+        value: parentUtxo.value,
+        scriptPubKey: inscriptionWallet.outputScript,
       },
     },
   ]
 
-  const txdata_vout = [
+  const txdataVout = [
     {
-      value: commit_output_value,
-      scriptPubKey: inscription_wallet.outputScript,
+      value: commitOutputValue,
+      scriptPubKey: inscriptionWallet.outputScript,
     },
     {
-      value: parent_utxo.value,
-      scriptPubKey: inscription_wallet.outputScript,
+      value: parentUtxo.value,
+      scriptPubKey: inscriptionWallet.outputScript,
     },
   ]
   if (payment > 0) {
-    if (!payment_wallet)
+    if (!paymentWallet)
       throw new Error('Payment wallet is not available.')
-    if (!payment_wallet.outputScript)
+    if (!paymentWallet.outputScript)
       throw new Error('Payment wallet output script is not set.')
 
-    txdata_vout.push({
+    txdataVout.push({
       value: payment,
-      scriptPubKey: payment_wallet.outputScript,
+      scriptPubKey: paymentWallet.outputScript,
     })
   }
 
-  for (let i = txdata_vin.length; i < inputs.length; i++) {
+  for (let i = txdataVin.length; i < inputs.length; i++) {
     const input = inputs[i]!
     const utxo = input.utxo
     const txid = utxo.utxo.split(':')[0]!
@@ -2801,7 +2790,7 @@ async function build_reveal_tx_with_parent(
     if (!wallet.outputScript)
       throw new Error('Input wallet output script is not set.')
 
-    txdata_vin.push({
+    txdataVin.push({
       txid,
       vout,
       prevout: {
@@ -2810,7 +2799,7 @@ async function build_reveal_tx_with_parent(
       },
     })
   }
-  for (let i = txdata_vout.length; i < outputs.length; i++) {
+  for (let i = txdataVout.length; i < outputs.length; i++) {
     const output = outputs[i]!
     const scriptPubKey = output.out_script
     const value = output.value
@@ -2818,15 +2807,15 @@ async function build_reveal_tx_with_parent(
     if (!scriptPubKey)
       throw new Error('Output script is not set.')
 
-    txdata_vout.push({
+    txdataVout.push({
       value,
       scriptPubKey,
     })
   }
 
   const txdata = Tx.create({
-    vin: txdata_vin,
-    vout: txdata_vout,
+    vin: txdataVin,
+    vout: txdataVout,
   })
 
   const sig = Signer.taproot.sign(seckey, txdata, 0, { extension: tapleaf })
@@ -2856,59 +2845,57 @@ async function build_reveal_tx_with_parent(
     Buffer.from(cblock, 'hex'),
   ])
 
-  const force_in_utxos: UtxoInfoWithWallet[] = [
+  const forceInUtxos: UtxoInfoWithWallet[] = [
     {
-      utxo: `${commit_txid}:0`,
+      utxo: `${commitTxid}:0`,
       script_type: 'witness_v1_taproot',
-      witnessUtxoScript: commit_wallet.outputScript,
+      witnessUtxoScript: commitWallet.outputScript,
       sequence: undefined,
       tapLeafScript: [tapLeafScript],
       finalScriptWitness,
-      wallet: commit_wallet,
-      value: commit_output_value,
+      wallet: commitWallet,
+      value: commitOutputValue,
     },
     {
-      utxo: `${parent_utxo.txid}:${parent_utxo.vout}`,
+      utxo: `${parentUtxo.txid}:${parentUtxo.vout}`,
       script_type: 'witness_v1_taproot',
-      witnessUtxoScript: inscription_wallet.outputScript,
+      witnessUtxoScript: inscriptionWallet.outputScript,
       sequence: undefined,
       tapLeafScript: undefined,
       finalScriptWitness: undefined,
-      wallet: inscription_wallet,
-      value: parent_utxo.value,
+      wallet: inscriptionWallet,
+      value: parentUtxo.value,
     },
   ]
 
-  const partially_signed_psbt = await buildPsbtFromTx(
-    tx,
-    cardinal_utxos,
-    payer_wallet,
-    force_in_utxos,
-  )
+  const partiallySignedPsbt = await buildPsbtFromTx(tx, cardinalUtxos, payerWallet, forceInUtxos)
   return {
     txid: Tx.util.getTxid(txdata),
-    partially_signed_psbt_hex: partially_signed_psbt.toHex(),
+    partially_signed_psbt_hex: partiallySignedPsbt.toHex(),
   }
 }
 
 /**
+ * Mints an inscription by building and signing the commit and reveal transactions. The commit transaction is built using the buildCommitTx function, and the reveal transaction is built using the buildRevealTx function. The function also validates the transactions before broadcasting them to the network. If dryRun is true, the transactions will not be broadcasted and the signed transaction hex will be returned for inspection.
  *
- * @param inscription_details
- * @param fee_rate
- * @param postage
- * @param payment_addr
- * @param payment
- * @param dry_run
- * @param sign_func
+ * @param inscriptionDetails - details of the inscription to mint, including content type, content length, and the actual content in hex format
+ * @param feeRate - fee rate in sat/vbyte to use for the transactions
+ * @param postage - postage amount in satoshis to use for the transactions
+ * @param paymentAddr - address to send the payment to (if payment is not null)
+ * @param payment - amount to pay (if payment is not null)
+ * @param dryRun - if true, the transactions will not be broadcasted and the signed transaction hex will be returned for inspection
+ * @param signFunc - function to sign the transactions
+ *
+ * @returns an object containing the commit transaction ID, signed commit transaction hex, reveal transaction ID, signed reveal transaction hex, inscription ID, postage used, and the secret token used for minting
  */
-export async function mint_all(
-  inscription_details: InscriptionDetails,
-  fee_rate: number,
+export async function mintAll(
+  inscriptionDetails: InscriptionDetails,
+  feeRate: number,
   postage: number | null,
-  payment_addr: string | null,
+  paymentAddr: string | null,
   payment: number | null,
-  dry_run: boolean,
-  sign_func: SignFunction,
+  dryRun: boolean,
+  signFunc: SignFunction,
 ) {
   // Get connected wallet
   const userPaymentWallet = getPaymentWallet()
@@ -2916,61 +2903,61 @@ export async function mint_all(
   if (!userPaymentWallet || !userOrdinalsWallet)
     throw new Error('Wallets not found')
 
-  const payer_addr = userPaymentWallet.address
-  const payer_public_key = userPaymentWallet.pubkey
-  const inscription_address = userOrdinalsWallet.address
-  const inscription_public_key = userOrdinalsWallet.pubkey
+  const payerAddr = userPaymentWallet.address
+  const payerPublicKey = userPaymentWallet.pubkey
+  const inscriptionAddress = userOrdinalsWallet.address
+  const inscriptionPublicKey = userOrdinalsWallet.pubkey
 
-  const payer_wallet = new WalletInfo(false, null, payer_addr, null, payer_public_key)
-  const inscription_wallet = new WalletInfo(
+  const payerWallet = new WalletInfo(false, null, payerAddr, null, payerPublicKey)
+  const inscriptionWallet = new WalletInfo(
     false,
     null,
-    inscription_address,
+    inscriptionAddress,
     null,
-    inscription_public_key,
+    inscriptionPublicKey,
   )
-  let payment_wallet = null
-  if (payment_addr != null) {
-    payment_wallet = new WalletInfo(false, null, payment_addr, null, null)
+  let paymentWallet = null
+  if (paymentAddr != null) {
+    paymentWallet = new WalletInfo(false, null, paymentAddr, null, null)
   }
 
   if (postage == null || postage <= 0) {
-    postage = getDustValue(inscription_wallet)
+    postage = getDustValue(inscriptionWallet)
   }
 
   const secret = createSecretToken()
-  const commit_tx = await build_commit_tx(
-    payer_wallet,
-    inscription_wallet,
+  const commitTx = await buildCommitTx(
+    payerWallet,
+    inscriptionWallet,
     secret,
-    inscription_details,
-    fee_rate,
+    inscriptionDetails,
+    feeRate,
     postage,
-    payment_wallet,
+    paymentWallet,
     payment,
     [],
   )
-  const signed_commit_tx = await sign_func(
-    commit_tx.unsigned_psbt_hex,
-    payer_addr,
-    inscription_address,
+  const signedCommitTx = await signFunc(
+    commitTx.unsigned_psbt_hex,
+    payerAddr,
+    inscriptionAddress,
     [],
   )
 
-  const commit_txid = signed_commit_tx.txid
-  const reveal_tx = await build_reveal_tx(
-    inscription_wallet,
-    commit_txid,
-    commit_tx.output_value,
+  const commitTxid = signedCommitTx.txId
+  const revealTx = await buildRevealTx(
+    inscriptionWallet,
+    commitTxid,
+    commitTx.output_value,
     secret,
-    inscription_details,
-    fee_rate,
+    inscriptionDetails,
+    feeRate,
     postage,
-    payment_wallet,
+    paymentWallet,
     payment,
   )
 
-  const isValid = await validateTxes([signed_commit_tx.signed_tx_hex, reveal_tx.signed_tx_hex])
+  const isValid = await validateTxes([signedCommitTx.signedPsbtHex, revealTx.signedPsbtHex])
 
   for (const entry of isValid) {
     if (!entry.allowed) {
@@ -2978,25 +2965,25 @@ export async function mint_all(
     }
   }
 
-  if (dry_run) {
+  if (dryRun) {
     return {
-      commit_txid: signed_commit_tx.txid,
-      signed_commit_tx_hex: signed_commit_tx.signed_tx_hex,
-      reveal_txid: reveal_tx.txid,
-      signed_reveal_tx_hex: reveal_tx.signed_tx_hex,
-      inscription_id: `${reveal_tx.txid}i0`,
+      commit_txid: signedCommitTx.txId,
+      signed_commit_tx_hex: signedCommitTx.signedPsbtHex,
+      reveal_txid: revealTx.txId,
+      signed_reveal_tx_hex: revealTx.signedPsbtHex,
+      inscription_id: `${revealTx.txId}i0`,
       postage,
       secret,
     }
   }
 
-  await broadcast_txes([signed_commit_tx.signed_tx_hex, reveal_tx.signed_tx_hex])
+  await broadcastTxes([signedCommitTx.signedPsbtHex, revealTx.signedPsbtHex])
   return {
-    commit_txid: signed_commit_tx.txid,
-    signed_commit_tx_hex: signed_commit_tx.signed_tx_hex,
-    reveal_txid: reveal_tx.txid,
-    signed_reveal_tx_hex: reveal_tx.signed_tx_hex,
-    inscription_id: `${reveal_tx.txid}i0`,
+    commit_txid: signedCommitTx.txId,
+    signed_commit_tx_hex: signedCommitTx.signedPsbtHex,
+    reveal_txid: revealTx.txId,
+    signed_reveal_tx_hex: revealTx.signedPsbtHex,
+    inscription_id: `${revealTx.txId}i0`,
     postage,
     secret,
   }
@@ -3012,23 +2999,26 @@ interface InscribeResult {
   secret: string
 }
 /**
+ * Mints an inscription using the connected payment wallet for both the commit and reveal transactions. This function is a wrapper around the mintAll function that simplifies the minting process when the user wants to use the same wallet for both transactions. It retrieves the connected wallets, builds and signs the transactions, validates them, and broadcasts them to the network. If dryRun is true, it returns the signed transaction hex without broadcasting.
  *
- * @param inscription_details
- * @param fee_rate
- * @param postage
- * @param payment_addr
- * @param payment
- * @param dry_run
- * @param sign_func
+ * @param inscriptionDetails - details of the inscription to mint, including content type, content length, and the actual content in hex format
+ * @param feeRate - fee rate in sat/vbyte to use for the transactions
+ * @param postage - postage amount in satoshis to use for the transactions
+ * @param paymentAddr - address to send the payment to (if payment is not null)
+ * @param payment - amount to pay (if payment is not null)
+ * @param dryRun - if true, the transactions will not be broadcasted and the signed transaction hex will be returned for inspection
+ * @param signFunc - function to sign the transactions
+ *
+ * @returns an object containing the commit transaction ID, signed commit transaction hex, reveal transaction ID, signed reveal transaction hex, inscription ID, postage used, and the secret token used for minting
  */
-export async function mint_all_payment_wallet(
-  inscription_details: InscriptionDetails,
-  fee_rate: number,
+export async function mintAllPaymentWallet(
+  inscriptionDetails: InscriptionDetails,
+  feeRate: number,
   postage: number | null,
-  payment_addr: string | null,
+  paymentAddr: string | null,
   payment: number | null,
-  dry_run: boolean,
-  sign_func: SignFunction,
+  dryRun: boolean,
+  signFunc: SignFunction,
 ): Promise<InscribeResult> {
   // Get connected wallet
   const userPaymentWallet = getPaymentWallet()
@@ -3036,53 +3026,53 @@ export async function mint_all_payment_wallet(
   if (!userPaymentWallet || !userOrdinalsWallet)
     throw new Error('Wallets not found')
 
-  const payer_addr = userPaymentWallet.address
-  const payer_public_key = userPaymentWallet.pubkey
-  const inscription_address = userOrdinalsWallet.address
+  const payerAddr = userPaymentWallet.address
+  const payerPublicKey = userPaymentWallet.pubkey
+  const inscriptionAddress = userOrdinalsWallet.address
 
-  const payer_wallet = new WalletInfo(false, null, payer_addr, null, payer_public_key)
-  let payment_wallet = null
-  if (payment_addr != null) {
-    payment_wallet = new WalletInfo(false, null, payment_addr, null, null)
+  const payerWallet = new WalletInfo(false, null, payerAddr, null, payerPublicKey)
+  let paymentWallet = null
+  if (paymentAddr != null) {
+    paymentWallet = new WalletInfo(false, null, paymentAddr, null, null)
   }
 
   if (postage == null || postage <= 0) {
-    postage = getDustValue(payer_wallet)
+    postage = getDustValue(payerWallet)
   }
 
   const secret = createSecretToken()
-  const commit_tx = await build_commit_tx(
-    payer_wallet,
-    payer_wallet,
+  const commitTx = await buildCommitTx(
+    payerWallet,
+    payerWallet,
     secret,
-    inscription_details,
-    fee_rate,
+    inscriptionDetails,
+    feeRate,
     postage,
-    payment_wallet,
+    paymentWallet,
     payment,
     [],
   )
-  const signed_commit_tx = await sign_func(
-    commit_tx.unsigned_psbt_hex,
-    payer_addr,
-    inscription_address,
+  const signedCommitTx = await signFunc(
+    commitTx.unsigned_psbt_hex,
+    payerAddr,
+    inscriptionAddress,
     [],
   )
 
-  const commit_txid = signed_commit_tx.txid
-  const reveal_tx = await build_reveal_tx(
-    payer_wallet,
-    commit_txid,
-    commit_tx.output_value,
+  const commitTxid = signedCommitTx.txId
+  const revealTx = await buildRevealTx(
+    payerWallet,
+    commitTxid,
+    commitTx.output_value,
     secret,
-    inscription_details,
-    fee_rate,
+    inscriptionDetails,
+    feeRate,
     postage,
-    payment_wallet,
+    paymentWallet,
     payment,
   )
 
-  const isValid = await validateTxes([signed_commit_tx.signed_tx_hex, reveal_tx.signed_tx_hex])
+  const isValid = await validateTxes([signedCommitTx.signedPsbtHex, revealTx.signedPsbtHex])
 
   for (const entry of isValid) {
     if (!entry.allowed) {
@@ -3090,25 +3080,25 @@ export async function mint_all_payment_wallet(
     }
   }
 
-  if (dry_run) {
+  if (dryRun) {
     return {
-      commit_txid: signed_commit_tx.txid,
-      signed_commit_tx_hex: signed_commit_tx.signed_tx_hex,
-      reveal_txid: reveal_tx.txid,
-      signed_reveal_tx_hex: reveal_tx.signed_tx_hex,
-      inscription_id: `${reveal_tx.txid}i0`,
+      commit_txid: signedCommitTx.txId,
+      signed_commit_tx_hex: signedCommitTx.signedPsbtHex,
+      reveal_txid: revealTx.txId,
+      signed_reveal_tx_hex: revealTx.signedPsbtHex,
+      inscription_id: `${revealTx.txId}i0`,
       postage,
       secret,
     }
   }
 
-  await broadcast_txes([signed_commit_tx.signed_tx_hex, reveal_tx.signed_tx_hex])
+  await broadcastTxes([signedCommitTx.signedPsbtHex, revealTx.signedPsbtHex])
   return {
-    commit_txid: signed_commit_tx.txid,
-    signed_commit_tx_hex: signed_commit_tx.signed_tx_hex,
-    reveal_txid: reveal_tx.txid,
-    signed_reveal_tx_hex: reveal_tx.signed_tx_hex,
-    inscription_id: `${reveal_tx.txid}i0`,
+    commit_txid: signedCommitTx.txId,
+    signed_commit_tx_hex: signedCommitTx.signedPsbtHex,
+    reveal_txid: revealTx.txId,
+    signed_reveal_tx_hex: revealTx.signedPsbtHex,
+    inscription_id: `${revealTx.txId}i0`,
     postage,
     secret,
   }
@@ -3124,18 +3114,21 @@ interface InscribeCheckFeesResult {
   postage: number
 }
 /**
+ * Checks the fees for minting an inscription by building the commit and reveal transactions without signing or broadcasting them. This function is useful for users who want to estimate the fees before actually minting the inscription. It returns the estimated commit fee, reveal fee, total fee, unsigned commit transaction hex, signed reveal transaction hex, inscription ID, and postage used.
  *
- * @param inscription_details
- * @param fee_rate
- * @param postage
- * @param payment_addr
- * @param payment
+ * @param inscriptionDetails - details of the inscription to mint, including content type, content length, and the actual content in hex format
+ * @param feeRate - fee rate in sat/vbyte to use for the transactions
+ * @param postage - postage amount in satoshis to use for the transactions
+ * @param paymentAddr - address to send the payment to (if payment is not null)
+ * @param payment - amount to pay (if payment is not null)
+ *
+ * @returns an object containing the estimated commit fee, reveal fee, total fee, unsigned commit transaction hex, signed reveal transaction hex, inscription ID, and postage used
  */
-export async function mint_all_check_fees(
-  inscription_details: InscriptionDetails,
-  fee_rate: number,
+export async function mintAllCheckFees(
+  inscriptionDetails: InscriptionDetails,
+  feeRate: number,
   postage: number | null,
-  payment_addr: string | null,
+  paymentAddr: string | null,
   payment: number | null,
 ): Promise<InscribeCheckFeesResult> {
   // Get connected wallet
@@ -3144,785 +3137,12 @@ export async function mint_all_check_fees(
   if (!userPaymentWallet || !userOrdinalsWallet)
     throw new Error('Wallets not found')
 
-  const payer_addr = userPaymentWallet.address
-  const payer_public_key = userPaymentWallet.pubkey
-  const inscription_address = userOrdinalsWallet.address
-  const inscription_public_key = userOrdinalsWallet.pubkey
-
-  const payer_wallet = new WalletInfo(false, null, payer_addr, null, payer_public_key)
-  const inscription_wallet = new WalletInfo(
-    false,
-    null,
-    inscription_address,
-    null,
-    inscription_public_key,
-  )
-  let payment_wallet = null
-  if (payment_addr != null) {
-    payment_wallet = new WalletInfo(false, null, payment_addr, null, null)
-  }
-
-  if (postage == null || postage <= 0) {
-    postage = getDustValue(inscription_wallet)
-  }
-
-  const secret = createSecretToken()
-  const commit_tx = await build_commit_tx(
-    payer_wallet,
-    inscription_wallet,
-    secret,
-    inscription_details,
-    fee_rate,
-    postage,
-    payment_wallet,
-    payment,
-    [],
-  )
-  const dummy_commit_txid = commit_tx.unsigned_commit_tx.getId()
-  const reveal_tx = await build_reveal_tx(
-    inscription_wallet,
-    dummy_commit_txid,
-    commit_tx.output_value,
-    secret,
-    inscription_details,
-    fee_rate,
-    postage,
-    payment_wallet,
-    payment,
-  )
-
-  return {
-    commit_fee: commit_tx.commit_fee,
-    reveal_fee: commit_tx.reveal_fee,
-    total_fee: commit_tx.commit_fee + commit_tx.reveal_fee,
-    unsigned_commit_tx_hex: commit_tx.unsigned_commit_tx.toHex(),
-    signed_reveal_tx_hex: reveal_tx.signed_tx_hex,
-    inscription_id: `${reveal_tx.txid}i0`,
-    postage,
-  }
-}
-
-/**
- *
- * @param inscription_id
- * @param target_wallet
- * @param target_postage
- * @param fee_rate
- * @param dry_run
- * @param sign_func
- */
-export async function send_inscription_to_op_return_all(
-  inscription_id: string,
-  target_wallet: WalletInfo,
-  target_postage: number,
-  fee_rate: number,
-  dry_run: boolean,
-  sign_func: SignFunction,
-): Promise<SignResponse> {
-  // Get connected wallet
-  const userPaymentWallet = getPaymentWallet()
-  const userOrdinalsWallet = getOrdinalsWallet()
-  if (!userPaymentWallet || !userOrdinalsWallet)
-    throw new Error('Wallets not found')
-
-  const payment_addr = userPaymentWallet.address
-  const payment_public_key = userPaymentWallet.pubkey
-  const inscription_address = userOrdinalsWallet.address
-  const inscription_public_key = userOrdinalsWallet.pubkey
-
-  const payer_wallet = new WalletInfo(false, null, payment_addr, null, payment_public_key)
-  const inscription_wallet = new WalletInfo(
-    false,
-    null,
-    inscription_address,
-    null,
-    inscription_public_key,
-  )
-
-  if (!inscription_wallet.addr)
-    throw new Error('Inscription wallet address is not set.')
-
-  const inscription_details = await get_inscription_details(inscription_id, inscription_wallet.addr)
-  if (inscription_details == null) {
-    throw new Error('Inscription cannot be found in wallet')
-  }
-  if (inscription_details.satpoint.split(':')[2] !== '0') {
-    // TODO: implement this case as well
-    throw new Error('Inscription is at the first sat of utxo')
-  }
-
-  if (!payer_wallet.addr)
-    throw new Error('Payer wallet address is not set.')
-
-  const cardinal_utxos = await getCardinalUtxos(payer_wallet.addr)
-
-  if (target_postage <= 0 || target_postage == null) {
-    target_postage = 1 // 1 sat for inscription
-  }
-
-  const inscr_utxo: UtxoInfoWithWallet = {
-    utxo: `${inscription_details.satpoint.split(':')[0]}:${inscription_details.satpoint.split(':')[1]}`,
-    value: inscription_details.value,
-    script_type: inscription_details.script_type,
-    wallet: inscription_wallet,
-  }
-
-  const unsigned_tx_resp = buildTransaction(
-    cardinal_utxos,
-    [inscr_utxo],
-    payer_wallet,
-    [],
-    target_wallet,
-    payer_wallet,
-    fee_rate,
-    target_postage,
-    null,
-    null,
-  )
-  const unsigned_tx = unsigned_tx_resp.tx
-
-  const unsigned_psbt = await buildPsbtFromTx(unsigned_tx, cardinal_utxos, payer_wallet, [
-    inscr_utxo,
-  ])
-  const unsigned_psbt_hex = unsigned_psbt.toHex()
-
-  const signed_tx = await sign_func(
-    unsigned_psbt_hex,
-    payer_wallet.addr,
-    inscription_wallet.addr,
-    [0],
-  )
-
-  const isValid = await validateTxes([signed_tx.signed_tx_hex])
-
-  for (const entry of isValid) {
-    if (!entry.allowed) {
-      throw new Error(entry['reject-reason'])
-    }
-  }
-
-  if (dry_run) {
-    return signed_tx
-  }
-
-  await broadcast_txes([signed_tx.signed_tx_hex])
-
-  return signed_tx
-}
-
-/**
- *
- * @param inscription_id
- * @param target_wallet
- * @param target_postage
- * @param fee_rate
- * @param dry_run
- * @param sign_func
- */
-export async function send_inscription_in_payment_wallet_to_op_return_all(
-  inscription_id: string,
-  target_wallet: WalletInfo,
-  target_postage: number,
-  fee_rate: number,
-  dry_run: boolean,
-  sign_func: SignFunction,
-): Promise<SignResponse> {
-  // Get connected wallet
-  const userPaymentWallet = getPaymentWallet()
-  const userOrdinalsWallet = getOrdinalsWallet()
-  if (!userPaymentWallet || !userOrdinalsWallet)
-    throw new Error('Wallets not found')
-
-  const payment_addr = userPaymentWallet.address
-  const payment_public_key = userPaymentWallet.pubkey
-  const inscription_addr = userOrdinalsWallet.address
-  const inscription_public_key = userOrdinalsWallet.pubkey
-
-  const payer_wallet = new WalletInfo(false, null, payment_addr, null, payment_public_key)
-  const inscription_wallet = new WalletInfo(
-    false,
-    null,
-    inscription_addr,
-    null,
-    inscription_public_key,
-  )
-
-  if (!payer_wallet.addr)
-    throw new Error('Payment wallet address is not set.')
-  if (!inscription_wallet.addr)
-    throw new Error('Inscription wallet address is not set.')
-
-  const inscription_details = await get_inscription_details(inscription_id, payer_wallet.addr)
-  if (inscription_details == null) {
-    throw new Error('Inscription cannot be found in wallet')
-  }
-  if (inscription_details.satpoint.split(':')[2] !== '0') {
-    // TODO: implement this case as well
-    throw new Error('Inscription is at the first sat of utxo')
-  }
-
-  if (!payer_wallet.addr)
-    throw new Error('Payer wallet address is not set.')
-
-  const cardinal_utxos = await getCardinalUtxos(payer_wallet.addr)
-
-  if (target_postage <= 0 || target_postage == null) {
-    target_postage = 1 // 1 sat for inscription
-  }
-
-  const inscr_utxo: UtxoInfoWithWallet = {
-    utxo: `${inscription_details.satpoint.split(':')[0]}:${inscription_details.satpoint.split(':')[1]}`,
-    value: inscription_details.value,
-    script_type: inscription_details.script_type,
-    wallet: payer_wallet,
-  }
-
-  const unsigned_tx_resp = buildTransaction(
-    cardinal_utxos,
-    [inscr_utxo],
-    payer_wallet,
-    [],
-    target_wallet,
-    payer_wallet,
-    fee_rate,
-    target_postage,
-    null,
-    null,
-  )
-  const unsigned_tx = unsigned_tx_resp.tx
-
-  const unsigned_psbt = await buildPsbtFromTx(unsigned_tx, cardinal_utxos, payer_wallet, [
-    inscr_utxo,
-  ])
-  const unsigned_psbt_hex = unsigned_psbt.toHex()
-
-  const signed_tx = await sign_func(
-    unsigned_psbt_hex,
-    payer_wallet.addr,
-    inscription_wallet.addr,
-    [],
-  )
-
-  const isValid = await validateTxes([signed_tx.signed_tx_hex])
-
-  for (const entry of isValid) {
-    if (!entry.allowed) {
-      throw new Error(entry['reject-reason'])
-    }
-  }
-
-  if (dry_run) {
-    return signed_tx
-  }
-
-  await broadcast_txes([signed_tx.signed_tx_hex])
-  return signed_tx
-}
-
-/**
- *
- * @param inscription_details
- * @param parent_inscription_id
- * @param fee_rate
- * @param postage
- * @param payment_addr
- * @param payment
- * @param dry_run
- * @param sign_func
- */
-export async function mint_with_parent_all(
-  inscription_details: InscriptionDetails,
-  parent_inscription_id: string,
-  fee_rate: number,
-  postage: number | null,
-  payment_addr: string | null,
-  payment: number | null,
-  dry_run: boolean,
-  sign_func: SignFunction,
-): Promise<InscribeResult> {
-  // Get connected wallet
-  const userPaymentWallet = getPaymentWallet()
-  const userOrdinalsWallet = getOrdinalsWallet()
-  if (!userPaymentWallet || !userOrdinalsWallet)
-    throw new Error('Wallets not found')
-
-  const payer_addr = userPaymentWallet.address
-  const payer_public_key = userPaymentWallet.pubkey
-  const inscription_address = userOrdinalsWallet.address
-  const inscription_public_key = userOrdinalsWallet.pubkey
-
-  const payer_wallet = new WalletInfo(false, null, payer_addr, null, payer_public_key)
-  const inscription_wallet = new WalletInfo(
-    false,
-    null,
-    inscription_address,
-    null,
-    inscription_public_key,
-  )
-  let payment_wallet = null
-  if (payment_addr != null) {
-    payment_wallet = new WalletInfo(false, null, payment_addr, null, null)
-  }
-
-  if (postage == null || postage <= 0) {
-    postage = getDustValue(inscription_wallet)
-  }
-
-  const secret = createSecretToken()
-  const commit_tx = await build_commit_tx_with_parent(
-    payer_wallet,
-    inscription_wallet,
-    secret,
-    inscription_details,
-    fee_rate,
-    postage,
-    parent_inscription_id,
-  )
-  const signed_commit_tx = await sign_func(
-    commit_tx.unsigned_psbt_hex,
-    payer_addr,
-    inscription_address,
-    [],
-  )
-
-  const commit_txid = signed_commit_tx.txid
-  let signed_reveal_tx = null
-  try {
-    saveExtraUtxos(
-      [signed_commit_tx.signed_tx_hex],
-      ['0000000000000000000000000000000000000000000000000000000000000000i0', `${commit_txid}:0:0`],
-    )
-    const reveal_tx = await build_reveal_tx_with_parent(
-      payer_wallet,
-      inscription_wallet,
-      commit_txid,
-      commit_tx.output_value,
-      secret,
-      inscription_details,
-      parent_inscription_id,
-      fee_rate,
-      payment_wallet,
-      payment,
-    )
-
-    signed_reveal_tx = await sign_func(
-      reveal_tx.partially_signed_psbt_hex,
-      payer_addr,
-      inscription_address,
-      [1],
-      undefined,
-      [0],
-    )
-  }
-  finally {
-    clearExtraUtxos()
-  }
-
-  const isValid = await validateTxes([
-    signed_commit_tx.signed_tx_hex,
-    signed_reveal_tx.signed_tx_hex,
-  ])
-
-  for (const entry of isValid) {
-    if (!entry.allowed) {
-      throw new Error(entry['reject-reason'])
-    }
-  }
-
-  if (dry_run) {
-    return {
-      commit_txid: signed_commit_tx.txid,
-      signed_commit_tx_hex: signed_commit_tx.signed_tx_hex,
-      reveal_txid: signed_reveal_tx.txid,
-      signed_reveal_tx_hex: signed_reveal_tx.signed_tx_hex,
-      inscription_id: `${signed_reveal_tx.txid}i0`,
-      postage,
-      secret,
-    }
-  }
-  await broadcast_txes([signed_commit_tx.signed_tx_hex, signed_reveal_tx.signed_tx_hex])
-  return {
-    commit_txid: signed_commit_tx.txid,
-    signed_commit_tx_hex: signed_commit_tx.signed_tx_hex,
-    reveal_txid: signed_reveal_tx.txid,
-    signed_reveal_tx_hex: signed_reveal_tx.signed_tx_hex,
-    inscription_id: `${signed_reveal_tx.txid}i0`,
-    postage,
-    secret,
-  }
-}
-
-interface OutputUtxoInfo {
-  wallet: WalletInfo
-  value: number
-}
-/**
- *
- * @param inscription_id
- * @param extra_input_utxos
- * @param target_wallet
- * @param target_postage
- * @param extra_output_utxos
- * @param fee_rate
- * @param dry_run
- * @param sign_func
- */
-export async function send_inscription_to_op_return_with_extra_inputs_and_extra_output_all(
-  inscription_id: string,
-  extra_input_utxos: UtxoInfoWithWallet[],
-  target_wallet: WalletInfo,
-  target_postage: number,
-  extra_output_utxos: OutputUtxoInfo[],
-  fee_rate: number,
-  dry_run: boolean,
-  sign_func: SignFunction,
-): Promise<SignResponse> {
-  // Get connected wallet
-  const userPaymentWallet = getPaymentWallet()
-  const userOrdinalsWallet = getOrdinalsWallet()
-  if (!userPaymentWallet || !userOrdinalsWallet)
-    throw new Error('Wallets not found')
-
-  const payer_addr = userPaymentWallet.address
-  const payer_public_key = userPaymentWallet.pubkey
-  const inscription_address = userOrdinalsWallet.address
-  const inscription_public_key = userOrdinalsWallet.pubkey
-
-  const payer_wallet = new WalletInfo(false, null, payer_addr, null, payer_public_key)
-  const inscription_wallet = new WalletInfo(
-    false,
-    null,
-    inscription_address,
-    null,
-    inscription_public_key,
-  )
-
-  if (!inscription_wallet.addr)
-    throw new Error('Inscription wallet address is not set.')
-
-  const inscription_details = await get_inscription_details(inscription_id, inscription_wallet.addr)
-  if (inscription_details == null) {
-    throw new Error('Inscription cannot be found in wallet')
-  }
-  if (inscription_details.satpoint.split(':')[2] !== '0') {
-    throw new Error('Inscription is not at the first sat of utxo')
-  }
-
-  if (!payer_wallet.addr)
-    throw new Error('Payer wallet address is not set.')
-
-  const cardinal_utxos = await getCardinalUtxos(payer_wallet.addr)
-
-  if (target_postage <= 0 || target_postage == null) {
-    target_postage = 1 // 1 sat for inscription
-  }
-
-  const inscr_utxo: UtxoInfoWithWallet = {
-    utxo: `${inscription_details.satpoint.split(':')[0]}:${inscription_details.satpoint.split(':')[1]}`,
-    value: inscription_details.value,
-    script_type: inscription_details.script_type,
-    wallet: inscription_wallet,
-  }
-  const extra_utxo_objs: UtxoInfoWithWallet[] = [inscr_utxo]
-  for (const extra_input of extra_input_utxos) {
-    extra_utxo_objs.push(extra_input)
-  }
-
-  const output_wallets: WalletInfo[] = [target_wallet]
-  const amounts: number[] = [target_postage]
-  for (const extra_output of extra_output_utxos) {
-    output_wallets.push(extra_output.wallet)
-    amounts.push(extra_output.value)
-  }
-
-  const unsigned_tx_resp = build_transaction_multi_output(
-    cardinal_utxos,
-    extra_utxo_objs,
-    payer_wallet,
-    output_wallets,
-    amounts,
-    payer_wallet,
-    fee_rate,
-  )
-  const unsigned_tx = unsigned_tx_resp.tx
-
-  const unsigned_psbt = await buildPsbtFromTx(
-    unsigned_tx,
-    cardinal_utxos,
-    payer_wallet,
-    extra_utxo_objs,
-  )
-  const unsigned_psbt_hex = unsigned_psbt.toHex()
-
-  const signed_tx = await sign_func(
-    unsigned_psbt_hex,
-    payer_wallet.addr,
-    inscription_wallet.addr,
-    [0],
-  )
-
-  const isValid = await validateTxes([signed_tx.signed_tx_hex])
-
-  for (const entry of isValid) {
-    if (!entry.allowed) {
-      throw new Error(entry['reject-reason'])
-    }
-  }
-
-  if (dry_run) {
-    return {
-      txid: signed_tx.txid,
-      signed_tx_hex: signed_tx.signed_tx_hex,
-    }
-  }
-
-  await broadcast_txes([signed_tx.signed_tx_hex])
-  return {
-    txid: signed_tx.txid,
-    signed_tx_hex: signed_tx.signed_tx_hex,
-  }
-}
-
-interface SendInscriptionFeeRateResult {
-  txid: string
-  unsigned_tx_hex: string
-  tx_fee: number
-}
-/**
- *
- * @param inscription_id
- * @param extra_input_utxos
- * @param target_wallet
- * @param target_postage
- * @param extra_output_utxos
- * @param fee_rate
- */
-export async function send_inscription_to_op_return_with_extra_inputs_and_extra_output_fee_rate(
-  inscription_id: string,
-  extra_input_utxos: UtxoInfoWithWallet[],
-  target_wallet: WalletInfo,
-  target_postage: number,
-  extra_output_utxos: OutputUtxoInfo[],
-  fee_rate: number,
-): Promise<SendInscriptionFeeRateResult> {
-  // Get connected wallet
-  const userPaymentWallet = getPaymentWallet()
-  const userOrdinalsWallet = getOrdinalsWallet()
-  if (!userPaymentWallet || !userOrdinalsWallet)
-    throw new Error('Wallets not found')
-
-  const payer_addr = userPaymentWallet.address
-  const payer_public_key = userPaymentWallet.pubkey
-  const inscription_address = userOrdinalsWallet.address
-  const inscription_public_key = userOrdinalsWallet.pubkey
-
-  const payer_wallet = new WalletInfo(false, null, payer_addr, null, payer_public_key)
-  const inscription_wallet = new WalletInfo(
-    false,
-    null,
-    inscription_address,
-    null,
-    inscription_public_key,
-  )
-
-  if (!inscription_wallet.addr)
-    throw new Error('Inscription wallet address is not set.')
-
-  const inscription_details = await get_inscription_details(inscription_id, inscription_wallet.addr)
-  if (inscription_details == null) {
-    throw new Error('Inscription cannot be found in wallet')
-  }
-  if (inscription_details.satpoint.split(':')[2] !== '0') {
-    throw new Error('Inscription is not at the first sat of utxo')
-  }
-
-  if (!payer_wallet.addr)
-    throw new Error('Payer wallet address is not set.')
-
-  const cardinal_utxos = await getCardinalUtxos(payer_wallet.addr)
-
-  if (target_postage <= 0 || target_postage == null) {
-    target_postage = 1 // 1 sat for inscription
-  }
-
-  const inscr_utxo: UtxoInfoWithWallet = {
-    utxo: `${inscription_details.satpoint.split(':')[0]}:${inscription_details.satpoint.split(':')[1]}`,
-    value: inscription_details.value,
-    script_type: inscription_details.script_type,
-    wallet: inscription_wallet,
-  }
-  const extra_utxo_objs: UtxoInfoWithWallet[] = [inscr_utxo]
-  for (const extra_input of extra_input_utxos) {
-    extra_utxo_objs.push(extra_input)
-  }
-
-  const output_wallets: WalletInfo[] = [target_wallet]
-  const amounts: number[] = [target_postage]
-  for (const extra_output of extra_output_utxos) {
-    output_wallets.push(extra_output.wallet)
-    amounts.push(extra_output.value)
-  }
-
-  const unsigned_tx_resp = build_transaction_multi_output(
-    cardinal_utxos,
-    extra_utxo_objs,
-    payer_wallet,
-    output_wallets,
-    amounts,
-    payer_wallet,
-    fee_rate,
-  )
-  const unsigned_tx = unsigned_tx_resp.tx
-
-  return {
-    txid: unsigned_tx.getId(),
-    unsigned_tx_hex: unsigned_tx.toHex(),
-    tx_fee: unsigned_tx_resp.tx_fee,
-  }
-}
-
-/**
- *
- * @param inscription_details
- * @param extra_input_utxos
- * @param fee_rate
- * @param postage
- * @param payment_addr
- * @param payment
- * @param dry_run
- * @param sign_func
- */
-export async function mint_with_extra_input_in_commit_all(
-  inscription_details: InscriptionDetails,
-  extra_input_utxos: UtxoInfoWithWallet[],
-  fee_rate: number,
-  postage: number | null,
-  payment_addr: string | null,
-  payment: number | null,
-  dry_run: boolean,
-  sign_func: SignFunction,
-): Promise<InscribeResult> {
-  // Get connected wallet
-  const userPaymentWallet = getPaymentWallet()
-  const userOrdinalsWallet = getOrdinalsWallet()
-  if (!userPaymentWallet || !userOrdinalsWallet)
-    throw new Error('Wallets not found')
-
-  const payer_addr = userPaymentWallet.address
-  const payer_public_key = userPaymentWallet.pubkey
-  const inscription_address = userOrdinalsWallet.address
-  const inscription_public_key = userOrdinalsWallet.pubkey
-
-  const payer_wallet = new WalletInfo(false, null, payer_addr, null, payer_public_key)
-  const inscription_wallet = new WalletInfo(
-    false,
-    null,
-    inscription_address,
-    null,
-    inscription_public_key,
-  )
-  let payment_wallet = null
-  if (payment_addr != null) {
-    payment_wallet = new WalletInfo(false, null, payment_addr, null, null)
-  }
-
-  if (postage == null || postage <= 0) {
-    postage = getDustValue(inscription_wallet)
-  }
-
-  const secret = createSecretToken()
-  const commit_tx = await build_commit_tx(
-    payer_wallet,
-    inscription_wallet,
-    secret,
-    inscription_details,
-    fee_rate,
-    postage,
-    payment_wallet,
-    payment,
-    extra_input_utxos,
-  )
-  const signed_commit_tx = await sign_func(
-    commit_tx.unsigned_psbt_hex,
-    payer_addr,
-    inscription_address,
-    [],
-  )
-
-  const commit_txid = signed_commit_tx.txid
-  const reveal_tx = await build_reveal_tx(
-    inscription_wallet,
-    commit_txid,
-    commit_tx.output_value,
-    secret,
-    inscription_details,
-    fee_rate,
-    postage,
-    payment_wallet,
-    payment,
-  )
-
-  const isValid = await validateTxes([signed_commit_tx.signed_tx_hex, reveal_tx.signed_tx_hex])
-
-  for (const entry of isValid) {
-    if (!entry.allowed) {
-      throw new Error(entry['reject-reason'])
-    }
-  }
-
-  if (dry_run) {
-    return {
-      commit_txid: signed_commit_tx.txid,
-      signed_commit_tx_hex: signed_commit_tx.signed_tx_hex,
-      reveal_txid: reveal_tx.txid,
-      signed_reveal_tx_hex: reveal_tx.signed_tx_hex,
-      inscription_id: `${reveal_tx.txid}i0`,
-      postage,
-      secret,
-    }
-  }
-
-  await broadcast_txes([signed_commit_tx.signed_tx_hex, reveal_tx.signed_tx_hex])
-  return {
-    commit_txid: signed_commit_tx.txid,
-    signed_commit_tx_hex: signed_commit_tx.signed_tx_hex,
-    reveal_txid: reveal_tx.txid,
-    signed_reveal_tx_hex: reveal_tx.signed_tx_hex,
-    inscription_id: `${reveal_tx.txid}i0`,
-    postage,
-    secret,
-  }
-}
-
-/**
- *
- * @param inscription_details
- * @param extra_input_utxos
- * @param fee_rate
- * @param postage
- * @param payment_addr
- * @param payment
- */
-export async function mint_with_extra_input_in_commit_fee_rate(
-  inscription_details: InscriptionDetails,
-  extra_input_utxos: UtxoInfoWithWallet[],
-  fee_rate: number,
-  postage: number | null,
-  payment_addr: string | null,
-  payment: number | null,
-): Promise<InscribeCheckFeesResult> {
-  // Get connected wallet
-  const userPaymentWallet = getPaymentWallet()
-  const userOrdinalsWallet = getOrdinalsWallet()
-  if (!userPaymentWallet || !userOrdinalsWallet)
-    throw new Error('Wallets not found')
-
-  const payer_addr = userPaymentWallet.address
-  const payer_public_key = userPaymentWallet.pubkey
+  const payerAddr = userPaymentWallet.address
+  const payerPublicKey = userPaymentWallet.pubkey
   const inscriptionAddress = userOrdinalsWallet.address
   const inscriptionPublicKey = userOrdinalsWallet.pubkey
 
-  const payerWallet = new WalletInfo(false, null, payer_addr, null, payer_public_key)
+  const payerWallet = new WalletInfo(false, null, payerAddr, null, payerPublicKey)
   const inscriptionWallet = new WalletInfo(
     false,
     null,
@@ -3931,8 +3151,8 @@ export async function mint_with_extra_input_in_commit_fee_rate(
     inscriptionPublicKey,
   )
   let paymentWallet = null
-  if (payment_addr != null) {
-    paymentWallet = new WalletInfo(false, null, payment_addr, null, null)
+  if (paymentAddr != null) {
+    paymentWallet = new WalletInfo(false, null, paymentAddr, null, null)
   }
 
   if (postage == null || postage <= 0) {
@@ -3940,25 +3160,25 @@ export async function mint_with_extra_input_in_commit_fee_rate(
   }
 
   const secret = createSecretToken()
-  const commitTx = await build_commit_tx(
+  const commitTx = await buildCommitTx(
     payerWallet,
     inscriptionWallet,
     secret,
-    inscription_details,
-    fee_rate,
+    inscriptionDetails,
+    feeRate,
     postage,
     paymentWallet,
     payment,
-    extra_input_utxos,
+    [],
   )
-  const dummyCommitTxId = commitTx.unsigned_commit_tx.getId()
-  const revealTx = await build_reveal_tx(
+  const dummyCommitTxid = commitTx.unsigned_commit_tx.getId()
+  const revealTx = await buildRevealTx(
     inscriptionWallet,
-    dummyCommitTxId,
+    dummyCommitTxid,
     commitTx.output_value,
     secret,
-    inscription_details,
-    fee_rate,
+    inscriptionDetails,
+    feeRate,
     postage,
     paymentWallet,
     payment,
@@ -3969,8 +3189,769 @@ export async function mint_with_extra_input_in_commit_fee_rate(
     reveal_fee: commitTx.reveal_fee,
     total_fee: commitTx.commit_fee + commitTx.reveal_fee,
     unsigned_commit_tx_hex: commitTx.unsigned_commit_tx.toHex(),
-    signed_reveal_tx_hex: revealTx.signed_tx_hex,
-    inscription_id: `${revealTx.txid}i0`,
+    signed_reveal_tx_hex: revealTx.signedPsbtHex,
+    inscription_id: `${revealTx.txId}i0`,
+    postage,
+  }
+}
+
+/**
+ * Sends an inscription to a target address using an OP_RETURN output. This function builds a transaction that spends the inscription UTXO and creates an OP_RETURN output with the inscription data, along with a target output with the specified postage. It then signs and broadcasts the transaction. If dryRun is true, it returns the signed transaction hex without broadcasting.
+ *
+ * @param inscriptionId - ID of the inscription to send, in the format of "txid:output_index"
+ * @param targetWallet - wallet information of the target address to send the inscription to
+ * @param targetPostage - postage amount in satoshis to include in the target output
+ * @param feeRate - fee rate in sat/vbyte to use for the transaction
+ * @param dryRun - if true, the transaction will not be broadcasted
+ * @param signFunc - function to sign the transaction
+ *
+ * @returns an object containing the transaction ID and signed transaction hex of the sent transaction
+ */
+export async function sendInscriptionToOpReturnAll(
+  inscriptionId: string,
+  targetWallet: WalletInfo,
+  targetPostage: number,
+  feeRate: number,
+  dryRun: boolean,
+  signFunc: SignFunction,
+): Promise<SignResponse> {
+  // Get connected wallet
+  const userPaymentWallet = getPaymentWallet()
+  const userOrdinalsWallet = getOrdinalsWallet()
+  if (!userPaymentWallet || !userOrdinalsWallet)
+    throw new Error('Wallets not found')
+
+  const paymentAddr = userPaymentWallet.address
+  const paymentPublicKey = userPaymentWallet.pubkey
+  const inscriptionAddress = userOrdinalsWallet.address
+  const inscriptionPublicKey = userOrdinalsWallet.pubkey
+
+  const payerWallet = new WalletInfo(false, null, paymentAddr, null, paymentPublicKey)
+  const inscriptionWallet = new WalletInfo(
+    false,
+    null,
+    inscriptionAddress,
+    null,
+    inscriptionPublicKey,
+  )
+
+  if (!inscriptionWallet.addr)
+    throw new Error('Inscription wallet address is not set.')
+
+  const inscriptionDetails = await getInscriptionDetails(inscriptionId, inscriptionWallet.addr)
+  if (inscriptionDetails == null) {
+    throw new Error('Inscription cannot be found in wallet')
+  }
+  if (inscriptionDetails.satpoint.split(':')[2] !== '0') {
+    // TODO: implement this case as well
+    throw new Error('Inscription is at the first sat of utxo')
+  }
+
+  if (!payerWallet.addr)
+    throw new Error('Payer wallet address is not set.')
+
+  const cardinalUtxos = await getCardinalUtxos(payerWallet.addr)
+
+  if (targetPostage <= 0 || targetPostage == null) {
+    targetPostage = 1 // 1 sat for inscription
+  }
+
+  const inscrUtxo: UtxoInfoWithWallet = {
+    utxo: `${inscriptionDetails.satpoint.split(':')[0]}:${inscriptionDetails.satpoint.split(':')[1]}`,
+    value: inscriptionDetails.value,
+    script_type: inscriptionDetails.script_type,
+    wallet: inscriptionWallet,
+  }
+
+  const unsignedTxResp = buildTransaction(
+    cardinalUtxos,
+    [inscrUtxo],
+    payerWallet,
+    [],
+    targetWallet,
+    payerWallet,
+    feeRate,
+    targetPostage,
+    null,
+    null,
+  )
+  const unsignedTx = unsignedTxResp.tx
+
+  const unsignedPsbt = await buildPsbtFromTx(unsignedTx, cardinalUtxos, payerWallet, [inscrUtxo])
+  const unsignedPsbtHex = unsignedPsbt.toHex()
+
+  const signedTx = await signFunc(unsignedPsbtHex, payerWallet.addr, inscriptionWallet.addr, [0])
+
+  const isValid = await validateTxes([signedTx.signedPsbtHex])
+
+  for (const entry of isValid) {
+    if (!entry.allowed) {
+      throw new Error(entry['reject-reason'])
+    }
+  }
+
+  if (dryRun) {
+    return signedTx
+  }
+
+  await broadcastTxes([signedTx.signedPsbtHex])
+
+  return signedTx
+}
+
+/**
+ * Sends an inscription to a target address using an OP_RETURN output, with the payment wallet as the source of funds for the transaction. This function is similar to sendInscriptionToOpReturnAll, but it specifically uses the payment wallet for funding the transaction, which can be useful in cases where the inscription wallet does not have enough funds to cover the transaction fees. It builds a transaction that spends the inscription UTXO and creates an OP_RETURN output with the inscription data, along with a target output with the specified postage. It then signs and broadcasts the transaction. If dryRun is true, it returns the signed transaction hex without broadcasting.
+ *
+ * @param inscriptionId - ID of the inscription to send, in the format of "txid:output_index"
+ * @param targetWallet - wallet information of the target address to send the inscription to
+ * @param targetPostage - postage amount in satoshis to include in the target output
+ * @param feeRate - fee rate in sat/vbyte to use for the transaction
+ * @param dryRun - if true, the transaction will not be broadcasted
+ * @param signFunc - function to sign the transaction
+ *
+ * @returns an object containing the transaction ID and signed transaction hex of the sent transaction
+ */
+export async function sendInscriptionInPaymentWalletToOpReturnAll(
+  inscriptionId: string,
+  targetWallet: WalletInfo,
+  targetPostage: number,
+  feeRate: number,
+  dryRun: boolean,
+  signFunc: SignFunction,
+): Promise<SignResponse> {
+  // Get connected wallet
+  const userPaymentWallet = getPaymentWallet()
+  const userOrdinalsWallet = getOrdinalsWallet()
+  if (!userPaymentWallet || !userOrdinalsWallet)
+    throw new Error('Wallets not found')
+
+  const paymentAddr = userPaymentWallet.address
+  const paymentPublicKey = userPaymentWallet.pubkey
+  const inscriptionAddr = userOrdinalsWallet.address
+  const inscriptionPublicKey = userOrdinalsWallet.pubkey
+
+  const payerWallet = new WalletInfo(false, null, paymentAddr, null, paymentPublicKey)
+  const inscriptionWallet = new WalletInfo(false, null, inscriptionAddr, null, inscriptionPublicKey)
+
+  if (!payerWallet.addr)
+    throw new Error('Payment wallet address is not set.')
+  if (!inscriptionWallet.addr)
+    throw new Error('Inscription wallet address is not set.')
+
+  const inscriptionDetails = await getInscriptionDetails(inscriptionId, payerWallet.addr)
+  if (inscriptionDetails == null) {
+    throw new Error('Inscription cannot be found in wallet')
+  }
+  if (inscriptionDetails.satpoint.split(':')[2] !== '0') {
+    // TODO: implement this case as well
+    throw new Error('Inscription is at the first sat of utxo')
+  }
+
+  if (!payerWallet.addr)
+    throw new Error('Payer wallet address is not set.')
+
+  const cardinalUtxos = await getCardinalUtxos(payerWallet.addr)
+
+  if (targetPostage <= 0 || targetPostage == null) {
+    targetPostage = 1 // 1 sat for inscription
+  }
+
+  const inscrUtxo: UtxoInfoWithWallet = {
+    utxo: `${inscriptionDetails.satpoint.split(':')[0]}:${inscriptionDetails.satpoint.split(':')[1]}`,
+    value: inscriptionDetails.value,
+    script_type: inscriptionDetails.script_type,
+    wallet: payerWallet,
+  }
+
+  const unsignedTxResp = buildTransaction(
+    cardinalUtxos,
+    [inscrUtxo],
+    payerWallet,
+    [],
+    targetWallet,
+    payerWallet,
+    feeRate,
+    targetPostage,
+    null,
+    null,
+  )
+  const unsignedTx = unsignedTxResp.tx
+
+  const unsignedPsbt = await buildPsbtFromTx(unsignedTx, cardinalUtxos, payerWallet, [inscrUtxo])
+  const unsignedPsbtHex = unsignedPsbt.toHex()
+
+  const signedTx = await signFunc(unsignedPsbtHex, payerWallet.addr, inscriptionWallet.addr, [])
+
+  const isValid = await validateTxes([signedTx.signedPsbtHex])
+
+  for (const entry of isValid) {
+    if (!entry.allowed) {
+      throw new Error(entry['reject-reason'])
+    }
+  }
+
+  if (dryRun) {
+    return signedTx
+  }
+
+  await broadcastTxes([signedTx.signedPsbtHex])
+  return signedTx
+}
+
+/**
+ * Mints an inscription with a parent inscription by building and signing the commit and reveal transactions that reference the parent inscription. This function is used when the user wants to create a new inscription that is linked to an existing parent inscription, allowing for hierarchical relationships between inscriptions. It retrieves the connected wallets, builds and signs the transactions, validates them, and broadcasts them to the network. If dryRun is true, it returns the signed transaction hex without broadcasting.
+ *
+ * @param inscriptionDetails - details of the inscription to mint, including content type, content length, and the actual content in hex format
+ * @param parentInscriptionId - ID of the parent inscription to link to, in the format of "txid:output_index"
+ * @param feeRate - fee rate in sat/vbyte to use for the transactions
+ * @param postage - postage amount in satoshis to use for the transactions
+ * @param paymentAddr - address to send the payment to (if payment is not null)
+ * @param payment - amount to pay (if payment is not null)
+ * @param dryRun - if true, the transactions will not be broadcasted and the signed transaction hex will be returned for inspection
+ * @param signFunc - function to sign the transactions
+ *
+ * @returns an object containing the commit transaction ID, signed commit transaction hex, reveal transaction ID, signed reveal transaction hex, inscription ID, postage used, and the secret token used for minting
+ */
+export async function mintWithParentAll(
+  inscriptionDetails: InscriptionDetails,
+  parentInscriptionId: string,
+  feeRate: number,
+  postage: number | null,
+  paymentAddr: string | null,
+  payment: number | null,
+  dryRun: boolean,
+  signFunc: SignFunction,
+): Promise<InscribeResult> {
+  // Get connected wallet
+  const userPaymentWallet = getPaymentWallet()
+  const userOrdinalsWallet = getOrdinalsWallet()
+  if (!userPaymentWallet || !userOrdinalsWallet)
+    throw new Error('Wallets not found')
+
+  const payerAddr = userPaymentWallet.address
+  const payerPublicKey = userPaymentWallet.pubkey
+  const inscriptionAddress = userOrdinalsWallet.address
+  const inscriptionPublicKey = userOrdinalsWallet.pubkey
+
+  const payerWallet = new WalletInfo(false, null, payerAddr, null, payerPublicKey)
+  const inscriptionWallet = new WalletInfo(
+    false,
+    null,
+    inscriptionAddress,
+    null,
+    inscriptionPublicKey,
+  )
+  let paymentWallet = null
+  if (paymentAddr != null) {
+    paymentWallet = new WalletInfo(false, null, paymentAddr, null, null)
+  }
+
+  if (postage == null || postage <= 0) {
+    postage = getDustValue(inscriptionWallet)
+  }
+
+  const secret = createSecretToken()
+  const commitTx = await buildCommitTxWithParent(
+    payerWallet,
+    inscriptionWallet,
+    secret,
+    inscriptionDetails,
+    feeRate,
+    postage,
+    parentInscriptionId,
+  )
+  const signedCommitTx = await signFunc(
+    commitTx.unsigned_psbt_hex,
+    payerAddr,
+    inscriptionAddress,
+    [],
+  )
+
+  const commitTxid = signedCommitTx.txId
+  let signedRevealTx = null
+  try {
+    saveExtraUtxos(
+      [signedCommitTx.signedPsbtHex],
+      ['0000000000000000000000000000000000000000000000000000000000000000i0', `${commitTxid}:0:0`],
+    )
+    const revealTx = await buildRevealTxWithParent(
+      payerWallet,
+      inscriptionWallet,
+      commitTxid,
+      commitTx.output_value,
+      secret,
+      inscriptionDetails,
+      parentInscriptionId,
+      feeRate,
+      paymentWallet,
+      payment,
+    )
+
+    signedRevealTx = await signFunc(
+      revealTx.partially_signed_psbt_hex,
+      payerAddr,
+      inscriptionAddress,
+      [1],
+      undefined,
+      [0],
+    )
+  }
+  finally {
+    clearExtraUtxos()
+  }
+
+  const isValid = await validateTxes([signedCommitTx.signedPsbtHex, signedRevealTx.signedPsbtHex])
+
+  for (const entry of isValid) {
+    if (!entry.allowed) {
+      throw new Error(entry['reject-reason'])
+    }
+  }
+
+  if (dryRun) {
+    return {
+      commit_txid: signedCommitTx.txId,
+      signed_commit_tx_hex: signedCommitTx.signedPsbtHex,
+      reveal_txid: signedRevealTx.txId,
+      signed_reveal_tx_hex: signedRevealTx.signedPsbtHex,
+      inscription_id: `${signedRevealTx.txId}i0`,
+      postage,
+      secret,
+    }
+  }
+  await broadcastTxes([signedCommitTx.signedPsbtHex, signedRevealTx.signedPsbtHex])
+  return {
+    commit_txid: signedCommitTx.txId,
+    signed_commit_tx_hex: signedCommitTx.signedPsbtHex,
+    reveal_txid: signedRevealTx.txId,
+    signed_reveal_tx_hex: signedRevealTx.signedPsbtHex,
+    inscription_id: `${signedRevealTx.txId}i0`,
+    postage,
+    secret,
+  }
+}
+
+interface OutputUtxoInfo {
+  wallet: WalletInfo
+  value: number
+}
+/**
+ * Sends an inscription to a target address using an OP_RETURN output, with extra input UTXOs and extra output UTXOs included in the transaction. This function allows for more complex transactions where the user wants to include additional inputs and outputs beyond just the inscription UTXO and the target output. It builds a transaction that spends the inscription UTXO along with the extra input UTXOs, creates an OP_RETURN output with the inscription data, includes a target output with the specified postage, and adds any extra output UTXOs. It then signs and broadcasts the transaction. If dryRun is true, it returns the signed transaction hex without broadcasting.
+ *
+ * @param inscriptionId - ID of the inscription to send, in the format of "txid:output_index"
+ * @param extraInputUtxos - array of extra input UTXOs to include in the transaction, each with its associated wallet information
+ * @param targetWallet - wallet information of the target address to send the inscription to
+ * @param targetPostage - postage amount in satoshis to include in the target output
+ * @param extraOutputUtxos - array of extra output UTXOs to include in the transaction, each with its associated wallet information and value
+ * @param feeRate - fee rate in sat/vbyte to use for the transaction
+ * @param dryRun - if true, the transaction will not be broadcasted
+ * @param signFunc - function to sign the transaction
+ *
+ * @returns an object containing the transaction ID and signed transaction hex of the sent transaction
+ */
+export async function sendInscriptionToOpReturnWithExtraInputsAndExtraOutputAll(
+  inscriptionId: string,
+  extraInputUtxos: UtxoInfoWithWallet[],
+  targetWallet: WalletInfo,
+  targetPostage: number,
+  extraOutputUtxos: OutputUtxoInfo[],
+  feeRate: number,
+  dryRun: boolean,
+  signFunc: SignFunction,
+): Promise<SignResponse> {
+  // Get connected wallet
+  const userPaymentWallet = getPaymentWallet()
+  const userOrdinalsWallet = getOrdinalsWallet()
+  if (!userPaymentWallet || !userOrdinalsWallet)
+    throw new Error('Wallets not found')
+
+  const payerAddr = userPaymentWallet.address
+  const payerPublicKey = userPaymentWallet.pubkey
+  const inscriptionAddress = userOrdinalsWallet.address
+  const inscriptionPublicKey = userOrdinalsWallet.pubkey
+
+  const payerWallet = new WalletInfo(false, null, payerAddr, null, payerPublicKey)
+  const inscriptionWallet = new WalletInfo(
+    false,
+    null,
+    inscriptionAddress,
+    null,
+    inscriptionPublicKey,
+  )
+
+  if (!inscriptionWallet.addr)
+    throw new Error('Inscription wallet address is not set.')
+
+  const inscriptionDetails = await getInscriptionDetails(inscriptionId, inscriptionWallet.addr)
+  if (inscriptionDetails == null) {
+    throw new Error('Inscription cannot be found in wallet')
+  }
+  if (inscriptionDetails.satpoint.split(':')[2] !== '0') {
+    throw new Error('Inscription is not at the first sat of utxo')
+  }
+
+  if (!payerWallet.addr)
+    throw new Error('Payer wallet address is not set.')
+
+  const cardinalUtxos = await getCardinalUtxos(payerWallet.addr)
+
+  if (targetPostage <= 0 || targetPostage == null) {
+    targetPostage = 1 // 1 sat for inscription
+  }
+
+  const inscrUtxo: UtxoInfoWithWallet = {
+    utxo: `${inscriptionDetails.satpoint.split(':')[0]}:${inscriptionDetails.satpoint.split(':')[1]}`,
+    value: inscriptionDetails.value,
+    script_type: inscriptionDetails.script_type,
+    wallet: inscriptionWallet,
+  }
+  const extraUtxoObjs: UtxoInfoWithWallet[] = [inscrUtxo]
+  for (const extraInput of extraInputUtxos) {
+    extraUtxoObjs.push(extraInput)
+  }
+
+  const outputWallets: WalletInfo[] = [targetWallet]
+  const amounts: number[] = [targetPostage]
+  for (const extraOutput of extraOutputUtxos) {
+    outputWallets.push(extraOutput.wallet)
+    amounts.push(extraOutput.value)
+  }
+
+  const unsignedTxResp = buildTransactionMultiOutput(
+    cardinalUtxos,
+    extraUtxoObjs,
+    payerWallet,
+    outputWallets,
+    amounts,
+    payerWallet,
+    feeRate,
+  )
+  const unsignedTx = unsignedTxResp.tx
+
+  const unsignedPsbt = await buildPsbtFromTx(unsignedTx, cardinalUtxos, payerWallet, extraUtxoObjs)
+  const unsignedPsbtHex = unsignedPsbt.toHex()
+
+  const signedTx = await signFunc(unsignedPsbtHex, payerWallet.addr, inscriptionWallet.addr, [0])
+
+  const isValid = await validateTxes([signedTx.signedPsbtHex])
+
+  for (const entry of isValid) {
+    if (!entry.allowed) {
+      throw new Error(entry['reject-reason'])
+    }
+  }
+
+  if (dryRun) {
+    return {
+      txId: signedTx.txId,
+      signedPsbtHex: signedTx.signedPsbtHex,
+    }
+  }
+
+  await broadcastTxes([signedTx.signedPsbtHex])
+  return {
+    txId: signedTx.txId,
+    signedPsbtHex: signedTx.signedPsbtHex,
+  }
+}
+
+interface SendInscriptionFeeRateResult {
+  txid: string
+  unsigned_tx_hex: string
+  tx_fee: number
+}
+/**
+ * Calculates the fee for sending an inscription to a target address using an OP_RETURN output, with extra input UTXOs and extra output UTXOs included in the transaction, based on a specified fee rate. This function builds the transaction without signing or broadcasting it, allowing the user to estimate the fees before actually sending the inscription. It returns the transaction ID, unsigned transaction hex, and the calculated transaction fee.
+ *
+ * @param inscriptionId - ID of the inscription to send, in the format of "txid:output_index"
+ * @param extraInputUtxos - array of extra input UTXOs to include in the transaction, each with its associated wallet information
+ * @param targetWallet - wallet information of the target address to send the inscription to
+ * @param targetPostage - postage amount in satoshis to include in the target output
+ * @param extraOutputUtxos - array of extra output UTXOs to include in the transaction, each with its associated wallet information and value
+ * @param feeRate - fee rate in sat/vbyte to use for the transaction
+ *
+ * @returns an object containing the transaction ID, unsigned transaction hex, and calculated transaction fee
+ */
+export async function sendInscriptionToOpReturnWithExtraInputsAndExtraOutputFeeRate(
+  inscriptionId: string,
+  extraInputUtxos: UtxoInfoWithWallet[],
+  targetWallet: WalletInfo,
+  targetPostage: number,
+  extraOutputUtxos: OutputUtxoInfo[],
+  feeRate: number,
+): Promise<SendInscriptionFeeRateResult> {
+  // Get connected wallet
+  const userPaymentWallet = getPaymentWallet()
+  const userOrdinalsWallet = getOrdinalsWallet()
+  if (!userPaymentWallet || !userOrdinalsWallet)
+    throw new Error('Wallets not found')
+
+  const payerAddr = userPaymentWallet.address
+  const payerPublicKey = userPaymentWallet.pubkey
+  const inscriptionAddress = userOrdinalsWallet.address
+  const inscriptionPublicKey = userOrdinalsWallet.pubkey
+
+  const payerWallet = new WalletInfo(false, null, payerAddr, null, payerPublicKey)
+  const inscriptionWallet = new WalletInfo(
+    false,
+    null,
+    inscriptionAddress,
+    null,
+    inscriptionPublicKey,
+  )
+
+  if (!inscriptionWallet.addr)
+    throw new Error('Inscription wallet address is not set.')
+
+  const inscriptionDetails = await getInscriptionDetails(inscriptionId, inscriptionWallet.addr)
+  if (inscriptionDetails == null) {
+    throw new Error('Inscription cannot be found in wallet')
+  }
+  if (inscriptionDetails.satpoint.split(':')[2] !== '0') {
+    throw new Error('Inscription is not at the first sat of utxo')
+  }
+
+  if (!payerWallet.addr)
+    throw new Error('Payer wallet address is not set.')
+
+  const cardinalUtxos = await getCardinalUtxos(payerWallet.addr)
+
+  if (targetPostage <= 0 || targetPostage == null) {
+    targetPostage = 1 // 1 sat for inscription
+  }
+
+  const inscrUtxo: UtxoInfoWithWallet = {
+    utxo: `${inscriptionDetails.satpoint.split(':')[0]}:${inscriptionDetails.satpoint.split(':')[1]}`,
+    value: inscriptionDetails.value,
+    script_type: inscriptionDetails.script_type,
+    wallet: inscriptionWallet,
+  }
+  const extraUtxoObjs: UtxoInfoWithWallet[] = [inscrUtxo]
+  for (const extraInput of extraInputUtxos) {
+    extraUtxoObjs.push(extraInput)
+  }
+
+  const outputWallets: WalletInfo[] = [targetWallet]
+  const amounts: number[] = [targetPostage]
+  for (const extraOutput of extraOutputUtxos) {
+    outputWallets.push(extraOutput.wallet)
+    amounts.push(extraOutput.value)
+  }
+
+  const unsignedTxResp = buildTransactionMultiOutput(
+    cardinalUtxos,
+    extraUtxoObjs,
+    payerWallet,
+    outputWallets,
+    amounts,
+    payerWallet,
+    feeRate,
+  )
+  const unsignedTx = unsignedTxResp.tx
+
+  return {
+    txid: unsignedTx.getId(),
+    unsigned_tx_hex: unsignedTx.toHex(),
+    tx_fee: unsignedTxResp.tx_fee,
+  }
+}
+
+/**
+ * Mints an inscription with extra input UTXOs included in the commit transaction. This function builds and signs the commit and reveal transactions for minting an inscription, while allowing the user to include additional input UTXOs in the commit transaction. This can be useful in cases where the user wants to fund the commit transaction with specific UTXOs or needs to include additional inputs for other reasons. The function retrieves the connected wallets, builds and signs the transactions, validates them, and broadcasts them to the network. If dryRun is true, it returns the signed transaction hex without broadcasting.
+ *
+ * @param inscriptionDetails - details of the inscription to mint, including content type, content length, and the actual content in hex format
+ * @param extraInputUtxos - array of extra input UTXOs to include in the commit transaction, each with its associated wallet information
+ * @param feeRate - fee rate in sat/vbyte to use for the transactions
+ * @param postage - postage amount in satoshis to use for the transactions
+ * @param paymentAddr - address to send the payment to (if payment is not null)
+ * @param payment - amount to pay (if payment is not null)
+ * @param dryRun - if true, the transactions will not be broadcasted and the signed transaction hex will be returned for inspection
+ * @param signFunc - function to sign the transactions
+ *
+ * @returns an object containing the commit transaction ID, signed commit transaction hex, reveal transaction ID, signed reveal transaction hex, inscription ID, postage used, and the secret token used for minting
+ */
+export async function mintWithExtraInputInCommitAll(
+  inscriptionDetails: InscriptionDetails,
+  extraInputUtxos: UtxoInfoWithWallet[],
+  feeRate: number,
+  postage: number | null,
+  paymentAddr: string | null,
+  payment: number | null,
+  dryRun: boolean,
+  signFunc: SignFunction,
+): Promise<InscribeResult> {
+  // Get connected wallet
+  const userPaymentWallet = getPaymentWallet()
+  const userOrdinalsWallet = getOrdinalsWallet()
+  if (!userPaymentWallet || !userOrdinalsWallet)
+    throw new Error('Wallets not found')
+
+  const payerAddr = userPaymentWallet.address
+  const payerPublicKey = userPaymentWallet.pubkey
+  const inscriptionAddress = userOrdinalsWallet.address
+  const inscriptionPublicKey = userOrdinalsWallet.pubkey
+
+  const payerWallet = new WalletInfo(false, null, payerAddr, null, payerPublicKey)
+  const inscriptionWallet = new WalletInfo(
+    false,
+    null,
+    inscriptionAddress,
+    null,
+    inscriptionPublicKey,
+  )
+  let paymentWallet = null
+  if (paymentAddr != null) {
+    paymentWallet = new WalletInfo(false, null, paymentAddr, null, null)
+  }
+
+  if (postage == null || postage <= 0) {
+    postage = getDustValue(inscriptionWallet)
+  }
+
+  const secret = createSecretToken()
+  const commitTx = await buildCommitTx(
+    payerWallet,
+    inscriptionWallet,
+    secret,
+    inscriptionDetails,
+    feeRate,
+    postage,
+    paymentWallet,
+    payment,
+    extraInputUtxos,
+  )
+  const signedCommitTx = await signFunc(
+    commitTx.unsigned_psbt_hex,
+    payerAddr,
+    inscriptionAddress,
+    [],
+  )
+
+  const commitTxid = signedCommitTx.txId
+  const revealTx = await buildRevealTx(
+    inscriptionWallet,
+    commitTxid,
+    commitTx.output_value,
+    secret,
+    inscriptionDetails,
+    feeRate,
+    postage,
+    paymentWallet,
+    payment,
+  )
+
+  const isValid = await validateTxes([signedCommitTx.signedPsbtHex, revealTx.signedPsbtHex])
+
+  for (const entry of isValid) {
+    if (!entry.allowed) {
+      throw new Error(entry['reject-reason'])
+    }
+  }
+
+  if (dryRun) {
+    return {
+      commit_txid: signedCommitTx.txId,
+      signed_commit_tx_hex: signedCommitTx.signedPsbtHex,
+      reveal_txid: revealTx.txId,
+      signed_reveal_tx_hex: revealTx.signedPsbtHex,
+      inscription_id: `${revealTx.txId}i0`,
+      postage,
+      secret,
+    }
+  }
+
+  await broadcastTxes([signedCommitTx.signedPsbtHex, revealTx.signedPsbtHex])
+  return {
+    commit_txid: signedCommitTx.txId,
+    signed_commit_tx_hex: signedCommitTx.signedPsbtHex,
+    reveal_txid: revealTx.txId,
+    signed_reveal_tx_hex: revealTx.signedPsbtHex,
+    inscription_id: `${revealTx.txId}i0`,
+    postage,
+    secret,
+  }
+}
+
+/**
+ * Checks the fees for minting an inscription with extra input UTXOs included in the commit transaction by building the commit and reveal transactions without signing or broadcasting them. This function is useful for users who want to estimate the fees before actually minting the inscription with extra inputs. It returns the estimated commit fee, reveal fee, total fee, unsigned commit transaction hex, signed reveal transaction hex, inscription ID, and postage used.
+ *
+ * @param inscriptionDetails - details of the inscription to mint, including content type, content length, and the actual content in hex format
+ * @param extraInputUtxos - array of extra input UTXOs to include in the commit transaction, each with its associated wallet information
+ * @param feeRate - fee rate in sat/vbyte to use for the transactions
+ * @param postage - postage amount in satoshis to use for the transactions
+ * @param paymentAddr - address to send the payment to (if payment is not null)
+ * @param payment - amount to pay (if payment is not null)
+ *
+ * @returns an object containing the estimated commit fee, reveal fee, total fee, unsigned commit transaction hex, signed reveal transaction hex, inscription ID, and postage used
+ */
+export async function mintWithExtraInputInCommitFeeRate(
+  inscriptionDetails: InscriptionDetails,
+  extraInputUtxos: UtxoInfoWithWallet[],
+  feeRate: number,
+  postage: number | null,
+  paymentAddr: string | null,
+  payment: number | null,
+): Promise<InscribeCheckFeesResult> {
+  // Get connected wallet
+  const userPaymentWallet = getPaymentWallet()
+  const userOrdinalsWallet = getOrdinalsWallet()
+  if (!userPaymentWallet || !userOrdinalsWallet)
+    throw new Error('Wallets not found')
+
+  const payerAddr = userPaymentWallet.address
+  const payerPublicKey = userPaymentWallet.pubkey
+  const inscriptionAddress = userOrdinalsWallet.address
+  const inscriptionPublicKey = userOrdinalsWallet.pubkey
+
+  const payerWallet = new WalletInfo(false, null, payerAddr, null, payerPublicKey)
+  const inscriptionWallet = new WalletInfo(
+    false,
+    null,
+    inscriptionAddress,
+    null,
+    inscriptionPublicKey,
+  )
+  let paymentWallet = null
+  if (paymentAddr != null) {
+    paymentWallet = new WalletInfo(false, null, paymentAddr, null, null)
+  }
+
+  if (postage == null || postage <= 0) {
+    postage = getDustValue(inscriptionWallet)
+  }
+
+  const secret = createSecretToken()
+  const commitTx = await buildCommitTx(
+    payerWallet,
+    inscriptionWallet,
+    secret,
+    inscriptionDetails,
+    feeRate,
+    postage,
+    paymentWallet,
+    payment,
+    extraInputUtxos,
+  )
+  const dummyCommitTxId = commitTx.unsigned_commit_tx.getId()
+  const revealTx = await buildRevealTx(
+    inscriptionWallet,
+    dummyCommitTxId,
+    commitTx.output_value,
+    secret,
+    inscriptionDetails,
+    feeRate,
+    postage,
+    paymentWallet,
+    payment,
+  )
+
+  return {
+    commit_fee: commitTx.commit_fee,
+    reveal_fee: commitTx.reveal_fee,
+    total_fee: commitTx.commit_fee + commitTx.reveal_fee,
+    unsigned_commit_tx_hex: commitTx.unsigned_commit_tx.toHex(),
+    signed_reveal_tx_hex: revealTx.signedPsbtHex,
+    inscription_id: `${revealTx.txId}i0`,
     postage,
   }
 }

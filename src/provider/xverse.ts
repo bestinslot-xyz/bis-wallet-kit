@@ -1,5 +1,5 @@
-import type { SignResponse } from '../core/providers'
 import type { BISWallet } from '../main'
+import type { BISProvider, SignResponse } from './api'
 import { Buffer } from 'node:buffer'
 import * as bitcoinjs from 'bitcoinjs-lib'
 import { getNetwork, getPaymentWallet } from '../core/bis'
@@ -29,10 +29,7 @@ function getNetworkType() {
   throw new Error('Unknown BTC network type.')
 }
 
-/**
- *
- */
-export async function getWallets(): Promise<BISWallet[]> {
+async function getWallets(): Promise<BISWallet[]> {
   if (!window.XverseProviders?.BitcoinProvider)
     throw new Error('Xverse extension not found.')
 
@@ -60,12 +57,7 @@ export async function getWallets(): Promise<BISWallet[]> {
   return wallets
 }
 
-/**
- *
- * @param message
- * @param address
- */
-export async function signMessage(message: string, address: string): Promise<string> {
+async function signMessage(message: string, address: string): Promise<string> {
   if (!window.XverseProviders?.BitcoinProvider)
     throw new Error('Xverse extension not found.')
 
@@ -88,11 +80,8 @@ export async function signMessage(message: string, address: string): Promise<str
 
   return Buffer.from(response, 'base64').toString('hex')
 }
-/**
- *
- * @param message
- */
-export async function signMessageDeterministic(
+
+async function signMessageDeterministic(
   message: string,
 ): Promise<{ signature: string, address: string }> {
   if (!window.XverseProviders?.BitcoinProvider)
@@ -126,13 +115,7 @@ export async function signMessageDeterministic(
   }
 }
 
-// returns txid
-/**
- *
- * @param amountSats
- * @param toAddress
- */
-export async function sendBTC(amountSats: string, toAddress: string): Promise<string> {
+async function sendBTC(amountSats: string, toAddress: string): Promise<string> {
   if (!window.XverseProviders?.BitcoinProvider)
     throw new Error('Xverse extension not found.')
 
@@ -148,18 +131,11 @@ export async function sendBTC(amountSats: string, toAddress: string): Promise<st
   return response.result.txid
 }
 
-/**
- *
- * @param psbtBase64
- * @param broadcast
- * @param inputsToSign
- * @param message
- */
-export async function signPSBT(
+async function signPSBT(
   psbtBase64: string,
   broadcast: boolean,
   inputsToSign: any[],
-  message: string,
+  message?: string,
 ) {
   if (!window.XverseProviders?.BitcoinProvider)
     throw new Error('Xverse extension not found.')
@@ -179,16 +155,7 @@ export async function signPSBT(
   return response
 }
 
-/**
- *
- * @param unsignedPsbtHex
- * @param paymentAddr
- * @param ordAddr
- * @param ordAddrIndexes
- * @param _useTweakedSignerIndexes
- * @param noSignIndexes
- */
-export async function sign(
+async function sign(
   unsignedPsbtHex: string,
   paymentAddr: string,
   ordAddr: string,
@@ -243,7 +210,16 @@ export async function sign(
   const signedTxHex = signedTx.toHex()
 
   return {
-    txid: signedTx.getId(),
-    signed_tx_hex: signedTxHex,
+    txId: signedTx.getId(),
+    signedPsbtHex: signedTxHex,
   }
+}
+
+export const XVERSE: BISProvider = {
+  getWallets,
+  signMessage,
+  signMessageDeterministic,
+  sendBTC,
+  signPSBT,
+  sign,
 }

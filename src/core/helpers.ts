@@ -466,10 +466,13 @@ export interface APIOrdinalUtxoInfo {
   vsize: number | null
 }
 /**
+ * Fetches the ordinal UTXOs associated with a given address from the backend API and applies fixes to include any extra UTXOs that are currently in the process of being used in transactions but not yet confirmed on the blockchain.
  *
- * @param addr
+ * @param addr The address for which to fetch the ordinal UTXOs.
+ *
+ * @returns A promise that resolves to an array of ordinal UTXO information objects.
  */
-export async function get_ordinal_utxos(addr: string): Promise<APIOrdinalUtxoInfo[]> {
+export async function getOrdinalUtxos(addr: string): Promise<APIOrdinalUtxoInfo[]> {
   const url = getBackendUrl(`ordinal_utxos/${addr}`)
   const response = await fetch(url)
   const json = await response.json()
@@ -477,10 +480,12 @@ export async function get_ordinal_utxos(addr: string): Promise<APIOrdinalUtxoInf
 }
 
 /**
+ * Fetches the raw transaction hex for a given transaction ID from the backend API. It caches the result to avoid redundant network requests.
  *
- * @param txid
+ * @param txid The transaction ID for which to fetch the raw transaction hex.
+ * @returns A promise that resolves to the raw transaction hex string.
  */
-export async function get_txhex(txid: string) {
+export async function getTxhex(txid: string) {
   if (!txHexByIdCache[txid]) {
     const url = getBackendUrl(`gettxhex/${txid}`)
     txHexByIdCache[txid] = await fetch(url).then(response => response.json())
@@ -490,10 +495,12 @@ export async function get_txhex(txid: string) {
 }
 
 /**
+ * Validates a list of transaction hexes by sending them to the backend API for testing their acceptance into the mempool. The function combines the provided transaction hexes with any currently saved extra transaction hexes and sends them to the backend for validation.
  *
- * @param tx_hexes
+ * @param txHexes An array of transaction hex strings representing the transactions to be validated.
+ * @returns A promise that resolves to the validation result returned by the backend API, or null if the validation request fails.
  */
-export async function validateTxes(tx_hexes: string[]) {
+export async function validateTxes(txHexes: string[]) {
   try {
     const url = getBackendUrl(`testmempoolaccept`)
     const response1 = await fetch(url, {
@@ -501,7 +508,7 @@ export async function validateTxes(tx_hexes: string[]) {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ txhexes: currentExtraTxHexes.concat(tx_hexes) }),
+      body: JSON.stringify({ txhexes: currentExtraTxHexes.concat(txHexes) }),
     })
     return await response1.json()
   }
@@ -511,10 +518,13 @@ export async function validateTxes(tx_hexes: string[]) {
 }
 
 /**
+ * Broadcasts a list of transaction hexes to the network by sending them to the backend API. The function throws an error if there are any extra transaction hexes currently set, as broadcasting is not allowed in that state.
  *
- * @param tx_hexes
+ * @param txHexes An array of transaction hex strings representing the transactions to be broadcasted.
+ * @returns A promise that resolves to the result of the broadcast request returned by the backend API, or null if the broadcast request fails.
+ * @throws An error if there are extra transaction hexes currently set, as broadcasting is not allowed in that state.
  */
-export async function broadcast_txes(tx_hexes: string[]) {
+export async function broadcastTxes(txHexes: string[]) {
   if (currentExtraTxHexes.length > 0) {
     throw new Error('Cannot broadcast txes when extra txes are set')
   }
@@ -526,7 +536,7 @@ export async function broadcast_txes(tx_hexes: string[]) {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ txhexes: tx_hexes }),
+      body: JSON.stringify({ txhexes: txHexes }),
     })
     return await response1.json()
   }
@@ -536,14 +546,17 @@ export async function broadcast_txes(tx_hexes: string[]) {
 }
 
 /**
+ * Verifies a signature for a given message, signature, and address by sending the verification request to the backend API. The function constructs the necessary parameters for the verification request, including converting the message to hexadecimal format and generating the pkscript from the provided address, and then sends the request to the backend for verification.
  *
- * @param message
- * @param signature_hex
- * @param address
+ * @param message The message for which the signature needs to be verified.
+ * @param signatureHex The signature in hexadecimal format that needs to be verified against the message and address.
+ * @param address The Bitcoin address that is claimed to have produced the signature for the given message.
+ * @returns A promise that resolves to a boolean indicating whether the signature is valid for the given message and address, or throws an error if the verification process fails.
+ * @throws An error if the verification process fails, such as due to network issues or invalid input parameters.
  */
-export async function verify_signature(
+export async function verifySignature(
   message: string,
-  signature_hex: string,
+  signatureHex: string,
   address: string,
 ): Promise<boolean> {
   try {
@@ -556,7 +569,7 @@ export async function verify_signature(
       },
       body: JSON.stringify({
         message_hex: Buffer.from(message).toString('hex'),
-        signature_hex,
+        signature_hex: signatureHex,
         pkscript_hex: bitcoinjs.address.toOutputScript(address, network).toString('hex'),
       }),
     })
@@ -568,21 +581,24 @@ export async function verify_signature(
   }
 }
 /**
+ * Locally verifies a signature for a given message, signature, and address using the bip322-js library. The function converts the signature from hexadecimal to base64 format and then uses the Verifier class from the bip322-js library to perform the verification against the provided message and address.
  *
- * @param message
- * @param signature_hex
- * @param address
+ * @param message The message for which the signature needs to be verified.
+ * @param signatureHex The signature in hexadecimal format that needs to be verified against the message and address.
+ * @param address The Bitcoin address that is claimed to have produced the signature for the given message.
+ * @returns A boolean indicating whether the signature is valid for the given message and address.
+ * @throws An error if the verification process fails, such as due to invalid input parameters.
  */
-export function verify_signature_local(
+export function verifySignatureLocal(
   message: string,
-  signature_hex: string,
+  signatureHex: string,
   address: string,
 ): boolean {
   try {
     const validity = Verifier.verifySignature(
       address,
       message,
-      Buffer.from(signature_hex, 'hex').toString('base64'),
+      Buffer.from(signatureHex, 'hex').toString('base64'),
     )
     return validity
   }
@@ -592,9 +608,12 @@ export function verify_signature_local(
 }
 
 /**
+ * Fetches the current chain tip (the latest block height) from the backend API. The function sends a request to the backend to retrieve the current chain tip and returns it as a number. If the request fails, it throws an error indicating that the chain tip could not be retrieved.
  *
+ * @returns A promise that resolves to the current chain tip (latest block height) as a number, or throws an error if the request fails.
+ * @throws An error if the request to fetch the chain tip fails, indicating that the chain tip could not be retrieved.
  */
-export async function get_chain_tip(): Promise<number> {
+export async function getChainTip(): Promise<number> {
   try {
     const url = getBackendUrl(`get_chain_tip`)
     const response1 = await fetch(url)

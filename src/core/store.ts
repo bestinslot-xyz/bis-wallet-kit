@@ -3,21 +3,22 @@ import { browserStorage, memoryStorage } from './storage'
 
 const LS_KEY = 'bis-cw-wallets'
 
-const walletStorage = typeof window === 'undefined' ? memoryStorage() : browserStorage
+const WALLET_STORAGE = typeof window === 'undefined' ? memoryStorage() : browserStorage
 
 /**
- *
- * @param data
+ * Saves the wallet information to local storage. The saveWalletInfo function takes a BISSession object as an argument and stores it in local storage under a specific key (LS_KEY). The data is serialized to a JSON string before being stored. This allows the application to persist wallet information across sessions, enabling users to retain their wallet data even after closing and reopening the application.
+ * @param data The BISSession object containing the wallet information to be saved. This object typically includes details about the connected wallet, such as the provider, accounts, and other relevant session data. The function serializes this object to a JSON string and stores it in local storage under the key defined by LS_KEY, allowing for easy retrieval and management of wallet information in the application.
  */
 export function saveWalletInfo(data: BISSession) {
-  walletStorage.set(LS_KEY, JSON.stringify(data))
+  WALLET_STORAGE.set(LS_KEY, JSON.stringify(data))
 }
 
 /**
- *
+ * Retrieves the wallet information from local storage. The getWalletInfo function reads the data stored under the LS_KEY in local storage, parses it from a JSON string back into a BISSession object, and returns it. If no data is found, it returns null. This function allows the application to access the persisted wallet information, enabling features like session restoration and wallet management.
+ * @returns The BISSession object containing the wallet information, or null if no data is found. This object typically includes details about the connected wallet, such as the provider, accounts, and other relevant session data.
  */
 export function getWalletInfo(): BISSession | null {
-  const data = walletStorage.get(LS_KEY)
+  const data = WALLET_STORAGE.get(LS_KEY)
 
   if (data) {
     const obj: BISSession = JSON.parse(data)
@@ -29,10 +30,10 @@ export function getWalletInfo(): BISSession | null {
 }
 
 /**
- *
+ * Clears the wallet information from local storage. The clearWalletInfo function removes the data stored under the LS_KEY in local storage, effectively clearing any persisted wallet information. This can be used when a user wants to disconnect their wallet or reset their session, ensuring that no wallet data remains stored in the browser after the operation is performed.
  */
 export function clearWalletInfo() {
-  walletStorage.remove(LS_KEY)
+  WALLET_STORAGE.remove(LS_KEY)
 }
 
 const DB_NAME = 'wallet-db'
@@ -136,8 +137,9 @@ export interface SwapWalletInfo {
   bitcoinAddress: string
 }
 /**
+ * Saves the swap wallet information securely in IndexedDB. The saveSwapWalletInfo function takes a SwapWalletInfo object containing the swap public key, private key, and associated Bitcoin address. It generates a random encryption key and initialization vector (IV) to encrypt the private key using AES-GCM encryption. The encrypted private key, along with the IV, encryption key, swap public key, and Bitcoin address, are then stored in IndexedDB for secure retrieval later. This approach ensures that sensitive wallet information is protected while still allowing for necessary access when needed.
  *
- * @param data
+ * @param data The SwapWalletInfo object containing the swap public key, private key, and associated Bitcoin address. The function encrypts the private key using AES-GCM encryption with a randomly generated key and IV, and then stores the encrypted data along with the necessary information for decryption in IndexedDB. This allows for secure storage of sensitive wallet information while still enabling retrieval when needed.
  */
 export async function saveSwapWalletInfo(data: SwapWalletInfo) {
   // SSR-SAFU
@@ -170,8 +172,10 @@ export async function saveSwapWalletInfo(data: SwapWalletInfo) {
 }
 
 /**
+ * Reads the swap wallet information from IndexedDB. The readSwapWalletInfo function takes a Bitcoin address as an argument and retrieves the corresponding encrypted wallet information from IndexedDB. It then decrypts the private key using the stored encryption key and IV, returning the swap public key, decrypted private key, and associated Bitcoin address as a SwapWalletInfo object. If no matching record is found or if decryption fails, it returns null. This function allows for secure retrieval of wallet information while ensuring that sensitive data remains protected.
  *
- * @param bitcoinAddressToRead
+ * @param bitcoinAddressToRead The Bitcoin address for which to read the swap wallet information. The function looks up the encrypted wallet information associated with this Bitcoin address in IndexedDB, decrypts the private key using the stored encryption key and IV, and returns the swap public key, decrypted private key, and Bitcoin address as a SwapWalletInfo object. If no matching record is found or if decryption fails, it returns null, ensuring that sensitive wallet information is handled securely.
+ * @returns A promise that resolves to a SwapWalletInfo object containing the swap public key, decrypted private key, and associated Bitcoin address if the information is successfully retrieved and decrypted, or null if no matching record is found or if decryption fails. This allows for secure access to wallet information while maintaining the confidentiality of sensitive data.
  */
 export async function readSwapWalletInfo(
   bitcoinAddressToRead: string,
@@ -181,12 +185,12 @@ export async function readSwapWalletInfo(
     return null
   }
 
-  const swap_wallet = await loadWalletFromDB(bitcoinAddressToRead)
-  if (!swap_wallet) {
+  const swapWallet = await loadWalletFromDB(bitcoinAddressToRead)
+  if (!swapWallet) {
     return null
   }
 
-  const { ciphertext, iv, key, swapPubkey, bitcoinAddress } = swap_wallet
+  const { ciphertext, iv, key, swapPubkey, bitcoinAddress } = swapWallet
   if (bitcoinAddressToRead !== bitcoinAddress) {
     return null
   }
@@ -205,8 +209,9 @@ export async function readSwapWalletInfo(
 }
 
 /**
+ * Deletes the swap wallet information associated with the given Bitcoin address from IndexedDB. The deleteSwapWalletInfo function takes a Bitcoin address as an argument and removes the corresponding record from IndexedDB, effectively deleting the stored swap wallet information. This can be used when a user wants to remove their wallet data or when it is no longer needed, ensuring that sensitive information is properly cleaned up from storage.
  *
- * @param bitcoinAddress
+ * @param bitcoinAddress The Bitcoin address for which to delete the swap wallet information. The function looks up the record associated with this Bitcoin address in IndexedDB and deletes it, effectively removing the stored swap wallet information. This allows for proper cleanup of sensitive data when it is no longer needed or when a user wants to remove their wallet information from storage.
  */
 export async function deleteSwapWalletInfo(bitcoinAddress: string): Promise<void> {
   // SSR-SAFU

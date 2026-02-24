@@ -1,40 +1,38 @@
 import type { BISSession, BISWallet, BISWalletProvider } from '../main'
-import * as leather from '../provider/leather'
-import * as local from '../provider/local'
-import * as me from '../provider/me'
-import * as okx from '../provider/okx'
-import * as orange from '../provider/orange'
-import * as unisat from '../provider/unisat'
-import * as xverse from '../provider/xverse'
-import { verify_signature, verify_signature_local } from './helpers'
+import type { BISProvider, SignFunction } from '../provider/api'
+import { LEATHER } from '../provider/leather'
+import { LOCAL } from '../provider/local'
+import { ME } from '../provider/me'
+import { OKX } from '../provider/okx'
+import { UNISAT } from '../provider/unisat'
+import { XVERSE } from '../provider/xverse'
+import { verifySignature, verifySignatureLocal } from './helpers'
 import { getWalletInfo, saveWalletInfo } from './store'
 
-export interface SignResponse {
-  txid: string
-  signed_tx_hex: string
-}
-
-export const providers = {
-  leather,
-  me,
-  okx,
-  orange,
-  unisat,
-  xverse,
-  local,
+export const PROVIDERS: Record<string, BISProvider> = {
+  leather: LEATHER,
+  me: ME,
+  okx: OKX,
+  unisat: UNISAT,
+  xverse: XVERSE,
+  local: LOCAL,
 } as const
 
-type ProviderKey = keyof typeof providers
+type ProviderKey = keyof typeof PROVIDERS
 
 // const allowedProviders = Object.keys(providers)
 
 /**
+ * Gets the list of wallets from the specified provider. The function checks if the provider is supported and then calls the corresponding getWallets function from the provider module to retrieve the list of wallets. If the provider is not supported or if there is an error while fetching the wallets, it throws an error with an appropriate message.
  *
- * @param provider
+ * @param provider The wallet provider for which to fetch the wallets. This should be one of the supported providers defined in the PROVIDERS object.
+ *
+ * @returns A promise that resolves to a BISSession object containing the provider, the list of wallets, and a null signature. The function also saves the wallet information to local storage for later use.
+ * @throws An error if the provider is not supported or if there is an error while fetching the wallets, with a message indicating the reason for the failure.
  */
 export async function getWallets(provider: BISWalletProvider): Promise<BISSession> {
   // Get wallets
-  const wallets = await providers[provider as ProviderKey]?.getWallets().catch((err: any) => {
+  const wallets = await PROVIDERS[provider as ProviderKey]?.getWallets().catch((err: any) => {
     console.error('Failed to get wallets.', err)
 
     throw new Error(err?.message || 'Failed to get wallets.')
@@ -85,43 +83,45 @@ function getWallet(walletType: 'payment' | 'ordinals' | 'all'): BISWallet | unde
 }
 
 /**
+ * Returns the currently connected ordinals wallet, or undefined if no ordinals wallet is connected. The function retrieves the wallet information from local storage and checks for a wallet with the purpose of 'ordinals'. If such a wallet is found, it is returned; otherwise, the function returns undefined.
  *
+ * @returns The currently connected ordinals wallet, or undefined if no ordinals wallet is connected.
  */
 export function getOrdinalsWallet(): BISWallet | undefined {
   return getWallet('ordinals')
 }
 
 /**
+ * Returns the currently connected payment wallet, or undefined if no payment wallet is connected. The function retrieves the wallet information from local storage and checks for a wallet with the purpose of 'payment'. If such a wallet is found, it is returned; otherwise, the function returns undefined.
  *
+ * @returns The currently connected payment wallet, or undefined if no payment wallet is connected.
  */
 export function getPaymentWallet(): BISWallet | undefined {
   return getWallet('payment')
 }
 
-export type SignFunction = (
-  unsigned_psbt_hex: string,
-  payment_addr: string,
-  ord_addr: string,
-  ord_addr_idxes: number[],
-  use_tweak_signer_idxes?: number[],
-  no_sign_idxes?: number[],
-) => Promise<SignResponse>
 /**
+ * Returns the sign function for the currently connected wallet provider. The function checks the provider from the wallet information stored in local storage and returns the corresponding sign function from the PROVIDERS object. If the provider is not found or if there is an error while retrieving the sign function, it throws an error with an appropriate message.
  *
- * @param provider
+ * @param provider The wallet provider for which to get the sign function. This should be one of the supported providers defined in the PROVIDERS object.
+ * @returns The sign function corresponding to the specified provider, which can be used to sign PSBTs for transactions. The function returns a promise that resolves to a SignResponse object containing the transaction ID and the signed transaction hex.
+ * @throws An error if the provider is not found or if there is an error while retrieving the sign function, with a message indicating the reason for the failure.
  */
 export function getSignFn(provider: BISWalletProvider): SignFunction {
-  if (!providers[provider as ProviderKey]) {
+  if (!PROVIDERS[provider as ProviderKey]) {
     throw new Error('Unknown provider')
   }
 
-  return providers[provider as ProviderKey].sign
+  return PROVIDERS[provider as ProviderKey]!.sign
 }
 
 /**
+ * Signs a message using the currently connected wallet provider. The function retrieves the provider from the wallet information stored in local storage and calls the corresponding signMessage function from the PROVIDERS object to sign the message. After signing, it verifies the signature using either the verifySignature or verifySignatureLocal function from the helpers module, depending on the context. If the signature is valid, it returns the signature; otherwise, it throws an error indicating that signature verification failed.
  *
- * @param message
- * @param walletType
+ * @param message The message to be signed by the wallet provider. This is typically a string that represents some data that the user needs to sign for authentication or transaction purposes.
+ * @param walletType The type of wallet for which to sign the message. This can be either 'payment' or 'ordinals', depending on the purpose of the wallet being used for signing.
+ * @returns A promise that resolves to the signature string if the signing and verification processes are successful, or throws an error if there is a failure in signing or if the signature verification fails.
+ * @throws An error if there is a failure in signing the message or if the signature verification fails, with a message indicating the reason for the failure.
  */
 export async function signMessage(
   message: string,
@@ -138,28 +138,28 @@ export async function signMessage(
   }
 
   if (provider === 'unisat') {
-    signature = await unisat.signMessage(message)
+    signature = await UNISAT.signMessage(message, walletType, wallet.address)
   }
   else if (provider === 'xverse') {
-    signature = await xverse.signMessage(message, wallet.address)
+    signature = await XVERSE.signMessage(message, walletType, wallet.address)
   }
   else if (provider === 'leather') {
-    signature = await leather.signMessage(message, walletType)
+    signature = await LEATHER.signMessage(message, walletType, wallet.address)
   }
   else if (provider === 'me') {
-    signature = await me.signMessage(message, wallet.address)
+    signature = await ME.signMessage(message, walletType, wallet.address)
   }
   else if (provider === 'okx') {
-    signature = await okx.signMessage(message)
+    signature = await OKX.signMessage(message, walletType, wallet.address)
   }
   else if (provider === 'local') {
-    signature = await local.signMessage(message)
+    signature = await LOCAL.signMessage(message, walletType, wallet.address)
   }
   else {
     throw new Error('Provider not found')
   }
 
-  if (!verify_signature(message, signature, wallet.address)) {
+  if (!verifySignature(message, signature, wallet.address)) {
     console.error('Signature verification failed.')
     throw new Error('Signature verification failed.')
   }
@@ -168,9 +168,12 @@ export async function signMessage(
 }
 
 /**
+ * Signs a message using the currently connected wallet provider and verifies the signature locally. The function retrieves the provider from the wallet information stored in local storage and calls the corresponding signMessage function from the PROVIDERS object to sign the message. After signing, it verifies the signature using the verifySignatureLocal function from the helpers module. If the signature is valid, it returns the signature; otherwise, it throws an error indicating that signature verification failed.
  *
- * @param message
- * @param walletType
+ * @param message The message to be signed by the wallet provider. This is typically a string that represents some data that the user needs to sign for authentication or transaction purposes.
+ * @param walletType The type of wallet for which to sign the message. This can be either 'payment' or 'ordinals', depending on the purpose of the wallet being used for signing.
+ * @returns A promise that resolves to the signature string if the signing and local verification processes are successful, or throws an error if there is a failure in signing or if the signature verification fails.
+ * @throws An error if there is a failure in signing the message or if the signature verification fails, with a message indicating the reason for the failure.
  */
 export async function signMessageLocalVerify(
   message: string,
@@ -187,28 +190,28 @@ export async function signMessageLocalVerify(
   }
 
   if (provider === 'unisat') {
-    signature = await unisat.signMessage(message)
+    signature = await UNISAT.signMessage(message, walletType, wallet.address)
   }
   else if (provider === 'xverse') {
-    signature = await xverse.signMessage(message, wallet.address)
+    signature = await XVERSE.signMessage(message, walletType, wallet.address)
   }
   else if (provider === 'leather') {
-    signature = await leather.signMessage(message, walletType)
+    signature = await LEATHER.signMessage(message, walletType, wallet.address)
   }
   else if (provider === 'me') {
-    signature = await me.signMessage(message, wallet.address)
+    signature = await ME.signMessage(message, walletType, wallet.address)
   }
   else if (provider === 'okx') {
-    signature = await okx.signMessage(message)
+    signature = await OKX.signMessage(message, walletType, wallet.address)
   }
   else if (provider === 'local') {
-    signature = await local.signMessage(message)
+    signature = await LOCAL.signMessage(message, walletType, wallet.address)
   }
   else {
     throw new Error('Provider not found')
   }
 
-  if (!verify_signature_local(message, signature, wallet.address)) {
+  if (!verifySignatureLocal(message, signature, wallet.address)) {
     console.error('Signature verification failed.')
     throw new Error('Signature verification failed.')
   }
@@ -217,74 +220,80 @@ export async function signMessageLocalVerify(
 }
 
 /**
+ * Signs a message using the currently connected wallet provider and verifies the signature locally using a deterministic signing method. The function retrieves the provider from the wallet information stored in local storage and calls the corresponding signMessageDeterministic function from the PROVIDERS object to sign the message. After signing, it verifies the signature using the verifySignatureLocal function from the helpers module. If the signature is valid, it returns the signature; otherwise, it throws an error indicating that signature verification failed.
  *
- * @param message
+ * @param message The message to be signed by the wallet provider. This is typically a string that represents some data that the user needs to sign for authentication or transaction purposes.
+ * @returns A promise that resolves to the signature string if the signing and local verification processes are successful, or throws an error if there is a failure in signing or if the signature verification fails.
+ * @throws An error if there is a failure in signing the message or if the signature verification fails, with a message indicating the reason for the failure.
  */
 export async function signMessageLocalVerifyDeterministic(message: string): Promise<string> {
   const provider = getWalletInfo()?.provider
-  let signature_res: { signature: string, address: string } | undefined
+  let signatureRes: { signature: string, address: string } | undefined
 
   if (provider === 'unisat') {
-    signature_res = await unisat.signMessageDeterministic(message)
+    signatureRes = await UNISAT.signMessageDeterministic(message)
   }
   else if (provider === 'xverse') {
-    signature_res = await xverse.signMessageDeterministic(message)
+    signatureRes = await XVERSE.signMessageDeterministic(message)
   }
   else if (provider === 'leather') {
-    signature_res = await leather.signMessageDeterministic(message)
+    signatureRes = await LEATHER.signMessageDeterministic(message)
   }
   else if (provider === 'me') {
-    signature_res = await me.signMessageDeterministic(message)
+    signatureRes = await ME.signMessageDeterministic(message)
   }
   else if (provider === 'okx') {
-    signature_res = await okx.signMessageDeterministic(message)
+    signatureRes = await OKX.signMessageDeterministic(message)
   }
   else if (provider === 'local') {
-    signature_res = await local.signMessageDeterministic(message)
+    signatureRes = await LOCAL.signMessageDeterministic(message)
   }
   else {
     throw new Error('Provider not found')
   }
 
-  if (!signature_res) {
+  if (!signatureRes) {
     console.error('Signature result not found.')
     throw new Error('Signature result not found.')
   }
 
-  if (!verify_signature_local(message, signature_res.signature, signature_res.address)) {
+  if (!verifySignatureLocal(message, signatureRes.signature, signatureRes.address)) {
     console.error('Signature verification failed.')
     throw new Error('Signature verification failed.')
   }
 
-  return signature_res.signature
+  return signatureRes.signature
 }
 
 /**
+ * Sends Bitcoin using the currently connected wallet provider. The function retrieves the provider from the wallet information stored in local storage and calls the corresponding sendBTC function from the PROVIDERS object to send the specified amount of Bitcoin to the given address. If the transaction is successful, it returns the transaction ID (txid) of the sent transaction; otherwise, it throws an error indicating that sending Bitcoin failed.
  *
- * @param amountSats
- * @param toAddress
+ * @param amountSats The amount of Bitcoin to send in satoshis. This value will be sent to the provider to initiate the transaction.
+ * @param toAddress The address to which the Bitcoin should be sent. This value will be sent to the provider along with the amount to initiate the transaction.
+ *
+ * @returns A promise that resolves to the transaction ID (txid) of the sent transaction as a string. This allows developers to track the transaction on the blockchain. If there is an error in sending the Bitcoin, the promise will be rejected with a descriptive error message.
  */
 export async function sendBTC(amountSats: string, toAddress: string): Promise<string> {
   const provider = getWalletInfo()?.provider
   let txid: string | undefined
 
   if (provider === 'unisat') {
-    txid = await unisat.sendBTC(amountSats, toAddress)
+    txid = await UNISAT.sendBTC(amountSats, toAddress)
   }
   else if (provider === 'xverse') {
-    txid = await xverse.sendBTC(amountSats, toAddress)
+    txid = await XVERSE.sendBTC(amountSats, toAddress)
   }
   else if (provider === 'leather') {
-    txid = await leather.sendBTC(amountSats, toAddress)
+    txid = await LEATHER.sendBTC(amountSats, toAddress)
   }
   else if (provider === 'me') {
-    txid = await me.sendBTC(amountSats, toAddress)
+    txid = await ME.sendBTC(amountSats, toAddress)
   }
   else if (provider === 'okx') {
-    txid = await okx.sendBTC(amountSats, toAddress)
+    txid = await OKX.sendBTC(amountSats, toAddress)
   }
   else if (provider === 'local') {
-    txid = await local.sendBTC(amountSats, toAddress)
+    txid = await LOCAL.sendBTC(amountSats, toAddress)
   }
   else {
     throw new Error('Provider not found')
@@ -299,11 +308,14 @@ export async function sendBTC(amountSats: string, toAddress: string): Promise<st
 }
 
 /**
+ * Signs a PSBT (Partially Signed Bitcoin Transaction) using the currently connected wallet provider. The function retrieves the provider from the wallet information stored in local storage and calls the corresponding signPSBT function from the PROVIDERS object to sign the PSBT with the specified parameters. If the signing process is successful, it returns the signed PSBT or transaction ID depending on the provider's implementation; otherwise, it throws an error indicating that signing the PSBT failed.
  *
- * @param psbtBase64
- * @param broadcast
- * @param inputsToSign
- * @param message
+ * @param psbtBase64 The PSBT to be signed, encoded in base64 format. This value will be sent to the provider to initiate the signing process.
+ * @param broadcast A boolean indicating whether the signed transaction should be broadcasted to the network after signing. This value will be sent to the provider along with the PSBT to determine if the transaction should be broadcasted immediately after signing.
+ * @param inputsToSign An array of inputs that need to be signed in the PSBT. This value will be sent to the provider to specify which inputs should be signed during the signing process.
+ * @param message An optional message that can be included with the signing request. This can be used for additional context or information related to the signing operation.
+ *
+ * @returns A promise that resolves to the signed PSBT as a hexadecimal string if broadcast is false, or the transaction ID (txid) of the broadcasted transaction if broadcast is true. This allows developers to use the signed PSBT for further processing or to track the transaction on the blockchain. If there is an error in signing the PSBT or broadcasting it, the promise will be rejected with a descriptive error message.
  */
 export async function signPSBT(
   psbtBase64: string,
@@ -317,22 +329,22 @@ export async function signPSBT(
     throw new Error('Wallets not found')
 
   if (walletInfo.provider === 'unisat') {
-    await unisat.signPSBT(psbtBase64, broadcast, inputsToSign)
+    await UNISAT.signPSBT(psbtBase64, broadcast, inputsToSign)
   }
   else if (walletInfo.provider === 'xverse') {
-    await xverse.signPSBT(psbtBase64, broadcast, inputsToSign, message)
+    await XVERSE.signPSBT(psbtBase64, broadcast, inputsToSign, message)
   }
   else if (walletInfo.provider === 'leather') {
-    await leather.signPSBT(psbtBase64, broadcast, inputsToSign)
+    await LEATHER.signPSBT(psbtBase64, broadcast, inputsToSign)
   }
   else if (walletInfo.provider === 'me') {
-    await me.signPSBT(psbtBase64, broadcast, inputsToSign, message)
+    await ME.signPSBT(psbtBase64, broadcast, inputsToSign, message)
   }
   else if (walletInfo.provider === 'okx') {
-    await okx.signPSBT(psbtBase64, broadcast, inputsToSign)
+    await OKX.signPSBT(psbtBase64, broadcast, inputsToSign)
   }
   else if (walletInfo.provider === 'local') {
-    await local.signPSBT(psbtBase64, broadcast, inputsToSign)
+    await LOCAL.signPSBT(psbtBase64, broadcast, inputsToSign)
   }
   else {
     throw new Error('Provider not found')

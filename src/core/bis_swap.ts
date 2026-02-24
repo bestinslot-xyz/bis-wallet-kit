@@ -11,24 +11,24 @@ import * as bitcoinjs from 'bitcoinjs-lib'
 import * as ethers from 'ethers'
 import { getBitcoinNetwork } from '../lib/bitcoin'
 import {
-  add_liquidity_request,
-  remove_liquidity_request,
-  save_info,
-  swap2_request,
-  swap_request,
-  unwrap_request,
-  withdraw_request,
+  addLiquidityRequest,
+  removeLiquidityRequest,
+  saveInfo,
+  swap2Request,
+  swapRequest,
+  unwrapRequest,
+  withdrawRequest,
 } from '../lib/uniswap_ops'
 import { compressSmartContractData } from './brc20'
 import { clearExtraUtxos, saveExtraUtxos, utxoOutputTypeFromOutputScript } from './helpers'
 import {
   InscriptionDetails,
-  mint_all,
-  mint_all_check_fees,
-  mint_with_extra_input_in_commit_all,
-  mint_with_extra_input_in_commit_fee_rate,
-  send_inscription_to_op_return_with_extra_inputs_and_extra_output_all,
-  send_inscription_to_op_return_with_extra_inputs_and_extra_output_fee_rate,
+  mintAll,
+  mintAllCheckFees,
+  mintWithExtraInputInCommitAll,
+  mintWithExtraInputInCommitFeeRate,
+  sendInscriptionToOpReturnWithExtraInputsAndExtraOutputAll,
+  sendInscriptionToOpReturnWithExtraInputsAndExtraOutputFeeRate,
   WalletInfo,
 } from './mint'
 import {
@@ -1282,7 +1282,7 @@ export async function createAndBroadcastDepositOrder(
       ),
     )
 
-    baseDepositMintRes = await mint_all(
+    baseDepositMintRes = await mintAll(
       baseDepositInscriptionDetails,
       feeRate,
       null,
@@ -1298,7 +1298,7 @@ export async function createAndBroadcastDepositOrder(
     baseDepositInscriptionId = baseDepositMintRes.inscription_id
     const satpoint = `${baseDepositInscriptionId.split('i')[0]}:0:0`
     baseDepositSecret = baseDepositMintRes.secret
-    let send_to_opreturn_res = null
+    let sendToOpreturnRes = null
     try {
       if (!baseDepositCommitTxHex) {
         throw new Error('Base deposit commit tx hex is missing')
@@ -1308,64 +1308,63 @@ export async function createAndBroadcastDepositOrder(
         [baseDepositInscriptionId, satpoint],
       )
 
-      const target_wallet = new WalletInfo(
+      const targetWallet = new WalletInfo(
         true,
         Buffer.from(Script.encode(['OP_RETURN', Buff.str('BRC20PROG')], false)),
         null,
         null,
         null,
       )
-      const extra_outputs = [
+      const extraOutputs = [
         {
           wallet: payerWallet,
           value: DUMMY_UTXO_VALUE,
         },
       ]
-      send_to_opreturn_res
-        = await send_inscription_to_op_return_with_extra_inputs_and_extra_output_all(
-          baseDepositInscriptionId,
-          [],
-          target_wallet,
-          1,
-          extra_outputs,
-          feeRate,
-          true,
-          signFn,
-        )
+      sendToOpreturnRes = await sendInscriptionToOpReturnWithExtraInputsAndExtraOutputAll(
+        baseDepositInscriptionId,
+        [],
+        targetWallet,
+        1,
+        extraOutputs,
+        feeRate,
+        true,
+        signFn,
+      )
     }
     finally {
       clearExtraUtxos()
     }
 
-    if (send_to_opreturn_res == null) {
+    if (sendToOpreturnRes == null) {
       throw new Error('Failed to send inscription to OP_RETURN')
     }
 
-    baseDepositSendToOpReturnTxHex = send_to_opreturn_res.signed_tx_hex
-    baseDepositSendToOpReturnTxId = send_to_opreturn_res.txid
+    baseDepositSendToOpReturnTxHex = sendToOpreturnRes.signedPsbtHex
+    baseDepositSendToOpReturnTxId = sendToOpreturnRes.txId
   }
 
-  let allowance_inscription_id: string | null = null
-  let allowance_secret: string | null = null
-  let allowance_commit_txid: string | null = null
-  let allowance_reveal_txid: string | null = null
-  let allowance_commit_tx_hex: string | null = null
-  let allowance_reveal_tx_hex: string | null = null
-  let allowance_send_to_op_return_tx_hex: string | null = null
-  let allowance_send_to_op_return_txid: string | null = null
-  let allowance_mint_res = null
+  let allowanceInscriptionId: string | null = null
+  let allowanceSecret: string | null = null
+  let allowanceCommitTxid: string | null = null
+  let allowanceRevealTxid: string | null = null
+  let allowanceCommitTxHex: string | null = null
+  let allowanceRevealTxHex: string | null = null
+  let allowanceSendToOpReturnTxHex: string | null = null
+  let allowanceSendToOpReturnTxid: string | null = null
+  let allowanceMintRes = null
   if (needsAllowance) {
-    const extra_txhexes_for_allowance = []
+    const extraTxhexesForAllowance = []
     if (useBaseAvailableBalanceAmount > 0n) {
-      extra_txhexes_for_allowance.push(
+      extraTxhexesForAllowance.push(
         baseDepositCommitTxHex!,
         baseDepositRevealTxHex!,
         baseDepositSendToOpReturnTxHex!,
       )
     }
     try {
-      saveExtraUtxos(extra_txhexes_for_allowance, null)
-      allowance_mint_res = await mint_all(
+      saveExtraUtxos(extraTxhexesForAllowance, null)
+      allowanceMintRes = await mintAll(
         allowanceInscriptionDetails,
         feeRate,
         null,
@@ -1374,76 +1373,75 @@ export async function createAndBroadcastDepositOrder(
         true,
         signFn,
       )
-      allowance_commit_tx_hex = allowance_mint_res.signed_commit_tx_hex
-      allowance_reveal_tx_hex = allowance_mint_res.signed_reveal_tx_hex
-      allowance_commit_txid = allowance_mint_res.commit_txid
-      allowance_reveal_txid = allowance_mint_res.reveal_txid
-      allowance_inscription_id = allowance_mint_res.inscription_id
-      allowance_secret = allowance_mint_res.secret
+      allowanceCommitTxHex = allowanceMintRes.signed_commit_tx_hex
+      allowanceRevealTxHex = allowanceMintRes.signed_reveal_tx_hex
+      allowanceCommitTxid = allowanceMintRes.commit_txid
+      allowanceRevealTxid = allowanceMintRes.reveal_txid
+      allowanceInscriptionId = allowanceMintRes.inscription_id
+      allowanceSecret = allowanceMintRes.secret
     }
     finally {
       clearExtraUtxos()
     }
 
-    const satpoint = `${allowance_inscription_id.split('i')[0]}:0:0`
-    let send_to_opreturn_res = null
+    const satpoint = `${allowanceInscriptionId.split('i')[0]}:0:0`
+    let sendToOpreturnRes = null
     try {
-      if (!allowance_commit_tx_hex) {
+      if (!allowanceCommitTxHex) {
         throw new Error('Allowance commit tx hex is missing')
       }
-      extra_txhexes_for_allowance.push(allowance_commit_tx_hex, allowance_reveal_tx_hex)
-      saveExtraUtxos(extra_txhexes_for_allowance, [allowance_inscription_id, satpoint])
+      extraTxhexesForAllowance.push(allowanceCommitTxHex, allowanceRevealTxHex)
+      saveExtraUtxos(extraTxhexesForAllowance, [allowanceInscriptionId, satpoint])
 
-      const target_wallet = new WalletInfo(
+      const targetWallet = new WalletInfo(
         true,
         Buffer.from(Script.encode(['OP_RETURN', Buff.str('BRC20PROG')], false)),
         null,
         null,
         null,
       )
-      const extra_outputs = [
+      const extraOutputs = [
         {
           wallet: payerWallet,
           value: DUMMY_UTXO_VALUE,
         },
       ]
-      send_to_opreturn_res
-        = await send_inscription_to_op_return_with_extra_inputs_and_extra_output_all(
-          allowance_inscription_id,
-          [],
-          target_wallet,
-          1,
-          extra_outputs,
-          feeRate,
-          true,
-          signFn,
-        )
+      sendToOpreturnRes = await sendInscriptionToOpReturnWithExtraInputsAndExtraOutputAll(
+        allowanceInscriptionId,
+        [],
+        targetWallet,
+        1,
+        extraOutputs,
+        feeRate,
+        true,
+        signFn,
+      )
     }
     finally {
       clearExtraUtxos()
     }
 
-    if (send_to_opreturn_res == null) {
+    if (sendToOpreturnRes == null) {
       throw new Error('Failed to send inscription to OP_RETURN')
     }
 
-    allowance_send_to_op_return_tx_hex = send_to_opreturn_res.signed_tx_hex
-    allowance_send_to_op_return_txid = send_to_opreturn_res.txid
+    allowanceSendToOpReturnTxHex = sendToOpreturnRes.signedPsbtHex
+    allowanceSendToOpReturnTxid = sendToOpreturnRes.txId
   }
 
-  const extra_utxos = []
-  const extra_tx_hexes = []
+  const extraUtxos = []
+  const extraTxHexes = []
   if (useBaseAvailableBalanceAmount > 0n) {
     if (!baseDepositCommitTxHex || !baseDepositRevealTxHex || !baseDepositSendToOpReturnTxHex) {
       throw new Error('Base deposit transaction hexes are missing')
     }
-    extra_tx_hexes.push(
+    extraTxHexes.push(
       baseDepositCommitTxHex,
       baseDepositRevealTxHex,
       baseDepositSendToOpReturnTxHex,
     )
 
-    extra_utxos.push({
+    extraUtxos.push({
       utxo: `${baseDepositSendToOpReturnTxId}:1`,
       value: DUMMY_UTXO_VALUE,
       script_type: utxoOutputTypeFromOutputScript(payerWallet.outputScript, network),
@@ -1451,40 +1449,32 @@ export async function createAndBroadcastDepositOrder(
     })
   }
   if (needsAllowance) {
-    if (
-      !allowance_commit_tx_hex
-      || !allowance_reveal_tx_hex
-      || !allowance_send_to_op_return_tx_hex
-    ) {
+    if (!allowanceCommitTxHex || !allowanceRevealTxHex || !allowanceSendToOpReturnTxHex) {
       throw new Error('Allowance transaction hexes are missing')
     }
-    extra_tx_hexes.push(
-      allowance_commit_tx_hex,
-      allowance_reveal_tx_hex,
-      allowance_send_to_op_return_tx_hex,
-    )
+    extraTxHexes.push(allowanceCommitTxHex, allowanceRevealTxHex, allowanceSendToOpReturnTxHex)
 
-    extra_utxos.push({
-      utxo: `${allowance_send_to_op_return_txid}:1`,
+    extraUtxos.push({
+      utxo: `${allowanceSendToOpReturnTxid}:1`,
       value: DUMMY_UTXO_VALUE,
       script_type: utxoOutputTypeFromOutputScript(payerWallet.outputScript, network),
       wallet: payerWallet,
     })
   }
 
-  let send_to_opreturn_res = null
-  let deposit_mint_res = null
-  let deposit_inscription_id: string = ''
-  let deposit_secret: string = ''
-  let deposit_commit_tx_hex: string = ''
-  let deposit_reveal_tx_hex: string = ''
+  let sendToOpreturnRes = null
+  let depositMintRes = null
+  let depositInscriptionId: string = ''
+  let depositSecret: string = ''
+  let depositCommitTxHex: string = ''
+  let depositRevealTxHex: string = ''
   try {
-    if (extra_tx_hexes.length > 0) {
-      saveExtraUtxos(extra_tx_hexes, null)
+    if (extraTxHexes.length > 0) {
+      saveExtraUtxos(extraTxHexes, null)
     }
-    deposit_mint_res = await mint_with_extra_input_in_commit_all(
+    depositMintRes = await mintWithExtraInputInCommitAll(
       depositInscriptionDetails,
-      extra_utxos,
+      extraUtxos,
       feeRate,
       null,
       null,
@@ -1492,64 +1482,63 @@ export async function createAndBroadcastDepositOrder(
       true,
       signFn,
     )
-    deposit_commit_tx_hex = deposit_mint_res.signed_commit_tx_hex
-    deposit_reveal_tx_hex = deposit_mint_res.signed_reveal_tx_hex
-    deposit_inscription_id = deposit_mint_res.inscription_id
-    const deposit_satpoint = `${deposit_inscription_id.split('i')[0]}:0:0`
-    deposit_secret = deposit_mint_res.secret
-    extra_tx_hexes.push(deposit_commit_tx_hex!, deposit_reveal_tx_hex!)
-    saveExtraUtxos(extra_tx_hexes, [deposit_inscription_id, deposit_satpoint])
-    const target_wallet = new WalletInfo(
+    depositCommitTxHex = depositMintRes.signed_commit_tx_hex
+    depositRevealTxHex = depositMintRes.signed_reveal_tx_hex
+    depositInscriptionId = depositMintRes.inscription_id
+    const depositSatpoint = `${depositInscriptionId.split('i')[0]}:0:0`
+    depositSecret = depositMintRes.secret
+    extraTxHexes.push(depositCommitTxHex!, depositRevealTxHex!)
+    saveExtraUtxos(extraTxHexes, [depositInscriptionId, depositSatpoint])
+    const targetWallet = new WalletInfo(
       true,
       Buffer.from(Script.encode(['OP_RETURN', Buff.str('BRC20PROG')], false)),
       null,
       null,
       null,
     )
-    send_to_opreturn_res
-      = await send_inscription_to_op_return_with_extra_inputs_and_extra_output_all(
-        deposit_inscription_id,
-        [],
-        target_wallet,
-        1,
-        [],
-        feeRate,
-        true,
-        signFn,
-      )
+    sendToOpreturnRes = await sendInscriptionToOpReturnWithExtraInputsAndExtraOutputAll(
+      depositInscriptionId,
+      [],
+      targetWallet,
+      1,
+      [],
+      feeRate,
+      true,
+      signFn,
+    )
   }
   finally {
     clearExtraUtxos()
   }
 
-  if (send_to_opreturn_res == null) {
+  if (sendToOpreturnRes == null) {
     throw new Error('Failed to send inscription to OP_RETURN')
   }
 
-  const deposit_send_to_op_return_tx_hex = send_to_opreturn_res.signed_tx_hex
-  const deposit_send_to_op_return_txid = send_to_opreturn_res.txid
+  const depositSendToOpReturnTxHex = sendToOpreturnRes.signedPsbtHex
+  const depositSendToOpReturnTxid = sendToOpreturnRes.txId
 
-  const to_send_for_broadcast: BroadcastDepositOrderRequest = {
-    commit_txid: deposit_mint_res.commit_txid,
-    commit_txhex: deposit_commit_tx_hex,
-    reveal_txid: deposit_mint_res.reveal_txid,
-    reveal_txhex: deposit_reveal_tx_hex,
-    send_to_opreturn_txid: deposit_send_to_op_return_txid,
-    send_to_opreturn_txhex: deposit_send_to_op_return_tx_hex,
-    secret: deposit_secret,
-    inscription_id: deposit_inscription_id,
+  const toSendForBroadcast: BroadcastDepositOrderRequest = {
+    commit_txid: depositMintRes.commit_txid,
+    commit_txhex: depositCommitTxHex,
+    reveal_txid: depositMintRes.reveal_txid,
+    reveal_txhex: depositRevealTxHex,
+    send_to_opreturn_txid: depositSendToOpReturnTxid,
+    send_to_opreturn_txhex: depositSendToOpReturnTxHex,
+    secret: depositSecret,
+    inscription_id: depositInscriptionId,
     fee_rate: feeRate,
 
     approve_details: needsAllowance
       ? {
-          commit_txid: allowance_commit_txid!,
-          commit_txhex: allowance_commit_tx_hex!,
-          reveal_txid: allowance_reveal_txid!,
-          reveal_txhex: allowance_reveal_tx_hex!,
-          send_to_opreturn_txid: allowance_send_to_op_return_txid!,
-          send_to_opreturn_txhex: allowance_send_to_op_return_tx_hex!,
-          secret: allowance_secret!,
-          inscription_id: allowance_inscription_id!,
+          commit_txid: allowanceCommitTxid!,
+          commit_txhex: allowanceCommitTxHex!,
+          reveal_txid: allowanceRevealTxid!,
+          reveal_txhex: allowanceRevealTxHex!,
+          send_to_opreturn_txid: allowanceSendToOpReturnTxid!,
+          send_to_opreturn_txhex: allowanceSendToOpReturnTxHex!,
+          secret: allowanceSecret!,
+          inscription_id: allowanceInscriptionId!,
           fee_rate: feeRate,
         }
       : null,
@@ -1569,23 +1558,31 @@ export async function createAndBroadcastDepositOrder(
           }
         : null,
   }
-  const broadcast_res = await broadcastDepositOrder(to_send_for_broadcast)
+  const broadcastRes = await broadcastDepositOrder(toSendForBroadcast)
 
-  return broadcast_res.result
+  return broadcastRes.result
 }
 
 /**
+ * Checks the miner fees required for creating a deposit order for swapping BRC-20 tokens, including the fees for minting inscriptions for allowance and deposit, as well as the fees for sending those inscriptions to OP_RETURN. The function also checks if the user has sufficient balance and allowance for the specified token amount.
  *
- * @param token_address
- * @param token_amount
- * @param fee_rate
- * @param create_allowance_if_needed
+ * @param tokenAddress The address of the BRC-20 token to deposit.
+ * @param tokenAmount The amount of the BRC-20 token to deposit, represented as a bigint in 18 decimals format.
+ * @param feeRate The fee rate to use for the transactions, represented in sats/vbyte.
+ * @param createAllowanceIfNeeded A boolean flag indicating whether to include the fees for creating an allowance inscription if the current allowance is insufficient. Defaults to true.
+ *
+ * @returns A promise that resolves to an object containing the following properties:
+ * - needs_approval: A boolean indicating whether an allowance inscription needs to be created.
+ * - allowance_fees_total: The total miner fees for creating and sending the allowance inscription to OP_RETURN (0 if no allowance inscription is needed).
+ * - base_deposit_fees_total: The total miner fees for creating and sending the base deposit inscription to OP_RETURN (0 if no base deposit inscription is needed).
+ * - deposit_fees_total: The total miner fees for creating and sending the deposit inscription to OP_RETURN.
+ * - fee_rate: The fee rate used for the calculations, in sats/vbyte.
  */
 export async function checkMinerFeesOfDepositOrder(
-  token_address: string,
-  token_amount: bigint,
-  fee_rate: number,
-  create_allowance_if_needed: boolean = true,
+  tokenAddress: string,
+  tokenAmount: bigint,
+  feeRate: number,
+  createAllowanceIfNeeded: boolean = true,
 ): Promise<{
   needs_approval: boolean
   allowance_fees_total: number
@@ -1608,354 +1605,339 @@ export async function checkMinerFeesOfDepositOrder(
   if (!userPaymentWallet.address)
     throw new Error('Payment wallet address not found')
 
-  const payer_addr = userPaymentWallet.address
-  const payer_public_key = userPaymentWallet.pubkey
+  const payerAddr = userPaymentWallet.address
+  const payerPublicKey = userPaymentWallet.pubkey
 
-  const payer_wallet = new WalletInfo(false, null, payer_addr, null, payer_public_key)
+  const payerWallet = new WalletInfo(false, null, payerAddr, null, payerPublicKey)
 
-  let use_base_available_balance_amt = 0n
-  let base_token_decimals = 0
-  let base_token_ticker = ''
-  const current_token_amount = await checkBRC20ProgBalance(token_address)
-  if (current_token_amount < token_amount) {
-    const current_base_available_token_info = await checkBaseBRC20Balance(token_address)
-    const current_base_available_token_amount
-      = current_base_available_token_info.available_balance_in_18_dec
-    base_token_decimals = current_base_available_token_info.decimals
-    base_token_ticker = current_base_available_token_info.ticker
-    use_base_available_balance_amt = token_amount - current_token_amount
-    if (current_base_available_token_amount < use_base_available_balance_amt) {
+  let useBaseAvailableBalanceAmt = 0n
+  let baseTokenDecimals = 0
+  let baseTokenTicker = ''
+  const currentTokenAmount = await checkBRC20ProgBalance(tokenAddress)
+  if (currentTokenAmount < tokenAmount) {
+    const currentBaseAvailableTokenInfo = await checkBaseBRC20Balance(tokenAddress)
+    const currentBaseAvailableTokenAmount
+      = currentBaseAvailableTokenInfo.available_balance_in_18_dec
+    baseTokenDecimals = currentBaseAvailableTokenInfo.decimals
+    baseTokenTicker = currentBaseAvailableTokenInfo.ticker
+    useBaseAvailableBalanceAmt = tokenAmount - currentTokenAmount
+    if (currentBaseAvailableTokenAmount < useBaseAvailableBalanceAmt) {
       console.error(
-        `Insufficient BRC-2.0 + BRC20 available balance. Current BRC-2.0: ${current_token_amount}, Available in base: ${current_base_available_token_amount}, Required: ${token_amount}`,
+        `Insufficient BRC-2.0 + BRC20 available balance. Current BRC-2.0: ${currentTokenAmount}, Available in base: ${currentBaseAvailableTokenAmount}, Required: ${tokenAmount}`,
       )
       throw new Error('Insufficient BRC-2.0 + BRC20 available balance')
     }
   }
 
-  const current_allowance = await checkSwapAllowance(token_address)
-  let needs_allowance = false
+  const currentAllowance = await checkSwapAllowance(tokenAddress)
+  let needsAllowance = false
   if (
-    current_allowance < BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')
+    currentAllowance < BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')
   ) {
-    if (!create_allowance_if_needed) {
+    if (!createAllowanceIfNeeded) {
       console.error('Insufficient allowance for BRC-2.0 token transfer.')
       throw new Error('Insufficient allowance for BRC-2.0 token transfer.')
     }
-    needs_allowance = true
+    needsAllowance = true
   }
 
-  const l1_contract_address = getSwapContractAddress()
-  const allowance_calldata = `0x095ea7b3000000000000000000000000${l1_contract_address.slice(2).toLowerCase()}ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff`
-  const allowance_calldata_compressed = await compressSmartContractData(allowance_calldata)
-  const allowance_content = Buff.str(
-    `{"p":"brc20-prog","op":"c","c":"${token_address}","b":"${allowance_calldata_compressed}"}`,
+  const l1ContractAddress = getSwapContractAddress()
+  const allowanceCalldata = `0x095ea7b3000000000000000000000000${l1ContractAddress.slice(2).toLowerCase()}ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff`
+  const allowanceCalldataCompressed = await compressSmartContractData(allowanceCalldata)
+  const allowanceContent = Buff.str(
+    `{"p":"brc20-prog","op":"c","c":"${tokenAddress}","b":"${allowanceCalldataCompressed}"}`,
   )
-  const allowance_inscription_details = new InscriptionDetails(
+  const allowanceInscriptionDetails = new InscriptionDetails(
     Buff.str('text/plain'),
     null,
     null,
     null,
     null,
-    allowance_content,
+    allowanceContent,
   )
 
-  const swap_pubkey = (await getSwapWalletFromDB())?.swapPubkey
-  if (!swap_pubkey) {
+  const swapPubkey = (await getSwapWalletFromDB())?.swapPubkey
+  if (!swapPubkey) {
     throw new Error('Smart wallet not found. Please generate a smart wallet first.')
   }
 
-  const ec_signature = `0x${'00'.repeat(64)}` // dummy
-  const pubkey_idx = 1 // dummy
-  const token_idx = 1 // dummy
+  const ecSignature = `0x${'00'.repeat(64)}` // dummy
+  const pubkeyIdx = 1 // dummy
+  const tokenIdx = 1 // dummy
 
-  const neg_signature_bls12 = await getDepositBLSSignature({
-    pubkey: swap_pubkey,
-    pk_idx: BigInt(pubkey_idx),
+  const negSignatureBls12 = await getDepositBLSSignature({
+    pubkey: swapPubkey,
+    pk_idx: BigInt(pubkeyIdx),
   })
 
-  const l1_swap = getSwapContractInterface()
+  const l1Swap = getSwapContractInterface()
   // tokenAddress, tickerIdx, amt, pubkey, pkIdx, negSignatureBLS12, ecSignatureForIndexes
-  const deposit_calldata = l1_swap.encodeFunctionData('deposit', [
-    token_address,
-    token_idx,
-    token_amount,
-    swap_pubkey,
-    BigInt(pubkey_idx),
-    neg_signature_bls12,
-    ec_signature,
+  const depositCalldata = l1Swap.encodeFunctionData('deposit', [
+    tokenAddress,
+    tokenIdx,
+    tokenAmount,
+    swapPubkey,
+    BigInt(pubkeyIdx),
+    negSignatureBls12,
+    ecSignature,
   ])
-  const deposit_calldata_compressed = await compressSmartContractData(deposit_calldata)
-  const deposit_content = Buff.str(
-    `{"p":"brc20-prog","op":"c","c":"${l1_contract_address}","b":"${deposit_calldata_compressed}"}`,
+  const depositCalldataCompressed = await compressSmartContractData(depositCalldata)
+  const depositContent = Buff.str(
+    `{"p":"brc20-prog","op":"c","c":"${l1ContractAddress}","b":"${depositCalldataCompressed}"}`,
   )
-  const deposit_inscription_details = new InscriptionDetails(
+  const depositInscriptionDetails = new InscriptionDetails(
     Buff.str('text/plain'),
     null,
     null,
     null,
     null,
-    deposit_content,
+    depositContent,
   )
 
-  let base_deposit_inscription_id = null
-  let base_deposit_commit_tx_hex = null
-  let base_deposit_reveal_tx_hex = null
-  let base_deposit_send_to_op_return_tx_hex = null
-  let base_deposit_send_to_op_return_txid = null
-  let base_deposit_fees_total = 0
-  if (use_base_available_balance_amt > 0n) {
-    const amount_to_deposit = convertAmountToBRC20String(
-      use_base_available_balance_amt,
-      base_token_decimals,
+  let baseDepositInscriptionId = null
+  let baseDepositCommitTxHex = null
+  let baseDepositRevealTxHex = null
+  let baseDepositSendToOpReturnTxHex = null
+  let baseDepositSendToOpReturnTxid = null
+  let baseDepositFeesTotal = 0
+  if (useBaseAvailableBalanceAmt > 0n) {
+    const amountToDeposit = convertAmountToBRC20String(
+      useBaseAvailableBalanceAmt,
+      baseTokenDecimals,
     )
-    const base_deposit_inscription_details = new InscriptionDetails(
+    const baseDepositInscriptionDetails = new InscriptionDetails(
       Buff.str('text/plain'),
       null,
       null,
       null,
       null,
       Buff.str(
-        `{"p":"brc-20","op":"transfer","tick":"${base_token_ticker}","amt":"${amount_to_deposit}"}`,
+        `{"p":"brc-20","op":"transfer","tick":"${baseTokenTicker}","amt":"${amountToDeposit}"}`,
       ),
     )
 
-    const base_deposit_mint_res = await mint_all_check_fees(
-      base_deposit_inscription_details,
-      fee_rate,
+    const baseDepositMintRes = await mintAllCheckFees(
+      baseDepositInscriptionDetails,
+      feeRate,
       null,
       null,
       0,
     )
-    base_deposit_commit_tx_hex = base_deposit_mint_res.unsigned_commit_tx_hex
-    base_deposit_reveal_tx_hex = base_deposit_mint_res.signed_reveal_tx_hex
-    base_deposit_inscription_id = base_deposit_mint_res.inscription_id
-    base_deposit_fees_total += base_deposit_mint_res.total_fee
-    const satpoint = `${base_deposit_inscription_id.split('i')[0]}:0:0`
-    let send_to_opreturn_res = null
+    baseDepositCommitTxHex = baseDepositMintRes.unsigned_commit_tx_hex
+    baseDepositRevealTxHex = baseDepositMintRes.signed_reveal_tx_hex
+    baseDepositInscriptionId = baseDepositMintRes.inscription_id
+    baseDepositFeesTotal += baseDepositMintRes.total_fee
+    const satpoint = `${baseDepositInscriptionId.split('i')[0]}:0:0`
+    let sendToOpreturnRes = null
     try {
-      if (!base_deposit_commit_tx_hex) {
+      if (!baseDepositCommitTxHex) {
         throw new Error('Base deposit commit tx hex is missing')
       }
       saveExtraUtxos(
-        [base_deposit_commit_tx_hex, base_deposit_reveal_tx_hex],
-        [base_deposit_inscription_id, satpoint],
+        [baseDepositCommitTxHex, baseDepositRevealTxHex],
+        [baseDepositInscriptionId, satpoint],
       )
 
-      const target_wallet = new WalletInfo(
+      const targetWallet = new WalletInfo(
         true,
         Buffer.from(Script.encode(['OP_RETURN', Buff.str('BRC20PROG')], false)),
         null,
         null,
         null,
       )
-      const extra_outputs = [
+      const extraOutputs = [
         {
-          wallet: payer_wallet,
+          wallet: payerWallet,
           value: DUMMY_UTXO_VALUE,
         },
       ]
-      send_to_opreturn_res
-        = await send_inscription_to_op_return_with_extra_inputs_and_extra_output_fee_rate(
-          base_deposit_inscription_id,
-          [],
-          target_wallet,
-          1,
-          extra_outputs,
-          fee_rate,
-        )
+      sendToOpreturnRes = await sendInscriptionToOpReturnWithExtraInputsAndExtraOutputFeeRate(
+        baseDepositInscriptionId,
+        [],
+        targetWallet,
+        1,
+        extraOutputs,
+        feeRate,
+      )
     }
     finally {
       clearExtraUtxos()
     }
 
-    if (send_to_opreturn_res == null) {
+    if (sendToOpreturnRes == null) {
       throw new Error('Failed to send inscription to OP_RETURN')
     }
 
-    base_deposit_send_to_op_return_tx_hex = send_to_opreturn_res.unsigned_tx_hex
-    base_deposit_send_to_op_return_txid = send_to_opreturn_res.txid
-    base_deposit_fees_total += send_to_opreturn_res.tx_fee
+    baseDepositSendToOpReturnTxHex = sendToOpreturnRes.unsigned_tx_hex
+    baseDepositSendToOpReturnTxid = sendToOpreturnRes.txid
+    baseDepositFeesTotal += sendToOpreturnRes.tx_fee
   }
 
-  let allowance_inscription_id = null
-  let allowance_commit_tx_hex = null
-  let allowance_reveal_tx_hex = null
-  let allowance_send_to_op_return_tx_hex = null
-  let allowance_send_to_op_return_txid = null
-  let allowance_fees_total = 0
-  if (needs_allowance) {
-    const extra_txhexes_for_allowance = []
-    if (use_base_available_balance_amt > 0n) {
-      extra_txhexes_for_allowance.push(
-        base_deposit_commit_tx_hex!,
-        base_deposit_reveal_tx_hex!,
-        base_deposit_send_to_op_return_tx_hex!,
+  let allowanceInscriptionId = null
+  let allowanceCommitTxHex = null
+  let allowanceRevealTxHex = null
+  let allowanceSendToOpReturnTxHex = null
+  let allowanceSendToOpReturnTxid = null
+  let allowanceFeesTotal = 0
+  if (needsAllowance) {
+    const extraTxhexesForAllowance = []
+    if (useBaseAvailableBalanceAmt > 0n) {
+      extraTxhexesForAllowance.push(
+        baseDepositCommitTxHex!,
+        baseDepositRevealTxHex!,
+        baseDepositSendToOpReturnTxHex!,
       )
     }
     try {
-      saveExtraUtxos(extra_txhexes_for_allowance, null)
-      const allowance_mint_res = await mint_all_check_fees(
-        allowance_inscription_details,
-        fee_rate,
+      saveExtraUtxos(extraTxhexesForAllowance, null)
+      const allowanceMintRes = await mintAllCheckFees(
+        allowanceInscriptionDetails,
+        feeRate,
         null,
         null,
         0,
       )
-      allowance_commit_tx_hex = allowance_mint_res.unsigned_commit_tx_hex
-      allowance_reveal_tx_hex = allowance_mint_res.signed_reveal_tx_hex
-      allowance_inscription_id = allowance_mint_res.inscription_id
-      allowance_fees_total += allowance_mint_res.total_fee
+      allowanceCommitTxHex = allowanceMintRes.unsigned_commit_tx_hex
+      allowanceRevealTxHex = allowanceMintRes.signed_reveal_tx_hex
+      allowanceInscriptionId = allowanceMintRes.inscription_id
+      allowanceFeesTotal += allowanceMintRes.total_fee
     }
     finally {
       clearExtraUtxos()
     }
 
-    const satpoint = `${allowance_inscription_id.split('i')[0]}:0:0`
-    let send_to_opreturn_res = null
+    const satpoint = `${allowanceInscriptionId.split('i')[0]}:0:0`
+    let sendToOpreturnRes = null
     try {
-      if (!allowance_commit_tx_hex) {
+      if (!allowanceCommitTxHex) {
         throw new Error('Allowance commit tx hex is missing')
       }
-      extra_txhexes_for_allowance.push(allowance_commit_tx_hex, allowance_reveal_tx_hex)
-      saveExtraUtxos(extra_txhexes_for_allowance, [allowance_inscription_id, satpoint])
+      extraTxhexesForAllowance.push(allowanceCommitTxHex, allowanceRevealTxHex)
+      saveExtraUtxos(extraTxhexesForAllowance, [allowanceInscriptionId, satpoint])
 
-      const target_wallet = new WalletInfo(
+      const targetWallet = new WalletInfo(
         true,
         Buffer.from(Script.encode(['OP_RETURN', Buff.str('BRC20PROG')], false)),
         null,
         null,
         null,
       )
-      const extra_outputs = [
+      const extraOutputs = [
         {
-          wallet: payer_wallet,
+          wallet: payerWallet,
           value: DUMMY_UTXO_VALUE,
         },
       ]
-      send_to_opreturn_res
-        = await send_inscription_to_op_return_with_extra_inputs_and_extra_output_fee_rate(
-          allowance_inscription_id,
-          [],
-          target_wallet,
-          1,
-          extra_outputs,
-          fee_rate,
-        )
+      sendToOpreturnRes = await sendInscriptionToOpReturnWithExtraInputsAndExtraOutputFeeRate(
+        allowanceInscriptionId,
+        [],
+        targetWallet,
+        1,
+        extraOutputs,
+        feeRate,
+      )
     }
     finally {
       clearExtraUtxos()
     }
 
-    if (send_to_opreturn_res == null) {
+    if (sendToOpreturnRes == null) {
       throw new Error('Failed to send inscription to OP_RETURN')
     }
 
-    allowance_send_to_op_return_tx_hex = send_to_opreturn_res.unsigned_tx_hex
-    allowance_send_to_op_return_txid = send_to_opreturn_res.txid
-    allowance_fees_total += send_to_opreturn_res.tx_fee
+    allowanceSendToOpReturnTxHex = sendToOpreturnRes.unsigned_tx_hex
+    allowanceSendToOpReturnTxid = sendToOpreturnRes.txid
+    allowanceFeesTotal += sendToOpreturnRes.tx_fee
   }
 
-  const extra_utxos = []
-  const extra_tx_hexes = []
-  if (use_base_available_balance_amt > 0n) {
-    if (
-      !base_deposit_commit_tx_hex
-      || !base_deposit_reveal_tx_hex
-      || !base_deposit_send_to_op_return_tx_hex
-    ) {
+  const extraUtxos = []
+  const extraTxHexes = []
+  if (useBaseAvailableBalanceAmt > 0n) {
+    if (!baseDepositCommitTxHex || !baseDepositRevealTxHex || !baseDepositSendToOpReturnTxHex) {
       throw new Error('Base deposit transaction hexes are missing')
     }
-    extra_tx_hexes.push(
-      base_deposit_commit_tx_hex,
-      base_deposit_reveal_tx_hex,
-      base_deposit_send_to_op_return_tx_hex,
+    extraTxHexes.push(
+      baseDepositCommitTxHex,
+      baseDepositRevealTxHex,
+      baseDepositSendToOpReturnTxHex,
     )
 
-    extra_utxos.push({
-      utxo: `${base_deposit_send_to_op_return_txid}:1`,
+    extraUtxos.push({
+      utxo: `${baseDepositSendToOpReturnTxid}:1`,
       value: DUMMY_UTXO_VALUE,
-      script_type: utxoOutputTypeFromOutputScript(payer_wallet.outputScript, network),
-      wallet: payer_wallet,
+      script_type: utxoOutputTypeFromOutputScript(payerWallet.outputScript, network),
+      wallet: payerWallet,
     })
   }
-  if (needs_allowance) {
-    if (
-      !allowance_commit_tx_hex
-      || !allowance_reveal_tx_hex
-      || !allowance_send_to_op_return_tx_hex
-    ) {
+  if (needsAllowance) {
+    if (!allowanceCommitTxHex || !allowanceRevealTxHex || !allowanceSendToOpReturnTxHex) {
       throw new Error('Allowance transaction hexes are missing')
     }
-    extra_tx_hexes.push(
-      allowance_commit_tx_hex,
-      allowance_reveal_tx_hex,
-      allowance_send_to_op_return_tx_hex,
-    )
+    extraTxHexes.push(allowanceCommitTxHex, allowanceRevealTxHex, allowanceSendToOpReturnTxHex)
 
-    extra_utxos.push({
-      utxo: `${allowance_send_to_op_return_txid}:1`,
+    extraUtxos.push({
+      utxo: `${allowanceSendToOpReturnTxid}:1`,
       value: DUMMY_UTXO_VALUE,
-      script_type: utxoOutputTypeFromOutputScript(payer_wallet.outputScript, network),
-      wallet: payer_wallet,
+      script_type: utxoOutputTypeFromOutputScript(payerWallet.outputScript, network),
+      wallet: payerWallet,
     })
   }
 
-  let deposit_fees_total = 0
-  let send_to_opreturn_res = null
+  let depositFeesTotal = 0
+  let sendToOpreturnRes = null
   try {
-    if (extra_tx_hexes.length > 0) {
-      saveExtraUtxos(extra_tx_hexes, null)
+    if (extraTxHexes.length > 0) {
+      saveExtraUtxos(extraTxHexes, null)
     }
-    const deposit_mint_res = await mint_with_extra_input_in_commit_fee_rate(
-      deposit_inscription_details,
-      extra_utxos,
-      fee_rate,
+    const depositMintRes = await mintWithExtraInputInCommitFeeRate(
+      depositInscriptionDetails,
+      extraUtxos,
+      feeRate,
       null,
       null,
       0,
     )
-    const deposit_commit_tx_hex = deposit_mint_res.unsigned_commit_tx_hex
-    const deposit_reveal_tx_hex = deposit_mint_res.signed_reveal_tx_hex
-    const deposit_inscription_id = deposit_mint_res.inscription_id
-    const deposit_satpoint = `${deposit_inscription_id.split('i')[0]}:0:0`
-    deposit_fees_total += deposit_mint_res.total_fee
-    extra_tx_hexes.push(deposit_commit_tx_hex!, deposit_reveal_tx_hex!)
-    saveExtraUtxos(extra_tx_hexes, [deposit_inscription_id, deposit_satpoint])
-    const target_wallet = new WalletInfo(
+    const depositCommitTxHex = depositMintRes.unsigned_commit_tx_hex
+    const depositRevealTxHex = depositMintRes.signed_reveal_tx_hex
+    const depositInscriptionId = depositMintRes.inscription_id
+    const depositSatpoint = `${depositInscriptionId.split('i')[0]}:0:0`
+    depositFeesTotal += depositMintRes.total_fee
+    extraTxHexes.push(depositCommitTxHex!, depositRevealTxHex!)
+    saveExtraUtxos(extraTxHexes, [depositInscriptionId, depositSatpoint])
+    const targetWallet = new WalletInfo(
       true,
       Buffer.from(Script.encode(['OP_RETURN', Buff.str('BRC20PROG')], false)),
       null,
       null,
       null,
     )
-    send_to_opreturn_res
-      = await send_inscription_to_op_return_with_extra_inputs_and_extra_output_fee_rate(
-        deposit_inscription_id,
-        [],
-        target_wallet,
-        1,
-        [],
-        fee_rate,
-      )
+    sendToOpreturnRes = await sendInscriptionToOpReturnWithExtraInputsAndExtraOutputFeeRate(
+      depositInscriptionId,
+      [],
+      targetWallet,
+      1,
+      [],
+      feeRate,
+    )
   }
   finally {
     clearExtraUtxos()
   }
 
-  if (send_to_opreturn_res == null) {
+  if (sendToOpreturnRes == null) {
     throw new Error('Failed to send inscription to OP_RETURN')
   }
 
-  deposit_fees_total += send_to_opreturn_res.tx_fee
+  depositFeesTotal += sendToOpreturnRes.tx_fee
 
-  const to_return = {
-    needs_approval: needs_allowance,
-    base_deposit_fees_total,
-    allowance_fees_total,
-    deposit_fees_total,
-    fee_rate,
+  const toReturn = {
+    needs_approval: needsAllowance,
+    base_deposit_fees_total: baseDepositFeesTotal,
+    allowance_fees_total: allowanceFeesTotal,
+    deposit_fees_total: depositFeesTotal,
+    fee_rate: feeRate,
   }
-  return to_return
+  return toReturn
 }
 
 interface BroadcastWrapOrderRequest {
@@ -1974,7 +1956,7 @@ interface BroadcastWrapOrderResponse {
   result: string[] // txid array
 }
 async function broadcastWrapOrder(
-  to_send: BroadcastWrapOrderRequest,
+  toSend: BroadcastWrapOrderRequest,
 ): Promise<BroadcastWrapOrderResponse> {
   const url = getSwapBackendUrl('wrap')
 
@@ -1983,7 +1965,7 @@ async function broadcastWrapOrder(
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(to_send),
+    body: JSON.stringify(toSend),
   })
 }
 interface EstimateGasWrapOrderResponse {
@@ -1992,7 +1974,7 @@ interface EstimateGasWrapOrderResponse {
   allocated_gas: number
 }
 async function estimateGasWrapOrder(
-  to_send: BroadcastWrapOrderRequest,
+  toSend: BroadcastWrapOrderRequest,
 ): Promise<EstimateGasWrapOrderResponse> {
   const url = getSwapBackendUrl('estimate_wrap_gas')
 
@@ -2001,19 +1983,22 @@ async function estimateGasWrapOrder(
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(to_send),
+    body: JSON.stringify(toSend),
   })
 }
 /**
+ * Creates and broadcasts a wrap order for swapping BRC-20 tokens. The function first retrieves the necessary swap information and connected wallet details, then generates the required signatures for the deposit. It constructs the call data for the wrap order and mints an inscription with the call data as its content. Finally, it sends the inscription to OP_RETURN and broadcasts the transaction to the network.
  *
- * @param btc_amount
- * @param fee_rate
+ * @param btcAmount The amount of BTC to wrap, represented as a bigint in satoshis.
+ * @param feeRate The fee rate to use for the transactions, represented in sats/vbyte.
+ *
+ * @returns A promise that resolves to an array of transaction IDs related to the wrap order, including the commit transaction, reveal transaction, and the transaction for sending the inscription to OP_RETURN.
  */
 export async function createAndBroadcastWrapOrder(
-  btc_amount: bigint,
-  fee_rate: number,
+  btcAmount: bigint,
+  feeRate: number,
 ): Promise<string[]> {
-  const swap_info = await getSwapInfo()
+  const swapInfo = await getSwapInfo()
   // Get connected wallet
   const walletInfo = getWalletInfo()
 
@@ -2035,174 +2020,176 @@ export async function createAndBroadcastWrapOrder(
   if (!userOrdinalsWallet.address)
     throw new Error('Ordinals wallet address not found')
 
-  const ordinals_addr = userOrdinalsWallet.address
+  const ordinalsAddr = userOrdinalsWallet.address
 
-  const l1_contract_address = getSwapContractAddress()
+  const l1ContractAddress = getSwapContractAddress()
 
-  const swap_pubkey = (await getSwapWalletFromDB())?.swapPubkey
-  if (!swap_pubkey) {
+  const swapPubkey = (await getSwapWalletFromDB())?.swapPubkey
+  if (!swapPubkey) {
     throw new Error('Smart wallet not found. Please generate a smart wallet first.')
   }
 
-  const bip322_signature = await getDepositBIP322Signature({
-    btc_address: ordinals_addr,
-    bls_pubkey: swap_pubkey,
-    token_address: swap_info.wbtc_address,
+  const bip322Signature = await getDepositBIP322Signature({
+    btc_address: ordinalsAddr,
+    bls_pubkey: swapPubkey,
+    token_address: swapInfo.wbtc_address,
   })
 
-  const ordinals_script = bitcoinjs.address.toOutputScript(ordinals_addr, getBitcoinNetwork())
-  const neg_signature_bls12_emergency = await getEmergencyBLSSignature({
-    pubkey: swap_pubkey,
-    ordinals_script: ordinals_script.toString('hex'),
+  const ordinalsScript = bitcoinjs.address.toOutputScript(ordinalsAddr, getBitcoinNetwork())
+  const negSignatureBls12Emergency = await getEmergencyBLSSignature({
+    pubkey: swapPubkey,
+    ordinals_script: ordinalsScript.toString('hex'),
   })
-  const deposit_details = await getDepositSignature({
-    btc_address: ordinals_addr,
-    bls_pubkey: swap_pubkey,
-    token_address: swap_info.wbtc_address.toLowerCase(),
-    bip322_signature,
-    bls12_signature: neg_signature_bls12_emergency,
+  const depositDetails = await getDepositSignature({
+    btc_address: ordinalsAddr,
+    bls_pubkey: swapPubkey,
+    token_address: swapInfo.wbtc_address.toLowerCase(),
+    bip322_signature: bip322Signature,
+    bls12_signature: negSignatureBls12Emergency,
   })
-  const ec_signature = deposit_details.edcsa_signature
-  const pubkey_idx = deposit_details.pubkey_idx
-  const token_idx = deposit_details.token_idx
+  const ecSignature = depositDetails.edcsa_signature
+  const pubkeyIdx = depositDetails.pubkey_idx
+  const tokenIdx = depositDetails.token_idx
 
-  const neg_signature_bls12 = await getDepositBLSSignature({
-    pubkey: swap_pubkey,
-    pk_idx: BigInt(pubkey_idx),
+  const negSignatureBls12 = await getDepositBLSSignature({
+    pubkey: swapPubkey,
+    pk_idx: BigInt(pubkeyIdx),
   })
 
   // tokenAddress, tickerIdx, amt, pubkey, pkIdx, negSignatureBLS12, ecSignatureForIndexes
-  const call_data = ethers.AbiCoder.defaultAbiCoder().encode(
+  const callData = ethers.AbiCoder.defaultAbiCoder().encode(
     ['address', 'uint32', 'bytes', 'uint64', 'bytes', 'bytes'],
     [
-      swap_info.wbtc_address,
-      token_idx,
-      Buffer.from(swap_pubkey.slice(2), 'hex'),
-      pubkey_idx,
-      Buffer.from(neg_signature_bls12.slice(2), 'hex'),
-      Buffer.from(ec_signature.slice(2), 'hex'),
+      swapInfo.wbtc_address,
+      tokenIdx,
+      Buffer.from(swapPubkey.slice(2), 'hex'),
+      pubkeyIdx,
+      Buffer.from(negSignatureBls12.slice(2), 'hex'),
+      Buffer.from(ecSignature.slice(2), 'hex'),
     ],
   )
-  const wrap_call_data = ethers.AbiCoder.defaultAbiCoder().encode(
+  const wrapCallData = ethers.AbiCoder.defaultAbiCoder().encode(
     ['address', 'bytes'],
-    [l1_contract_address, Buffer.from(call_data.slice(2), 'hex')],
+    [l1ContractAddress, Buffer.from(callData.slice(2), 'hex')],
   )
-  const wrap_call_data_full = `0x5608f857${wrap_call_data.slice(2)}`
+  const wrapCallDataFull = `0x5608f857${wrapCallData.slice(2)}`
 
-  const deposit_calldata_compressed = await compressSmartContractData(wrap_call_data_full)
-  const deposit_content = Buff.str(
-    `{"p":"brc20-prog","op":"c","c":"${swap_info.wbtc_address}","b":"${deposit_calldata_compressed}"}`,
+  const depositCalldataCompressed = await compressSmartContractData(wrapCallDataFull)
+  const depositContent = Buff.str(
+    `{"p":"brc20-prog","op":"c","c":"${swapInfo.wbtc_address}","b":"${depositCalldataCompressed}"}`,
   )
-  let estimated_gas = 0
+  let estimatedGas = 0
   for (let i = 0; i < 5; i++) {
-    const deposit_content_gas_allocation = deposit_content.length * GAS_PER_BYTE
-    const needed_padding
-      = estimated_gas > deposit_content_gas_allocation
-        ? Math.ceil((estimated_gas - deposit_content_gas_allocation) / GAS_PER_BYTE)
+    const depositContentGasAllocation = depositContent.length * GAS_PER_BYTE
+    const neededPadding
+      = estimatedGas > depositContentGasAllocation
+        ? Math.ceil((estimatedGas - depositContentGasAllocation) / GAS_PER_BYTE)
         : 0
-    const padded_deposit_content = Buff.from(
-      Buffer.concat([deposit_content, Buff.str(' '.repeat(needed_padding))]),
+    const paddedDepositContent = Buff.from(
+      Buffer.concat([depositContent, Buff.str(' '.repeat(neededPadding))]),
     )
-    const deposit_inscription_details = new InscriptionDetails(
+    const depositInscriptionDetails = new InscriptionDetails(
       Buff.str('text/plain'),
       null,
       null,
       null,
       null,
-      padded_deposit_content,
+      paddedDepositContent,
     )
 
-    const deposit_mint_res = await mint_with_extra_input_in_commit_all(
-      deposit_inscription_details,
+    const depositMintRes = await mintWithExtraInputInCommitAll(
+      depositInscriptionDetails,
       [],
-      fee_rate,
+      feeRate,
       null,
       null,
       0,
       true,
       signFn,
     )
-    const deposit_commit_tx_hex = deposit_mint_res.signed_commit_tx_hex
-    const deposit_reveal_tx_hex = deposit_mint_res.signed_reveal_tx_hex
-    const deposit_inscription_id = deposit_mint_res.inscription_id
-    const deposit_satpoint = `${deposit_inscription_id.split('i')[0]}:0:0`
-    const deposit_secret = deposit_mint_res.secret
-    let send_to_opreturn_res = null
+    const depositCommitTxHex = depositMintRes.signed_commit_tx_hex
+    const depositRevealTxHex = depositMintRes.signed_reveal_tx_hex
+    const depositInscriptionId = depositMintRes.inscription_id
+    const depositSatpoint = `${depositInscriptionId.split('i')[0]}:0:0`
+    const depositSecret = depositMintRes.secret
+    let sendToOpreturnRes = null
     try {
       saveExtraUtxos(
-        [deposit_commit_tx_hex, deposit_reveal_tx_hex],
-        [deposit_inscription_id, deposit_satpoint],
+        [depositCommitTxHex, depositRevealTxHex],
+        [depositInscriptionId, depositSatpoint],
       )
 
-      const target_wallet = new WalletInfo(
+      const targetWallet = new WalletInfo(
         true,
         Buffer.from(Script.encode(['OP_RETURN', Buff.str('BRC20PROG')], false)),
         null,
         null,
         null,
       )
-      const extra_output_utxos = [
+      const extraOutputUtxos = [
         // send BTC to WBTC handler
         {
-          wallet: new WalletInfo(false, null, swap_info.wbtc_handler_address, null, null),
-          value: Number.parseInt(btc_amount.toString()),
+          wallet: new WalletInfo(false, null, swapInfo.wbtc_handler_address, null, null),
+          value: Number.parseInt(btcAmount.toString()),
         },
       ]
-      send_to_opreturn_res
-        = await send_inscription_to_op_return_with_extra_inputs_and_extra_output_all(
-          deposit_inscription_id,
-          [],
-          target_wallet,
-          1,
-          extra_output_utxos,
-          fee_rate,
-          true,
-          signFn,
-        )
+      sendToOpreturnRes = await sendInscriptionToOpReturnWithExtraInputsAndExtraOutputAll(
+        depositInscriptionId,
+        [],
+        targetWallet,
+        1,
+        extraOutputUtxos,
+        feeRate,
+        true,
+        signFn,
+      )
     }
     finally {
       clearExtraUtxos()
     }
 
-    if (send_to_opreturn_res == null) {
+    if (sendToOpreturnRes == null) {
       throw new Error('Failed to send inscription to OP_RETURN')
     }
 
-    const deposit_send_to_op_return_tx_hex = send_to_opreturn_res.signed_tx_hex
-    const deposit_send_to_op_return_txid = send_to_opreturn_res.txid
+    const depositSendToOpReturnTxHex = sendToOpreturnRes.signedPsbtHex
+    const depositSendToOpReturnTxid = sendToOpreturnRes.txId
 
-    const to_send_for_broadcast: BroadcastWrapOrderRequest = {
-      commit_txid: deposit_mint_res.commit_txid,
-      commit_txhex: deposit_commit_tx_hex,
-      reveal_txid: deposit_mint_res.reveal_txid,
-      reveal_txhex: deposit_reveal_tx_hex,
-      send_to_opreturn_txid: deposit_send_to_op_return_txid,
-      send_to_opreturn_txhex: deposit_send_to_op_return_tx_hex,
-      secret: deposit_secret,
-      inscription_id: deposit_inscription_id,
-      fee_rate,
+    const toSendForBroadcast: BroadcastWrapOrderRequest = {
+      commit_txid: depositMintRes.commit_txid,
+      commit_txhex: depositCommitTxHex,
+      reveal_txid: depositMintRes.reveal_txid,
+      reveal_txhex: depositRevealTxHex,
+      send_to_opreturn_txid: depositSendToOpReturnTxid,
+      send_to_opreturn_txhex: depositSendToOpReturnTxHex,
+      secret: depositSecret,
+      inscription_id: depositInscriptionId,
+      fee_rate: feeRate,
     }
-    const estimate_gas_res = await estimateGasWrapOrder(to_send_for_broadcast)
-    const estimate_padded = Math.max(
-      estimate_gas_res.estimated_gas + 100000,
-      estimate_gas_res.estimated_gas * 1.2,
+    const estimateGasRes = await estimateGasWrapOrder(toSendForBroadcast)
+    const estimatePadded = Math.max(
+      estimateGasRes.estimated_gas + 100000,
+      estimateGasRes.estimated_gas * 1.2,
     )
-    if (estimate_gas_res.allocated_gas < estimate_padded) {
-      estimated_gas = estimate_padded + 50000
+    if (estimateGasRes.allocated_gas < estimatePadded) {
+      estimatedGas = estimatePadded + 50000
       continue
     }
-    const broadcast_res = await broadcastWrapOrder(to_send_for_broadcast)
+    const broadcastRes = await broadcastWrapOrder(toSendForBroadcast)
 
-    return broadcast_res.result
+    return broadcastRes.result
   }
 
   throw new Error('Failed to estimate gas for wrap order after multiple attempts')
 }
 
 /**
+ * Checks the miner fees required for creating a wrap order for swapping BRC-20 tokens. The function retrieves the necessary swap information and connected wallet details, then generates the required signatures for the deposit. It constructs the call data for the wrap order and estimates the gas fees for minting an inscription with the call data as its content and sending it to OP_RETURN.
  *
- * @param btcAmount
- * @param feeRate
+ * @param btcAmount The amount of BTC to wrap, represented as a bigint in satoshis.
+ * @param feeRate The fee rate to use for the transactions, represented in sats/vbyte.
+ *
+ * @returns A promise that resolves to an object containing the total miner fees for creating and sending the inscriptions related to the wrap order, as well as the fee rate used for the calculations.
  */
 export async function checkMinerFeesOfWrapOrder(
   btcAmount: bigint,
@@ -2222,121 +2209,123 @@ export async function checkMinerFeesOfWrapOrder(
   if (!userPaymentWallet.address)
     throw new Error('Payment wallet address not found')
 
-  const L1ContractAddress = getSwapContractAddress()
+  const l1ContractAddress = getSwapContractAddress()
 
   const swapPubkey = (await getSwapWalletFromDB())?.swapPubkey
   if (!swapPubkey) {
     throw new Error('Smart wallet not found. Please generate a smart wallet first.')
   }
 
-  const ec_signature = `0x${'00'.repeat(64)}` // dummy
-  const pubkey_idx = 1 // dummy
-  const token_idx = 1 // dummy
+  const ecSignature = `0x${'00'.repeat(64)}` // dummy
+  const pubkeyIdx = 1 // dummy
+  const tokenIdx = 1 // dummy
 
-  const neg_signature_bls12 = await getDepositBLSSignature({
+  const negSignatureBls12 = await getDepositBLSSignature({
     pubkey: swapPubkey,
-    pk_idx: BigInt(pubkey_idx),
+    pk_idx: BigInt(pubkeyIdx),
   })
 
   // tokenAddress, tickerIdx, amt, pubkey, pkIdx, negSignatureBLS12, ecSignatureForIndexes
-  const call_data = ethers.AbiCoder.defaultAbiCoder().encode(
+  const callData = ethers.AbiCoder.defaultAbiCoder().encode(
     ['address', 'uint32', 'bytes', 'uint64', 'bytes', 'bytes'],
     [
       swapInfo.wbtc_address,
-      token_idx,
+      tokenIdx,
       Buffer.from(swapPubkey.slice(2), 'hex'),
-      pubkey_idx,
-      Buffer.from(neg_signature_bls12.slice(2), 'hex'),
-      Buffer.from(ec_signature.slice(2), 'hex'),
+      pubkeyIdx,
+      Buffer.from(negSignatureBls12.slice(2), 'hex'),
+      Buffer.from(ecSignature.slice(2), 'hex'),
     ],
   )
-  const wrap_call_data = ethers.AbiCoder.defaultAbiCoder().encode(
+  const wrapCallData = ethers.AbiCoder.defaultAbiCoder().encode(
     ['address', 'bytes'],
-    [L1ContractAddress, Buffer.from(call_data.slice(2), 'hex')],
+    [l1ContractAddress, Buffer.from(callData.slice(2), 'hex')],
   )
-  const wrap_call_data_full = `0x5608f857${wrap_call_data.slice(2)}`
+  const wrapCallDataFull = `0x5608f857${wrapCallData.slice(2)}`
 
-  const deposit_calldata_compressed = await compressSmartContractData(wrap_call_data_full)
-  const deposit_content = Buff.str(
-    `{"p":"brc20-prog","op":"c","c":"${swapInfo.wbtc_address}","b":"${deposit_calldata_compressed}"}`,
+  const depositCalldataCompressed = await compressSmartContractData(wrapCallDataFull)
+  const depositContent = Buff.str(
+    `{"p":"brc20-prog","op":"c","c":"${swapInfo.wbtc_address}","b":"${depositCalldataCompressed}"}`,
   )
-  const deposit_inscription_details = new InscriptionDetails(
+  const depositInscriptionDetails = new InscriptionDetails(
     Buff.str('text/plain'),
     null,
     null,
     null,
     null,
-    deposit_content,
+    depositContent,
   )
 
-  let deposit_fees_total = 0
-  const deposit_mint_res = await mint_with_extra_input_in_commit_fee_rate(
-    deposit_inscription_details,
+  let depositFeesTotal = 0
+  const depositMintRes = await mintWithExtraInputInCommitFeeRate(
+    depositInscriptionDetails,
     [],
     feeRate,
     null,
     null,
     0,
   )
-  const deposit_commit_tx_hex = deposit_mint_res.unsigned_commit_tx_hex
-  const deposit_reveal_tx_hex = deposit_mint_res.signed_reveal_tx_hex
-  const deposit_inscription_id = deposit_mint_res.inscription_id
-  const deposit_satpoint = `${deposit_inscription_id.split('i')[0]}:0:0`
-  deposit_fees_total += deposit_mint_res.total_fee
-  let send_to_opreturn_res = null
+  const depositCommitTxHex = depositMintRes.unsigned_commit_tx_hex
+  const depositRevealTxHex = depositMintRes.signed_reveal_tx_hex
+  const depositInscriptionId = depositMintRes.inscription_id
+  const depositSatpoint = `${depositInscriptionId.split('i')[0]}:0:0`
+  depositFeesTotal += depositMintRes.total_fee
+  let sendToOpreturnRes = null
   try {
     saveExtraUtxos(
-      [deposit_commit_tx_hex, deposit_reveal_tx_hex],
-      [deposit_inscription_id, deposit_satpoint],
+      [depositCommitTxHex, depositRevealTxHex],
+      [depositInscriptionId, depositSatpoint],
     )
 
-    const target_wallet = new WalletInfo(
+    const targetWallet = new WalletInfo(
       true,
       Buffer.from(Script.encode(['OP_RETURN', Buff.str('BRC20PROG')], false)),
       null,
       null,
       null,
     )
-    const extra_output_utxos = [
+    const extraOutputUtxos = [
       // send BTC to WBTC handler
       {
         wallet: new WalletInfo(false, null, swapInfo.wbtc_handler_address, null, null),
         value: Number.parseInt(btcAmount.toString()),
       },
     ]
-    send_to_opreturn_res
-      = await send_inscription_to_op_return_with_extra_inputs_and_extra_output_fee_rate(
-        deposit_inscription_id,
-        [],
-        target_wallet,
-        1,
-        extra_output_utxos,
-        feeRate,
-      )
+    sendToOpreturnRes = await sendInscriptionToOpReturnWithExtraInputsAndExtraOutputFeeRate(
+      depositInscriptionId,
+      [],
+      targetWallet,
+      1,
+      extraOutputUtxos,
+      feeRate,
+    )
   }
   finally {
     clearExtraUtxos()
   }
 
-  if (send_to_opreturn_res == null) {
+  if (sendToOpreturnRes == null) {
     throw new Error('Failed to send inscription to OP_RETURN')
   }
 
-  deposit_fees_total += send_to_opreturn_res.tx_fee
+  depositFeesTotal += sendToOpreturnRes.tx_fee
 
-  const to_return = {
-    total_fee: deposit_fees_total,
+  const toReturn = {
+    total_fee: depositFeesTotal,
     fee_rate: feeRate,
   }
-  return to_return
+  return toReturn
 }
 
 /**
+ * Calculates the expected amounts of tokens A and B to be added to the liquidity pool, as well as the amount of liquidity tokens that will be minted, based on the input parameters for adding liquidity. The function retrieves the necessary swap information and uses a proxy to check the current balances and reserves of the tokens in the liquidity pool. It also requests the miner fee for adding liquidity and then calls the addLiquidityRequest function to get the expected results.
  *
- * @param token1Addr
- * @param token2Addr
- * @param amt1
- * @param amt2
+ * @param token1Addr The address of the first token to be added to the liquidity pool.
+ * @param token2Addr The address of the second token to be added to the liquidity pool.
+ * @param amt1 The amount of the first token to be added to the liquidity pool, represented as a bigint.
+ * @param amt2 The amount of the second token to be added to the liquidity pool, represented as a bigint.
+ *
+ * @returns A promise that resolves to an object containing the expected amounts of tokens A and B to be added to the liquidity pool, as well as the amount of liquidity tokens that will be minted, represented as bigints.
  */
 export async function getAddLiquidityResult(
   token1Addr: string,
@@ -2345,7 +2334,7 @@ export async function getAddLiquidityResult(
   amt2: bigint,
 ): Promise<{ amountA: bigint, amountB: bigint, liquidity: bigint }> {
   const swapInfo = await getSwapInfo()
-  save_info(swapInfo.wbtc_address, swapInfo.factory_address)
+  saveInfo(swapInfo.wbtc_address, swapInfo.factory_address)
 
   const pubkey = (await getSwapWalletFromDB())?.swapPubkey
   if (!pubkey) {
@@ -2359,7 +2348,7 @@ export async function getAddLiquidityResult(
 
   const btcFee = await requestMinerFee('add_liquidity')
 
-  const result = await add_liquidity_request(
+  const result = await addLiquidityRequest(
     proxy,
     pubkey,
     token1Addr,
@@ -2400,25 +2389,25 @@ interface AddLiquiditySignatureRequest {
   btc_fee: string
 }
 async function getAddLiquiditySignature(
-  order_params: AddLiquiditySignatureRequest,
+  orderParams: AddLiquiditySignatureRequest,
 ): Promise<string> {
-  order_params.token1_addr = order_params.token1_addr.toLowerCase()
-  order_params.token2_addr = order_params.token2_addr.toLowerCase()
+  orderParams.token1_addr = orderParams.token1_addr.toLowerCase()
+  orderParams.token2_addr = orderParams.token2_addr.toLowerCase()
 
-  const signature_text = `Add Liquidity Order:
-Token 1 Address: ${order_params.token1_addr}
-Token 2 Address: ${order_params.token2_addr}
-Amount 1: ${order_params.amt1}
-Amount 2: ${order_params.amt2}
-Minimum Amount 1: ${order_params.minamt1}
-Minimum Amount 2: ${order_params.minamt2}
-Token 1 Fee Bps: ${order_params.token1FeeBps}
-Token 2 Fee Bps: ${order_params.token2FeeBps}
-BTC Fee: ${order_params.btc_fee}
+  const signatureText = `Add Liquidity Order:
+Token 1 Address: ${orderParams.token1_addr}
+Token 2 Address: ${orderParams.token2_addr}
+Amount 1: ${orderParams.amt1}
+Amount 2: ${orderParams.amt2}
+Minimum Amount 1: ${orderParams.minamt1}
+Minimum Amount 2: ${orderParams.minamt2}
+Token 1 Fee Bps: ${orderParams.token1FeeBps}
+Token 2 Fee Bps: ${orderParams.token2FeeBps}
+BTC Fee: ${orderParams.btc_fee}
 
 By signing this message, you authorize the creation of an add liquidity order with the above parameters.`
 
-  const signature = await signMessageLocalVerify(signature_text, 'ordinals')
+  const signature = await signMessageLocalVerify(signatureText, 'ordinals')
   return signature
 }
 
@@ -2453,8 +2442,8 @@ async function getAddLiquidityBLSSignature(
   msg += params.token2FeeBps.toString(16).padStart(64, '0')
   msg += params.btc_fee.toString(16).padStart(64, '0')
 
-  const msg_buf = Buffer.from(msg, 'hex')
-  const P = bls12_381.G1.hashToCurve(msg_buf, {
+  const msgBuf = Buffer.from(msg, 'hex')
+  const P = bls12_381.G1.hashToCurve(msgBuf, {
     DST: 'BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_NUL_',
   })
 
@@ -2462,14 +2451,14 @@ async function getAddLiquidityBLSSignature(
   if (!swapWallet?.swapPrivkey) {
     throw new Error('Smart wallet not found. Please generate a smart wallet first.')
   }
-  const bls_private_key = swapWallet.swapPrivkey.startsWith('0x')
+  const blsPrivateKey = swapWallet.swapPrivkey.startsWith('0x')
     ? swapWallet.swapPrivkey.slice(2)
     : swapWallet.swapPrivkey
-  const bls_private_key_buffer = Buffer.from(bls_private_key, 'hex')
+  const blsPrivateKeyBuffer = Buffer.from(blsPrivateKey, 'hex')
 
-  const bls_signature = bls12_381.shortSignatures.sign(P, bls_private_key_buffer)
+  const blsSignature = bls12_381.shortSignatures.sign(P, blsPrivateKeyBuffer)
 
-  return `0x${bls_signature.x.toString(16).padStart(128, '0')}${bls_signature.y.toString(16).padStart(128, '0')}`
+  return `0x${blsSignature.x.toString(16).padStart(128, '0')}${blsSignature.y.toString(16).padStart(128, '0')}`
 }
 
 interface AddLiquidityOrderRequest {
@@ -2490,7 +2479,7 @@ interface AddLiquidityOrderResponse {
   success: boolean
 }
 async function sendAddLiquidityOrder(
-  to_send: AddLiquidityOrderRequest,
+  toSend: AddLiquidityOrderRequest,
 ): Promise<AddLiquidityOrderResponse> {
   const url = getSwapBackendUrl('add_liq_req')
 
@@ -2499,26 +2488,29 @@ async function sendAddLiquidityOrder(
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(to_send),
+    body: JSON.stringify(toSend),
   })
 }
 
 /**
+ * Prepares and sends an add liquidity order for a decentralized exchange. The function retrieves the necessary swap information and connected wallet details, calculates the minimum amounts based on the provided slippage, and generates the required signatures for the order. It then constructs the order parameters and sends the add liquidity order to the backend API.
  *
- * @param token1_addr
- * @param token2_addr
- * @param amt1
- * @param amt2
- * @param slippageBPS
+ * @param token1Addr The address of the first token to be added to the liquidity pool.
+ * @param token2Addr The address of the second token to be added to the liquidity pool.
+ * @param amt1 The amount of the first token to be added to the liquidity pool, represented as a bigint.
+ * @param amt2 The amount of the second token to be added to the liquidity pool, represented as a bigint.
+ * @param slippageBPS The slippage in basis points to be applied when calculating the minimum amounts for the liquidity order.
+ *
+ * @returns A promise that resolves to an object indicating the success of the add liquidity order request.
  */
 export async function prepareAndSendAddLiquidityOrder(
-  token1_addr: string,
-  token2_addr: string,
+  token1Addr: string,
+  token2Addr: string,
   amt1: bigint,
   amt2: bigint,
   slippageBPS: bigint,
 ): Promise<AddLiquidityOrderResponse> {
-  const swap_info = await getSwapInfo()
+  const swapInfo = await getSwapInfo()
 
   const pubkey = (await getSwapWalletFromDB())?.swapPubkey
   if (!pubkey) {
@@ -2530,70 +2522,73 @@ export async function prepareAndSendAddLiquidityOrder(
   const token1FeeBPS = 0n
   const token2FeeBPS = 0n
   if (
-    token1_addr.toLowerCase() !== swap_info.wbtc_address.toLowerCase()
-    && token2_addr.toLowerCase() !== swap_info.wbtc_address.toLowerCase()
+    token1Addr.toLowerCase() !== swapInfo.wbtc_address.toLowerCase()
+    && token2Addr.toLowerCase() !== swapInfo.wbtc_address.toLowerCase()
   ) {
     throw new Error('One of the tokens must be BTC')
   }
 
   const nonce = await getSwapWalletNonce()
 
-  const btc_fee = await requestMinerFee('add_liquidity')
-  const bip322_signature = await getAddLiquiditySignature({
-    token1_addr,
-    token2_addr,
+  const btcFee = await requestMinerFee('add_liquidity')
+  const bip322Signature = await getAddLiquiditySignature({
+    token1_addr: token1Addr,
+    token2_addr: token2Addr,
     amt1: amt1.toString(),
     amt2: amt2.toString(),
     minamt1: minamt1.toString(),
     minamt2: minamt2.toString(),
     token1FeeBps: token1FeeBPS.toString(),
     token2FeeBps: token2FeeBPS.toString(),
-    btc_fee: btc_fee.toString(),
+    btc_fee: btcFee.toString(),
   })
 
-  const bls_signature = await getAddLiquidityBLSSignature({
+  const blsSignature = await getAddLiquidityBLSSignature({
     pubkey,
     nonce,
-    token1_addr,
-    token2_addr,
+    token1_addr: token1Addr,
+    token2_addr: token2Addr,
     amt1,
     amt2,
     minamt1,
     minamt2,
     token1FeeBps: token1FeeBPS,
     token2FeeBps: token2FeeBPS,
-    btc_fee,
+    btc_fee: btcFee,
   })
 
   return await sendAddLiquidityOrder({
     pubkey,
-    token1_addr,
-    token2_addr,
+    token1_addr: token1Addr,
+    token2_addr: token2Addr,
     amt1: amt1.toString(),
     amt2: amt2.toString(),
     minamt1: minamt1.toString(),
     minamt2: minamt2.toString(),
-    bls_signature,
+    bls_signature: blsSignature,
     token1FeeBps: token1FeeBPS.toString(),
     token2FeeBps: token2FeeBPS.toString(),
-    btc_fee: btc_fee.toString(),
-    bip322_signature,
+    btc_fee: btcFee.toString(),
+    bip322_signature: bip322Signature,
   })
 }
 
 /**
+ * Calculates the expected amounts of tokens A and B to be removed from the liquidity pool, as well as the amount of liquidity tokens that will be burned, based on the input parameters for removing liquidity. The function retrieves the necessary swap information and uses a proxy to check the current balances and reserves of the tokens in the liquidity pool. It also requests the miner fee for removing liquidity and then calls the removeLiquidityRequest function to get the expected results.
  *
- * @param token1_addr
- * @param token2_addr
- * @param lp_amt
+ * @param token1Addr The address of the first token to be removed from the liquidity pool.
+ * @param token2Addr The address of the second token to be removed from the liquidity pool.
+ * @param lpAmt The amount of liquidity tokens to be burned, represented as a bigint.
+ *
+ * @returns A promise that resolves to an object containing the expected amounts of tokens A and B to be removed from the liquidity pool, as well as the amount of liquidity tokens that will be burned, represented as bigints.
  */
 export async function getRemoveLiquidityResult(
-  token1_addr: string,
-  token2_addr: string,
-  lp_amt: bigint,
+  token1Addr: string,
+  token2Addr: string,
+  lpAmt: bigint,
 ): Promise<{ amountA: bigint, amountB: bigint, liquidity: bigint }> {
-  const swap_info = await getSwapInfo()
-  save_info(swap_info.wbtc_address, swap_info.factory_address)
+  const swapInfo = await getSwapInfo()
+  saveInfo(swapInfo.wbtc_address, swapInfo.factory_address)
 
   const pubkey = (await getSwapWalletFromDB())?.swapPubkey
   if (!pubkey) {
@@ -2605,20 +2600,20 @@ export async function getRemoveLiquidityResult(
     reservesOf: checkPairReserves,
   }
 
-  const btc_fee = await requestMinerFee('remove_liquidity')
-  const result = await remove_liquidity_request(
+  const btcFee = await requestMinerFee('remove_liquidity')
+  const result = await removeLiquidityRequest(
     proxy,
     pubkey,
-    token1_addr,
-    token2_addr,
-    lp_amt,
+    token1Addr,
+    token2Addr,
+    lpAmt,
     0n, // minamt1
     0n, // minamt2
     '', // bls_signature
     0n, // nonce
     0n, // token1FeeBps
     0n, // token2FeeBps
-    btc_fee, // btc_fee
+    btcFee, // btc_fee
   )
 
   if (!result.success) {
@@ -2645,24 +2640,24 @@ interface RemoveLiquiditySignatureRequest {
   btc_fee: string
 }
 async function getRemoveLiquiditySignature(
-  order_params: RemoveLiquiditySignatureRequest,
+  orderParams: RemoveLiquiditySignatureRequest,
 ): Promise<string> {
-  order_params.token1_addr = order_params.token1_addr.toLowerCase()
-  order_params.token2_addr = order_params.token2_addr.toLowerCase()
+  orderParams.token1_addr = orderParams.token1_addr.toLowerCase()
+  orderParams.token2_addr = orderParams.token2_addr.toLowerCase()
 
-  const signature_text = `Remove Liquidity Order:
-Token 1 Address: ${order_params.token1_addr}
-Token 2 Address: ${order_params.token2_addr}
-LP Amount: ${order_params.lp_amt}
-Minimum Amount 1: ${order_params.minamt1}
-Minimum Amount 2: ${order_params.minamt2}
-Token 1 Fee Bps: ${order_params.token1FeeBps}
-Token 2 Fee Bps: ${order_params.token2FeeBps}
-BTC Fee: ${order_params.btc_fee}
+  const signatureText = `Remove Liquidity Order:
+Token 1 Address: ${orderParams.token1_addr}
+Token 2 Address: ${orderParams.token2_addr}
+LP Amount: ${orderParams.lp_amt}
+Minimum Amount 1: ${orderParams.minamt1}
+Minimum Amount 2: ${orderParams.minamt2}
+Token 1 Fee Bps: ${orderParams.token1FeeBps}
+Token 2 Fee Bps: ${orderParams.token2FeeBps}
+BTC Fee: ${orderParams.btc_fee}
 
 By signing this message, you authorize the creation of a remove liquidity order with the above parameters.`
 
-  const signature = await signMessageLocalVerify(signature_text, 'ordinals')
+  const signature = await signMessageLocalVerify(signatureText, 'ordinals')
   return signature
 }
 
@@ -2695,8 +2690,8 @@ async function getRemoveLiquidityBLSSignature(
   msg += params.token2FeeBps.toString(16).padStart(64, '0')
   msg += params.btc_fee.toString(16).padStart(64, '0')
 
-  const msg_buf = Buffer.from(msg, 'hex')
-  const P = bls12_381.G1.hashToCurve(msg_buf, {
+  const msgBuf = Buffer.from(msg, 'hex')
+  const P = bls12_381.G1.hashToCurve(msgBuf, {
     DST: 'BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_NUL_',
   })
 
@@ -2704,14 +2699,14 @@ async function getRemoveLiquidityBLSSignature(
   if (!swapWallet?.swapPrivkey) {
     throw new Error('Smart wallet not found. Please generate a smart wallet first.')
   }
-  const bls_private_key = swapWallet.swapPrivkey.startsWith('0x')
+  const blsPrivateKey = swapWallet.swapPrivkey.startsWith('0x')
     ? swapWallet.swapPrivkey.slice(2)
     : swapWallet.swapPrivkey
-  const bls_private_key_buffer = Buffer.from(bls_private_key, 'hex')
+  const blsPrivateKeyBuffer = Buffer.from(blsPrivateKey, 'hex')
 
-  const bls_signature = bls12_381.shortSignatures.sign(P, bls_private_key_buffer)
+  const blsSignature = bls12_381.shortSignatures.sign(P, blsPrivateKeyBuffer)
 
-  return `0x${bls_signature.x.toString(16).padStart(128, '0')}${bls_signature.y.toString(16).padStart(128, '0')}`
+  return `0x${blsSignature.x.toString(16).padStart(128, '0')}${blsSignature.y.toString(16).padStart(128, '0')}`
 }
 
 interface RemoveLiquidityOrderRequest {
@@ -2731,7 +2726,7 @@ interface RemoveLiquidityOrderResponse {
   success: boolean
 }
 async function sendRemoveLiquidityOrder(
-  to_send: RemoveLiquidityOrderRequest,
+  toSend: RemoveLiquidityOrderRequest,
 ): Promise<RemoveLiquidityOrderResponse> {
   const url = getSwapBackendUrl('remove_liq_req')
 
@@ -2740,28 +2735,31 @@ async function sendRemoveLiquidityOrder(
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(to_send),
+    body: JSON.stringify(toSend),
   })
 }
 
 /**
+ * Prepares and sends a remove liquidity order for a decentralized exchange. The function retrieves the necessary swap information and connected wallet details, calculates the minimum amounts based on the provided slippage, and generates the required signatures for the order. It then constructs the order parameters and sends the remove liquidity order to the backend API.
  *
- * @param token1_addr
- * @param token2_addr
- * @param lp_amt
- * @param amt1
- * @param amt2
- * @param slippageBPS
+ * @param token1Addr The address of the first token to be removed from the liquidity pool.
+ * @param token2Addr The address of the second token to be removed from the liquidity pool.
+ * @param lpAmt The amount of liquidity tokens to be burned, represented as a bigint.
+ * @param amt1 The expected amount of the first token to be removed from the liquidity pool, represented as a bigint.
+ * @param amt2 The expected amount of the second token to be removed from the liquidity pool, represented as a bigint.
+ * @param slippageBPS The slippage in basis points to be applied when calculating the minimum amounts for the liquidity order.
+ *
+ * @returns A promise that resolves to an object indicating the success of the remove liquidity order request.
  */
 export async function prepareAndSendRemoveLiquidityOrder(
-  token1_addr: string,
-  token2_addr: string,
-  lp_amt: bigint,
+  token1Addr: string,
+  token2Addr: string,
+  lpAmt: bigint,
   amt1: bigint,
   amt2: bigint,
   slippageBPS: bigint,
 ): Promise<RemoveLiquidityOrderResponse> {
-  const swap_info = await getSwapInfo()
+  const swapInfo = await getSwapInfo()
 
   const pubkey = (await getSwapWalletFromDB())?.swapPubkey
   if (!pubkey) {
@@ -2773,69 +2771,69 @@ export async function prepareAndSendRemoveLiquidityOrder(
   const token1FeeBPS = 0n
   const token2FeeBPS = 0n
   if (
-    token1_addr.toLowerCase() !== swap_info.wbtc_address.toLowerCase()
-    && token2_addr.toLowerCase() !== swap_info.wbtc_address.toLowerCase()
+    token1Addr.toLowerCase() !== swapInfo.wbtc_address.toLowerCase()
+    && token2Addr.toLowerCase() !== swapInfo.wbtc_address.toLowerCase()
   ) {
     throw new Error('One of the tokens must be BTC')
   }
 
   const nonce = await getSwapWalletNonce()
 
-  const btc_fee = await requestMinerFee('remove_liquidity')
-  const bip322_signature = await getRemoveLiquiditySignature({
-    token1_addr,
-    token2_addr,
-    lp_amt: lp_amt.toString(),
+  const btcFee = await requestMinerFee('remove_liquidity')
+  const bip322Signature = await getRemoveLiquiditySignature({
+    token1_addr: token1Addr,
+    token2_addr: token2Addr,
+    lp_amt: lpAmt.toString(),
     minamt1: minamt1.toString(),
     minamt2: minamt2.toString(),
     token1FeeBps: token1FeeBPS.toString(),
     token2FeeBps: token2FeeBPS.toString(),
-    btc_fee: btc_fee.toString(),
+    btc_fee: btcFee.toString(),
   })
 
-  const bls_signature = await getRemoveLiquidityBLSSignature({
+  const blsSignature = await getRemoveLiquidityBLSSignature({
     pubkey,
     nonce,
-    token1_addr,
-    token2_addr,
-    lp_amt,
+    token1_addr: token1Addr,
+    token2_addr: token2Addr,
+    lp_amt: lpAmt,
     minamt1,
     minamt2,
     token1FeeBps: token1FeeBPS,
     token2FeeBps: token2FeeBPS,
-    btc_fee,
+    btc_fee: btcFee,
   })
 
   return await sendRemoveLiquidityOrder({
     pubkey,
-    token1_addr,
-    token2_addr,
-    lp_amt: lp_amt.toString(),
+    token1_addr: token1Addr,
+    token2_addr: token2Addr,
+    lp_amt: lpAmt.toString(),
     minamt1: minamt1.toString(),
     minamt2: minamt2.toString(),
-    bls_signature,
+    bls_signature: blsSignature,
     token1FeeBps: token1FeeBPS.toString(),
     token2FeeBps: token2FeeBPS.toString(),
-    btc_fee: btc_fee.toString(),
-    bip322_signature,
+    btc_fee: btcFee.toString(),
+    bip322_signature: bip322Signature,
   })
 }
 
 async function getSwapFeesBps(
-  token1_addr: string,
-  token2_addr: string,
+  token1Addr: string,
+  token2Addr: string,
 ): Promise<{ token1FeeBps: bigint, token2FeeBps: bigint }> {
-  const swap_info = await getSwapInfo()
+  const swapInfo = await getSwapInfo()
 
   let token1FeeBps = 25n
   let token2FeeBps = 0n
   if (
-    token1_addr.toLowerCase() !== swap_info.wbtc_address.toLowerCase()
-    && token2_addr.toLowerCase() !== swap_info.wbtc_address.toLowerCase()
+    token1Addr.toLowerCase() !== swapInfo.wbtc_address.toLowerCase()
+    && token2Addr.toLowerCase() !== swapInfo.wbtc_address.toLowerCase()
   ) {
     throw new Error('One of the tokens must be BTC')
   }
-  if (token1_addr.toLowerCase() !== swap_info.wbtc_address.toLowerCase()) {
+  if (token1Addr.toLowerCase() !== swapInfo.wbtc_address.toLowerCase()) {
     token1FeeBps = 0n
     token2FeeBps = 25n
   }
@@ -2844,18 +2842,21 @@ async function getSwapFeesBps(
 }
 
 /**
+ * Calculates the expected output amount, quoted price, and price impact for a token swap operation. The function retrieves the necessary swap information and connected wallet details, then uses a proxy to check the current balances and reserves of the tokens in the liquidity pool. It also requests the miner fee for swapping and gets the fee basis points for the tokens involved in the swap. Finally, it calls the swapRequest function to get the expected results based on the input parameters.
  *
- * @param token_in_addr
- * @param token_out_addr
- * @param amt_in
+ * @param tokenInAddr The address of the token being swapped from.
+ * @param tokenOutAddr The address of the token being swapped to.
+ * @param amtIn The amount of the input token to be swapped, represented as a bigint.
+ *
+ * @returns A promise that resolves to an object containing the expected output amount of the token being swapped to, the quoted price for the swap, and the price impact in basis points, all represented as bigints or numbers as appropriate.
  */
 export async function getSwapResult(
-  token_in_addr: string,
-  token_out_addr: string,
-  amt_in: bigint,
+  tokenInAddr: string,
+  tokenOutAddr: string,
+  amtIn: bigint,
 ): Promise<{ amount_out: bigint, quoted_price: number, price_impact_bps: bigint }> {
-  const swap_info = await getSwapInfo()
-  save_info(swap_info.wbtc_address, swap_info.factory_address)
+  const swapInfo = await getSwapInfo()
+  saveInfo(swapInfo.wbtc_address, swapInfo.factory_address)
 
   const pubkey = (await getSwapWalletFromDB())?.swapPubkey
   if (!pubkey) {
@@ -2867,20 +2868,20 @@ export async function getSwapResult(
     reservesOf: checkPairReserves,
   }
 
-  const btc_fee = await requestMinerFee('swap')
-  const { token1FeeBps, token2FeeBps } = await getSwapFeesBps(token_in_addr, token_out_addr)
-  const result = await swap_request(
+  const btcFee = await requestMinerFee('swap')
+  const { token1FeeBps, token2FeeBps } = await getSwapFeesBps(tokenInAddr, tokenOutAddr)
+  const result = await swapRequest(
     proxy,
     pubkey,
-    token_in_addr,
-    token_out_addr,
-    amt_in,
+    tokenInAddr,
+    tokenOutAddr,
+    amtIn,
     0n, // min_out_amt
     '', // bls_signature
     0n, // nonce
     token1FeeBps,
     token2FeeBps,
-    btc_fee,
+    btcFee,
   )
 
   if (!result.success) {
@@ -2896,17 +2897,17 @@ export async function getSwapResult(
     throw new Error('Invalid amounts returned from swap request.')
   }
 
-  const decimals_of_in = await getTokenDecimals(token_in_addr)
-  const decimals_of_out = await getTokenDecimals(token_out_addr)
-  const quoted_price
-    = token_in_addr.toLowerCase() === swap_info.wbtc_address.toLowerCase()
-      ? (amt_in * 10n ** BigInt(decimals_of_out) * 100n) / result.amounts[1]!
-      : (result.amounts[1]! * 10n ** BigInt(decimals_of_in) * 100n) / amt_in
-  const quoted_price_number = Number(quoted_price) / 100.0
+  const decimalsOfIn = await getTokenDecimals(tokenInAddr)
+  const decimalsOfOut = await getTokenDecimals(tokenOutAddr)
+  const quotedPrice
+    = tokenInAddr.toLowerCase() === swapInfo.wbtc_address.toLowerCase()
+      ? (amtIn * 10n ** BigInt(decimalsOfOut) * 100n) / result.amounts[1]!
+      : (result.amounts[1]! * 10n ** BigInt(decimalsOfIn) * 100n) / amtIn
+  const quotedPriceNumber = Number(quotedPrice) / 100.0
 
   return {
     amount_out: result.amounts[1]!,
-    quoted_price: quoted_price_number,
+    quoted_price: quotedPriceNumber,
     price_impact_bps: result.price_impact_bps,
   }
 }
@@ -2920,22 +2921,22 @@ interface SwapOrderSignatureRequest {
   token2FeeBps: string
   btc_fee: string
 }
-async function getSwapOrderSignature(order_params: SwapOrderSignatureRequest): Promise<string> {
-  order_params.token1_addr = order_params.token1_addr.toLowerCase()
-  order_params.token2_addr = order_params.token2_addr.toLowerCase()
+async function getSwapOrderSignature(orderParams: SwapOrderSignatureRequest): Promise<string> {
+  orderParams.token1_addr = orderParams.token1_addr.toLowerCase()
+  orderParams.token2_addr = orderParams.token2_addr.toLowerCase()
 
-  const signature_text = `Swap Order:
-Token 1 Address: ${order_params.token1_addr}
-Token 2 Address: ${order_params.token2_addr}
-Input Amount: ${order_params.in_amt}
-Minimum Output Amount: ${order_params.min_out_amt}
-Token 1 Fee Bps: ${order_params.token1FeeBps}
-Token 2 Fee Bps: ${order_params.token2FeeBps}
-BTC Fee: ${order_params.btc_fee}
+  const signatureText = `Swap Order:
+Token 1 Address: ${orderParams.token1_addr}
+Token 2 Address: ${orderParams.token2_addr}
+Input Amount: ${orderParams.in_amt}
+Minimum Output Amount: ${orderParams.min_out_amt}
+Token 1 Fee Bps: ${orderParams.token1FeeBps}
+Token 2 Fee Bps: ${orderParams.token2FeeBps}
+BTC Fee: ${orderParams.btc_fee}
 
 By signing this message, you authorize the creation of a swap order with the above parameters.`
 
-  const signature = await signMessageLocalVerify(signature_text, 'ordinals')
+  const signature = await signMessageLocalVerify(signatureText, 'ordinals')
   return signature
 }
 
@@ -2964,8 +2965,8 @@ async function getSwapBLSSignature(params: SwapBLSSignatureRequest): Promise<str
   msg += params.token2FeeBps.toString(16).padStart(64, '0')
   msg += params.btc_fee.toString(16).padStart(64, '0')
 
-  const msg_buf = Buffer.from(msg, 'hex')
-  const P = bls12_381.G1.hashToCurve(msg_buf, {
+  const msgBuf = Buffer.from(msg, 'hex')
+  const P = bls12_381.G1.hashToCurve(msgBuf, {
     DST: 'BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_NUL_',
   })
 
@@ -2973,14 +2974,14 @@ async function getSwapBLSSignature(params: SwapBLSSignatureRequest): Promise<str
   if (!swapWallet?.swapPrivkey) {
     throw new Error('Smart wallet not found. Please generate a smart wallet first.')
   }
-  const bls_private_key = swapWallet.swapPrivkey.startsWith('0x')
+  const blsPrivateKey = swapWallet.swapPrivkey.startsWith('0x')
     ? swapWallet.swapPrivkey.slice(2)
     : swapWallet.swapPrivkey
-  const bls_private_key_buffer = Buffer.from(bls_private_key, 'hex')
+  const blsPrivateKeyBuffer = Buffer.from(blsPrivateKey, 'hex')
 
-  const bls_signature = bls12_381.shortSignatures.sign(P, bls_private_key_buffer)
+  const blsSignature = bls12_381.shortSignatures.sign(P, blsPrivateKeyBuffer)
 
-  return `0x${bls_signature.x.toString(16).padStart(128, '0')}${bls_signature.y.toString(16).padStart(128, '0')}`
+  return `0x${blsSignature.x.toString(16).padStart(128, '0')}${blsSignature.y.toString(16).padStart(128, '0')}`
 }
 
 interface SwapOrderRequest {
@@ -2998,7 +2999,7 @@ interface SwapOrderRequest {
 interface SwapOrderResponse {
   success: boolean
 }
-async function sendSwapOrder(to_send: SwapOrderRequest): Promise<SwapOrderResponse> {
+async function sendSwapOrder(toSend: SwapOrderRequest): Promise<SwapOrderResponse> {
   const url = getSwapBackendUrl('swap')
 
   return fetchWithErrors<SwapOrderResponse>(url, {
@@ -3006,21 +3007,24 @@ async function sendSwapOrder(to_send: SwapOrderRequest): Promise<SwapOrderRespon
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(to_send),
+    body: JSON.stringify(toSend),
   })
 }
 
 /**
+ * Prepares and sends a swap order for BiS Swap. The function retrieves the necessary swap information and connected wallet details, calculates the minimum output amount based on the provided slippage, and generates the required signatures for the order. It then constructs the order parameters and sends the swap order to the backend API.
  *
- * @param token1_addr
- * @param token2_addr
- * @param amt1
- * @param amt2
- * @param slippageBPS
+ * @param token1Addr The address of the token being swapped from.
+ * @param token2Addr The address of the token being swapped to.
+ * @param amt1 The amount of the input token to be swapped, represented as a bigint.
+ * @param amt2 The amount of the output token expected from the swap, represented as a bigint.
+ * @param slippageBPS The slippage in basis points to be applied when calculating the minimum amounts for the liquidity order.
+ *
+ * @returns A promise that resolves to an object indicating the success of the swap order request.
  */
 export async function prepareAndSendSwapOrder(
-  token1_addr: string,
-  token2_addr: string,
+  token1Addr: string,
+  token2Addr: string,
   amt1: bigint,
   amt2: bigint,
   slippageBPS: bigint,
@@ -3030,61 +3034,64 @@ export async function prepareAndSendSwapOrder(
     throw new Error('Smart wallet not found. Please generate a smart wallet first.')
   }
 
-  const min_out_amt = (amt2 * (10000n - slippageBPS)) / 10000n
+  const minOutAmt = (amt2 * (10000n - slippageBPS)) / 10000n
 
   const nonce = await getSwapWalletNonce()
 
-  const btc_fee = await requestMinerFee('swap')
-  const { token1FeeBps, token2FeeBps } = await getSwapFeesBps(token1_addr, token2_addr)
-  const bip322_signature = await getSwapOrderSignature({
-    token1_addr,
-    token2_addr,
+  const btcFee = await requestMinerFee('swap')
+  const { token1FeeBps, token2FeeBps } = await getSwapFeesBps(token1Addr, token2Addr)
+  const bip322Signature = await getSwapOrderSignature({
+    token1_addr: token1Addr,
+    token2_addr: token2Addr,
     in_amt: amt1.toString(),
-    min_out_amt: min_out_amt.toString(),
+    min_out_amt: minOutAmt.toString(),
     token1FeeBps: token1FeeBps.toString(),
     token2FeeBps: token2FeeBps.toString(),
-    btc_fee: btc_fee.toString(),
+    btc_fee: btcFee.toString(),
   })
 
-  const bls_signature = await getSwapBLSSignature({
+  const blsSignature = await getSwapBLSSignature({
     pubkey,
     nonce,
-    token1_addr,
-    token2_addr,
+    token1_addr: token1Addr,
+    token2_addr: token2Addr,
     in_amt: amt1,
-    min_out_amt,
+    min_out_amt: minOutAmt,
     token1FeeBps,
     token2FeeBps,
-    btc_fee,
+    btc_fee: btcFee,
   })
 
   return await sendSwapOrder({
     pubkey,
-    token1_addr,
-    token2_addr,
+    token1_addr: token1Addr,
+    token2_addr: token2Addr,
     in_amt: amt1.toString(),
-    min_out_amt: min_out_amt.toString(),
-    bls_signature,
+    min_out_amt: minOutAmt.toString(),
+    bls_signature: blsSignature,
     token1FeeBps: token1FeeBps.toString(),
     token2FeeBps: token2FeeBps.toString(),
-    btc_fee: btc_fee.toString(),
-    bip322_signature,
+    btc_fee: btcFee.toString(),
+    bip322_signature: bip322Signature,
   })
 }
 
 /**
+ * Calculates the expected input amount, quoted price, and price impact for a token swap operation using the swap2 algorithm. The function retrieves the necessary swap information and connected wallet details, then uses a proxy to check the current balances and reserves of the tokens in the liquidity pool. It also requests the miner fee for swapping and gets the fee basis points for the tokens involved in the swap. Finally, it calls the swap2Request function to get the expected results based on the input parameters.
  *
- * @param token_in_addr
- * @param token_out_addr
- * @param amt_out
+ * @param tokenInAddr The address of the token being swapped from.
+ * @param tokenOutAddr The address of the token being swapped to.
+ * @param amtOut The amount of the output token expected from the swap, represented as a bigint.
+ *
+ * @returns A promise that resolves to an object containing the expected input amount of the token being swapped from, the quoted price for the swap, and the price impact in basis points, all represented as bigints or numbers as appropriate.
  */
 export async function getSwap2Result(
-  token_in_addr: string,
-  token_out_addr: string,
-  amt_out: bigint,
+  tokenInAddr: string,
+  tokenOutAddr: string,
+  amtOut: bigint,
 ): Promise<{ amount_in: bigint, quoted_price: number, price_impact_bps: bigint }> {
-  const swap_info = await getSwapInfo()
-  save_info(swap_info.wbtc_address, swap_info.factory_address)
+  const swapInfo = await getSwapInfo()
+  saveInfo(swapInfo.wbtc_address, swapInfo.factory_address)
 
   const pubkey = (await getSwapWalletFromDB())?.swapPubkey
   if (!pubkey) {
@@ -3096,20 +3103,20 @@ export async function getSwap2Result(
     reservesOf: checkPairReserves,
   }
 
-  const btc_fee = await requestMinerFee('swap')
-  const { token1FeeBps, token2FeeBps } = await getSwapFeesBps(token_in_addr, token_out_addr)
-  const result = await swap2_request(
+  const btcFee = await requestMinerFee('swap')
+  const { token1FeeBps, token2FeeBps } = await getSwapFeesBps(tokenInAddr, tokenOutAddr)
+  const result = await swap2Request(
     proxy,
     pubkey,
-    token_in_addr,
-    token_out_addr,
+    tokenInAddr,
+    tokenOutAddr,
     BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'), // max_in_amt
-    amt_out,
+    amtOut,
     '', // bls_signature
     0n, // nonce
     token1FeeBps,
     token2FeeBps,
-    btc_fee,
+    btcFee,
   )
 
   if (!result.success) {
@@ -3125,18 +3132,18 @@ export async function getSwap2Result(
     throw new Error('Invalid data returned from swap request.')
   }
 
-  const decimals_of_in = await getTokenDecimals(token_in_addr)
-  const decimals_of_out = await getTokenDecimals(token_out_addr)
-  const quoted_price
-    = token_in_addr.toLowerCase() === swap_info.wbtc_address.toLowerCase()
-      ? (result.amounts[0]! * 10n ** BigInt(decimals_of_out) * 100n) / amt_out
-      : (amt_out * 10n ** BigInt(decimals_of_in) * 100n) / result.amounts[0]!
+  const decimalsOfIn = await getTokenDecimals(tokenInAddr)
+  const decimalsOfOut = await getTokenDecimals(tokenOutAddr)
+  const quotedPrice
+    = tokenInAddr.toLowerCase() === swapInfo.wbtc_address.toLowerCase()
+      ? (result.amounts[0]! * 10n ** BigInt(decimalsOfOut) * 100n) / amtOut
+      : (amtOut * 10n ** BigInt(decimalsOfIn) * 100n) / result.amounts[0]!
 
-  const quoted_price_number = Number(quoted_price) / 100.0
+  const quotedPriceNumber = Number(quotedPrice) / 100.0
 
   return {
     amount_in: result.amounts[0]!,
-    quoted_price: quoted_price_number,
+    quoted_price: quotedPriceNumber,
     price_impact_bps: result.price_impact_bps,
   }
 }
@@ -3150,22 +3157,22 @@ interface Swap2OrderSignatureRequest {
   token2FeeBps: string
   btc_fee: string
 }
-async function getSwap2OrderSignature(order_params: Swap2OrderSignatureRequest): Promise<string> {
-  order_params.token1_addr = order_params.token1_addr.toLowerCase()
-  order_params.token2_addr = order_params.token2_addr.toLowerCase()
+async function getSwap2OrderSignature(orderParams: Swap2OrderSignatureRequest): Promise<string> {
+  orderParams.token1_addr = orderParams.token1_addr.toLowerCase()
+  orderParams.token2_addr = orderParams.token2_addr.toLowerCase()
 
-  const signature_text = `Swap Order:
-Token 1 Address: ${order_params.token1_addr}
-Token 2 Address: ${order_params.token2_addr}
-Maximum Input Amount: ${order_params.max_in_amt}
-Output Amount: ${order_params.out_amt}
-Token 1 Fee Bps: ${order_params.token1FeeBps}
-Token 2 Fee Bps: ${order_params.token2FeeBps}
-BTC Fee: ${order_params.btc_fee}
+  const signatureText = `Swap Order:
+Token 1 Address: ${orderParams.token1_addr}
+Token 2 Address: ${orderParams.token2_addr}
+Maximum Input Amount: ${orderParams.max_in_amt}
+Output Amount: ${orderParams.out_amt}
+Token 1 Fee Bps: ${orderParams.token1FeeBps}
+Token 2 Fee Bps: ${orderParams.token2FeeBps}
+BTC Fee: ${orderParams.btc_fee}
 
 By signing this message, you authorize the creation of a swap order with the above parameters.`
 
-  const signature = await signMessageLocalVerify(signature_text, 'ordinals')
+  const signature = await signMessageLocalVerify(signatureText, 'ordinals')
   return signature
 }
 
@@ -3194,8 +3201,8 @@ async function getSwap2BLSSignature(params: Swap2BLSSignatureRequest): Promise<s
   msg += params.token2FeeBps.toString(16).padStart(64, '0')
   msg += params.btc_fee.toString(16).padStart(64, '0')
 
-  const msg_buf = Buffer.from(msg, 'hex')
-  const P = bls12_381.G1.hashToCurve(msg_buf, {
+  const msgBuf = Buffer.from(msg, 'hex')
+  const P = bls12_381.G1.hashToCurve(msgBuf, {
     DST: 'BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_NUL_',
   })
 
@@ -3203,14 +3210,14 @@ async function getSwap2BLSSignature(params: Swap2BLSSignatureRequest): Promise<s
   if (!swapWallet?.swapPrivkey) {
     throw new Error('Smart wallet not found. Please generate a smart wallet first.')
   }
-  const bls_private_key = swapWallet.swapPrivkey.startsWith('0x')
+  const blsPrivateKey = swapWallet.swapPrivkey.startsWith('0x')
     ? swapWallet.swapPrivkey.slice(2)
     : swapWallet.swapPrivkey
-  const bls_private_key_buffer = Buffer.from(bls_private_key, 'hex')
+  const blsPrivateKeyBuffer = Buffer.from(blsPrivateKey, 'hex')
 
-  const bls_signature = bls12_381.shortSignatures.sign(P, bls_private_key_buffer)
+  const blsSignature = bls12_381.shortSignatures.sign(P, blsPrivateKeyBuffer)
 
-  return `0x${bls_signature.x.toString(16).padStart(128, '0')}${bls_signature.y.toString(16).padStart(128, '0')}`
+  return `0x${blsSignature.x.toString(16).padStart(128, '0')}${blsSignature.y.toString(16).padStart(128, '0')}`
 }
 
 interface Swap2OrderRequest {
@@ -3228,7 +3235,7 @@ interface Swap2OrderRequest {
 interface Swap2OrderResponse {
   success: boolean
 }
-async function sendSwap2Order(to_send: Swap2OrderRequest): Promise<Swap2OrderResponse> {
+async function sendSwap2Order(toSend: Swap2OrderRequest): Promise<Swap2OrderResponse> {
   const url = getSwapBackendUrl('swap2')
 
   return fetchWithErrors<Swap2OrderResponse>(url, {
@@ -3236,21 +3243,24 @@ async function sendSwap2Order(to_send: Swap2OrderRequest): Promise<Swap2OrderRes
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(to_send),
+    body: JSON.stringify(toSend),
   })
 }
 
 /**
+ * Prepares and sends a swap order using the swap2 algorithm for BiS Swap. The function retrieves the necessary swap information and connected wallet details, calculates the maximum input amount based on the provided slippage, and generates the required signatures for the order. It then constructs the order parameters and sends the swap order to the backend API.
  *
- * @param token1_addr
- * @param token2_addr
- * @param amt1
- * @param amt2
- * @param slippageBPS
+ * @param token1Addr The address of the token being swapped from.
+ * @param token2Addr The address of the token being swapped to.
+ * @param amt1 The amount of the input token to be swapped, represented as a bigint.
+ * @param amt2 The amount of the output token expected from the swap, represented as a bigint.
+ * @param slippageBPS The slippage in basis points to be applied when calculating the maximum input amount for the swap order.
+ *
+ * @returns A promise that resolves to an object indicating the success of the swap order request.
  */
 export async function prepareAndSendSwap2Order(
-  token1_addr: string,
-  token2_addr: string,
+  token1Addr: string,
+  token2Addr: string,
   amt1: bigint,
   amt2: bigint,
   slippageBPS: bigint,
@@ -3260,90 +3270,93 @@ export async function prepareAndSendSwap2Order(
     throw new Error('Smart wallet not found. Please generate a smart wallet first.')
   }
 
-  const max_in_amt = (amt1 * (10000n + slippageBPS)) / 10000n
+  const maxInAmt = (amt1 * (10000n + slippageBPS)) / 10000n
 
   const nonce = await getSwapWalletNonce()
 
-  const btc_fee = await requestMinerFee('swap')
-  const { token1FeeBps, token2FeeBps } = await getSwapFeesBps(token1_addr, token2_addr)
-  const bip322_signature = await getSwap2OrderSignature({
-    token1_addr,
-    token2_addr,
-    max_in_amt: max_in_amt.toString(),
+  const btcFee = await requestMinerFee('swap')
+  const { token1FeeBps, token2FeeBps } = await getSwapFeesBps(token1Addr, token2Addr)
+  const bip322Signature = await getSwap2OrderSignature({
+    token1_addr: token1Addr,
+    token2_addr: token2Addr,
+    max_in_amt: maxInAmt.toString(),
     out_amt: amt2.toString(),
     token1FeeBps: token1FeeBps.toString(),
     token2FeeBps: token2FeeBps.toString(),
-    btc_fee: btc_fee.toString(),
+    btc_fee: btcFee.toString(),
   })
 
-  const bls_signature = await getSwap2BLSSignature({
+  const blsSignature = await getSwap2BLSSignature({
     pubkey,
     nonce,
-    token1_addr,
-    token2_addr,
-    max_in_amt,
+    token1_addr: token1Addr,
+    token2_addr: token2Addr,
+    max_in_amt: maxInAmt,
     out_amt: amt2,
     token1FeeBps,
     token2FeeBps,
-    btc_fee,
+    btc_fee: btcFee,
   })
 
   return await sendSwap2Order({
     pubkey,
-    token1_addr,
-    token2_addr,
-    max_in_amt: max_in_amt.toString(),
+    token1_addr: token1Addr,
+    token2_addr: token2Addr,
+    max_in_amt: maxInAmt.toString(),
     out_amt: amt2.toString(),
-    bls_signature,
+    bls_signature: blsSignature,
     token1FeeBps: token1FeeBps.toString(),
     token2FeeBps: token2FeeBps.toString(),
-    btc_fee: btc_fee.toString(),
-    bip322_signature,
+    btc_fee: btcFee.toString(),
+    bip322_signature: bip322Signature,
   })
 }
 
-function btcAddressToEvmAddress(btc_addr: string): string {
+function btcAddressToEvmAddress(btcAddr: string): string {
   const network = getBitcoinNetwork()
-  return `0x${ethers.keccak256(bitcoinjs.address.toOutputScript(btc_addr, network)).slice(26)}`
+  return `0x${ethers.keccak256(bitcoinjs.address.toOutputScript(btcAddr, network)).slice(26)}`
 }
 
 /**
+ * Prepares and sends a withdraw request to transfer tokens from the smart wallet to an ordinal wallet. The function retrieves the necessary swap information and connected wallet details, converts the target ordinal Bitcoin address to an Ethereum-compatible address, and generates the required signatures for the withdraw request. It then constructs the withdraw request parameters and sends the request to the backend API.
  *
- * @param token_address
- * @param ordinal_address
- * @param amt
+ * @param tokenAddress The address of the token to be withdrawn.
+ * @param ordinalAddress The Bitcoin address of the target ordinal wallet.
+ * @param amt The amount of the token to be withdrawn, represented as a bigint.
+ *
+ * @returns A promise that resolves to an object containing the amount withdrawn, represented as a bigint.
  */
 export async function getWithdrawWithdrawToOrdinalWalletResult(
-  token_address: string,
-  ordinal_address: string,
+  tokenAddress: string,
+  ordinalAddress: string,
   amt: bigint,
 ): Promise<{ amt: bigint }> {
-  const swap_info = await getSwapInfo()
-  save_info(swap_info.wbtc_address, swap_info.factory_address)
+  const swapInfo = await getSwapInfo()
+  saveInfo(swapInfo.wbtc_address, swapInfo.factory_address)
 
   const pubkey = (await getSwapWalletFromDB())?.swapPubkey
   if (!pubkey) {
     throw new Error('Smart wallet not found. Please generate a smart wallet first.')
   }
 
-  const target_btc_addr = ordinal_address
-  const target_address = btcAddressToEvmAddress(target_btc_addr)
+  const targetBtcAddr = ordinalAddress
+  const targetAddress = btcAddressToEvmAddress(targetBtcAddr)
 
   const proxy: UniswapInfoProxy = {
     balanceOf: checkSwapBalanceOf,
     reservesOf: checkPairReserves,
   }
 
-  const btc_fee = await requestMinerFee('withdraw')
-  const result = await withdraw_request(
+  const btcFee = await requestMinerFee('withdraw')
+  const result = await withdrawRequest(
     proxy,
     pubkey,
-    token_address,
-    target_address,
+    tokenAddress,
+    targetAddress,
     amt,
     '', // bls_signature
     0n, // nonce
-    btc_fee,
+    btcFee,
   )
 
   if (!result.success) {
@@ -3360,16 +3373,19 @@ export async function getWithdrawWithdrawToOrdinalWalletResult(
 }
 
 /**
+ * Prepares and sends a withdraw request to transfer tokens from the smart wallet to the user's own ordinal wallet. The function retrieves the necessary swap information and connected wallet details, obtains the user's ordinal wallet address, converts it to an Ethereum-compatible address, and generates the required signatures for the withdraw request. It then constructs the withdraw request parameters and sends the request to the backend API.
  *
- * @param token_address
- * @param amt
+ * @param tokenAddress The address of the token to be withdrawn.
+ * @param amt The amount of the token to be withdrawn, represented as a bigint.
+ *
+ * @returns A promise that resolves to an object containing the amount withdrawn, represented as a bigint.
  */
 export async function getWithdrawWithdrawToSelfOrdinalWalletResult(
-  token_address: string,
+  tokenAddress: string,
   amt: bigint,
 ): Promise<{ amt: bigint }> {
-  const swap_info = await getSwapInfo()
-  save_info(swap_info.wbtc_address, swap_info.factory_address)
+  const swapInfo = await getSwapInfo()
+  saveInfo(swapInfo.wbtc_address, swapInfo.factory_address)
 
   const pubkey = (await getSwapWalletFromDB())?.swapPubkey
   if (!pubkey) {
@@ -3380,26 +3396,26 @@ export async function getWithdrawWithdrawToSelfOrdinalWalletResult(
   if (!ordinalsWallet || !ordinalsWallet.address) {
     throw new Error('Ordinals wallet not found. Please generate an ordinals wallet first.')
   }
-  const ordinal_address = ordinalsWallet.address
+  const ordinalAddress = ordinalsWallet.address
 
-  const target_btc_addr = ordinal_address
-  const target_address = btcAddressToEvmAddress(target_btc_addr)
+  const targetBtcAddr = ordinalAddress
+  const targetAddress = btcAddressToEvmAddress(targetBtcAddr)
 
   const proxy: UniswapInfoProxy = {
     balanceOf: checkSwapBalanceOf,
     reservesOf: checkPairReserves,
   }
 
-  const btc_fee = await requestMinerFee('withdraw')
-  const result = await withdraw_request(
+  const btcFee = await requestMinerFee('withdraw')
+  const result = await withdrawRequest(
     proxy,
     pubkey,
-    token_address,
-    target_address,
+    tokenAddress,
+    targetAddress,
     amt,
     '', // bls_signature
     0n, // nonce
-    btc_fee,
+    btcFee,
   )
 
   if (!result.success) {
@@ -3424,22 +3440,22 @@ interface WithdrawOrderSignatureRequest {
   btc_fee: string
 }
 async function getWithdrawOrderSignature(
-  order_params: WithdrawOrderSignatureRequest,
+  orderParams: WithdrawOrderSignatureRequest,
 ): Promise<string> {
-  order_params.token_address = order_params.token_address.toLowerCase()
-  order_params.target_addr = order_params.target_addr.toLowerCase()
+  orderParams.token_address = orderParams.token_address.toLowerCase()
+  orderParams.target_addr = orderParams.target_addr.toLowerCase()
 
-  const signature_text = `Withdraw Order:
-Token Address: ${order_params.token_address}
-Target Address: ${order_params.target_addr}
-Amount: ${order_params.amt}
-Token 1 Fee Bps: ${order_params.token1FeeBps}
-Token 2 Fee Bps: ${order_params.token2FeeBps}
-BTC Fee: ${order_params.btc_fee}
+  const signatureText = `Withdraw Order:
+Token Address: ${orderParams.token_address}
+Target Address: ${orderParams.target_addr}
+Amount: ${orderParams.amt}
+Token 1 Fee Bps: ${orderParams.token1FeeBps}
+Token 2 Fee Bps: ${orderParams.token2FeeBps}
+BTC Fee: ${orderParams.btc_fee}
 
 By signing this message, you authorize the creation of a withdraw order with the above parameters.`
 
-  const signature = await signMessageLocalVerify(signature_text, 'ordinals')
+  const signature = await signMessageLocalVerify(signatureText, 'ordinals')
   return signature
 }
 
@@ -3462,8 +3478,8 @@ async function getWithdrawBLSSignature(params: WithdrawBLSSignatureRequest): Pro
   msg += params.amt.toString(16).padStart(64, '0')
   msg += params.btc_fee.toString(16).padStart(64, '0')
 
-  const msg_buf = Buffer.from(msg, 'hex')
-  const P = bls12_381.G1.hashToCurve(msg_buf, {
+  const msgBuf = Buffer.from(msg, 'hex')
+  const P = bls12_381.G1.hashToCurve(msgBuf, {
     DST: 'BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_NUL_',
   })
 
@@ -3471,14 +3487,14 @@ async function getWithdrawBLSSignature(params: WithdrawBLSSignatureRequest): Pro
   if (!swapWallet?.swapPrivkey) {
     throw new Error('Smart wallet not found. Please generate a smart wallet first.')
   }
-  const bls_private_key = swapWallet.swapPrivkey.startsWith('0x')
+  const blsPrivateKey = swapWallet.swapPrivkey.startsWith('0x')
     ? swapWallet.swapPrivkey.slice(2)
     : swapWallet.swapPrivkey
-  const bls_private_key_buffer = Buffer.from(bls_private_key, 'hex')
+  const blsPrivateKeyBuffer = Buffer.from(blsPrivateKey, 'hex')
 
-  const bls_signature = bls12_381.shortSignatures.sign(P, bls_private_key_buffer)
+  const blsSignature = bls12_381.shortSignatures.sign(P, blsPrivateKeyBuffer)
 
-  return `0x${bls_signature.x.toString(16).padStart(128, '0')}${bls_signature.y.toString(16).padStart(128, '0')}`
+  return `0x${blsSignature.x.toString(16).padStart(128, '0')}${blsSignature.y.toString(16).padStart(128, '0')}`
 }
 
 interface WithdrawOrderRequest {
@@ -3495,7 +3511,7 @@ interface WithdrawOrderRequest {
 interface WithdrawOrderResponse {
   success: boolean
 }
-async function sendWithdrawOrder(to_send: WithdrawOrderRequest): Promise<WithdrawOrderResponse> {
+async function sendWithdrawOrder(toSend: WithdrawOrderRequest): Promise<WithdrawOrderResponse> {
   const url = getSwapBackendUrl('withdraw')
 
   return fetchWithErrors<WithdrawOrderResponse>(url, {
@@ -3503,19 +3519,22 @@ async function sendWithdrawOrder(to_send: WithdrawOrderRequest): Promise<Withdra
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(to_send),
+    body: JSON.stringify(toSend),
   })
 }
 
 /**
+ * Prepares and sends a withdraw order to transfer tokens from the smart wallet to an ordinal wallet. The function retrieves the necessary swap information and connected wallet details, converts the target ordinal Bitcoin address to an Ethereum-compatible address, and generates the required signatures for the withdraw order. It then constructs the withdraw order parameters and sends the order to the backend API.
  *
- * @param token_addr
- * @param ordinal_addr
- * @param amt
+ * @param tokenAddr The address of the token to be withdrawn.
+ * @param ordinalAddr The Bitcoin address of the target ordinal wallet.
+ * @param amt The amount of the token to be withdrawn, represented as a bigint.
+ *
+ * @returns A promise that resolves to an object indicating the success of the withdraw order request.
  */
 export async function prepareAndSendWithdrawOrderToOrdinalWallet(
-  token_addr: string,
-  ordinal_addr: string,
+  tokenAddr: string,
+  ordinalAddr: string,
   amt: bigint,
 ): Promise<WithdrawOrderResponse> {
   const pubkey = (await getSwapWalletFromDB())?.swapPubkey
@@ -3523,53 +3542,56 @@ export async function prepareAndSendWithdrawOrderToOrdinalWallet(
     throw new Error('Smart wallet not found. Please generate a smart wallet first.')
   }
 
-  const target_btc_addr = ordinal_addr
-  const target_addr = btcAddressToEvmAddress(target_btc_addr)
+  const targetBtcAddr = ordinalAddr
+  const targetAddr = btcAddressToEvmAddress(targetBtcAddr)
 
   const token1FeeBPS = 0n
   const token2FeeBPS = 0n
 
   const nonce = await getSwapWalletNonce()
 
-  const btc_fee = await requestMinerFee('withdraw')
-  const bip322_signature = await getWithdrawOrderSignature({
-    token_address: token_addr,
-    target_addr,
+  const btcFee = await requestMinerFee('withdraw')
+  const bip322Signature = await getWithdrawOrderSignature({
+    token_address: tokenAddr,
+    target_addr: targetAddr,
     amt: amt.toString(),
     token1FeeBps: token1FeeBPS.toString(),
     token2FeeBps: token2FeeBPS.toString(),
-    btc_fee: btc_fee.toString(),
+    btc_fee: btcFee.toString(),
   })
 
-  const bls_signature = await getWithdrawBLSSignature({
+  const blsSignature = await getWithdrawBLSSignature({
     pubkey,
     nonce,
-    token_addr,
-    target_addr,
+    token_addr: tokenAddr,
+    target_addr: targetAddr,
     amt,
-    btc_fee,
+    btc_fee: btcFee,
   })
 
   return await sendWithdrawOrder({
     pubkey,
-    token_addr,
-    target_addr,
+    token_addr: tokenAddr,
+    target_addr: targetAddr,
     amt: amt.toString(),
-    bls_signature,
+    bls_signature: blsSignature,
     token1FeeBps: token1FeeBPS.toString(),
     token2FeeBps: token2FeeBPS.toString(),
-    btc_fee: btc_fee.toString(),
-    bip322_signature,
+    btc_fee: btcFee.toString(),
+    bip322_signature: bip322Signature,
   })
 }
 
 /**
+ * Prepares and sends a withdraw order to transfer tokens from the smart wallet to the user's own ordinal wallet. The function retrieves the necessary swap information and connected wallet details, obtains the user's ordinal wallet address, converts it to an Ethereum-compatible address, and generates the required signatures for the withdraw order. It then constructs the withdraw order parameters and sends the order to the backend API.
  *
- * @param token_addr
- * @param amt
+ * @param tokenAddr The address of the token to be withdrawn.
+ * @param amt The amount of the token to be withdrawn, represented as a bigint.
+ *
+ * @returns A promise that resolves to an object indicating the success of the withdraw order request.
  */
 export async function prepareAndSendWithdrawOrderToSelfOrdinalWallet(
-  token_addr: string,
+  tokenAddr: string,
   amt: bigint,
 ): Promise<WithdrawOrderResponse> {
   const pubkey = (await getSwapWalletFromDB())?.swapPubkey
@@ -3581,54 +3603,57 @@ export async function prepareAndSendWithdrawOrderToSelfOrdinalWallet(
   if (!ordinalsWallet || !ordinalsWallet.address) {
     throw new Error('Ordinals wallet not found. Please set up your ordinals wallet first.')
   }
-  const target_btc_addr = ordinalsWallet.address
-  const target_addr = btcAddressToEvmAddress(target_btc_addr)
+  const targetBtcAddr = ordinalsWallet.address
+  const targetAddr = btcAddressToEvmAddress(targetBtcAddr)
 
   const token1FeeBPS = 0n
   const token2FeeBPS = 0n
 
   const nonce = await getSwapWalletNonce()
 
-  const btc_fee = await requestMinerFee('withdraw')
-  const bip322_signature = await getWithdrawOrderSignature({
-    token_address: token_addr,
-    target_addr,
+  const btcFee = await requestMinerFee('withdraw')
+  const bip322Signature = await getWithdrawOrderSignature({
+    token_address: tokenAddr,
+    target_addr: targetAddr,
     amt: amt.toString(),
     token1FeeBps: token1FeeBPS.toString(),
     token2FeeBps: token2FeeBPS.toString(),
-    btc_fee: btc_fee.toString(),
+    btc_fee: btcFee.toString(),
   })
 
-  const bls_signature = await getWithdrawBLSSignature({
+  const blsSignature = await getWithdrawBLSSignature({
     pubkey,
     nonce,
-    token_addr,
-    target_addr,
+    token_addr: tokenAddr,
+    target_addr: targetAddr,
     amt,
-    btc_fee,
+    btc_fee: btcFee,
   })
 
   return await sendWithdrawOrder({
     pubkey,
-    token_addr,
-    target_addr,
+    token_addr: tokenAddr,
+    target_addr: targetAddr,
     amt: amt.toString(),
-    bls_signature,
+    bls_signature: blsSignature,
     token1FeeBps: token1FeeBPS.toString(),
     token2FeeBps: token2FeeBPS.toString(),
-    btc_fee: btc_fee.toString(),
-    bip322_signature,
+    btc_fee: btcFee.toString(),
+    bip322_signature: bip322Signature,
   })
 }
 
 /**
+ * Prepares and sends an unwrap order to transfer WBTC from the smart wallet back to Bitcoin. The function retrieves the necessary swap information and connected wallet details, generates the required signatures for the unwrap order, and constructs the unwrap order parameters before sending the order to the backend API.
  *
- * @param pkscript
- * @param amt
+ * @param pkscript The pkscript of the target Bitcoin address where the unwrapped WBTC will be sent.
+ * @param amt The amount of WBTC to be unwrapped, represented as a bigint.
+ *
+ * @returns A promise that resolves to an object containing the amount unwrapped, represented as a bigint.
  */
 export async function getUnwrapResult(pkscript: string, amt: bigint): Promise<{ amt: bigint }> {
-  const swap_info = await getSwapInfo()
-  save_info(swap_info.wbtc_address, swap_info.factory_address)
+  const swapInfo = await getSwapInfo()
+  saveInfo(swapInfo.wbtc_address, swapInfo.factory_address)
 
   const pubkey = (await getSwapWalletFromDB())?.swapPubkey
   if (!pubkey) {
@@ -3640,15 +3665,15 @@ export async function getUnwrapResult(pkscript: string, amt: bigint): Promise<{ 
     reservesOf: checkPairReserves,
   }
 
-  const btc_fee = await requestMinerFee('unwrap')
-  const result = await unwrap_request(
+  const btcFee = await requestMinerFee('unwrap')
+  const result = await unwrapRequest(
     proxy,
     pubkey,
     pkscript,
     amt,
     '', // bls_signature
     0n, // nonce
-    btc_fee,
+    btcFee,
   )
 
   if (!result.success) {
@@ -3671,19 +3696,19 @@ interface UnwrapOrderSignatureRequest {
   token2FeeBps: string
   btc_fee: string
 }
-async function getUnwrapOrderSignature(order_params: UnwrapOrderSignatureRequest): Promise<string> {
-  order_params.pkscript = order_params.pkscript.toLowerCase()
+async function getUnwrapOrderSignature(orderParams: UnwrapOrderSignatureRequest): Promise<string> {
+  orderParams.pkscript = orderParams.pkscript.toLowerCase()
 
-  const signature_text = `Unwrap Order:
-Pkscript: ${order_params.pkscript}
-Amount: ${order_params.amt}
-Token 1 Fee Bps: ${order_params.token1FeeBps}
-Token 2 Fee Bps: ${order_params.token2FeeBps}
-BTC Fee: ${order_params.btc_fee}
+  const signatureText = `Unwrap Order:
+Pkscript: ${orderParams.pkscript}
+Amount: ${orderParams.amt}
+Token 1 Fee Bps: ${orderParams.token1FeeBps}
+Token 2 Fee Bps: ${orderParams.token2FeeBps}
+BTC Fee: ${orderParams.btc_fee}
 
 By signing this message, you authorize the creation of a withdraw order with the above parameters.`
 
-  const signature = await signMessageLocalVerify(signature_text, 'ordinals')
+  const signature = await signMessageLocalVerify(signatureText, 'ordinals')
   return signature
 }
 
@@ -3704,8 +3729,8 @@ async function getUnwrapBLSSignature(params: UnwrapBLSSignatureRequest): Promise
   msg += params.amt.toString(16).padStart(64, '0')
   msg += params.btc_fee.toString(16).padStart(64, '0')
 
-  const msg_buf = Buffer.from(msg, 'hex')
-  const P = bls12_381.G1.hashToCurve(msg_buf, {
+  const msgBuf = Buffer.from(msg, 'hex')
+  const P = bls12_381.G1.hashToCurve(msgBuf, {
     DST: 'BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_NUL_',
   })
 
@@ -3713,14 +3738,14 @@ async function getUnwrapBLSSignature(params: UnwrapBLSSignatureRequest): Promise
   if (!swapWallet?.swapPrivkey) {
     throw new Error('Smart wallet not found. Please generate a smart wallet first.')
   }
-  const bls_private_key = swapWallet.swapPrivkey.startsWith('0x')
+  const blsPrivateKey = swapWallet.swapPrivkey.startsWith('0x')
     ? swapWallet.swapPrivkey.slice(2)
     : swapWallet.swapPrivkey
-  const bls_private_key_buffer = Buffer.from(bls_private_key, 'hex')
+  const blsPrivateKeyBuffer = Buffer.from(blsPrivateKey, 'hex')
 
-  const bls_signature = bls12_381.shortSignatures.sign(P, bls_private_key_buffer)
+  const blsSignature = bls12_381.shortSignatures.sign(P, blsPrivateKeyBuffer)
 
-  return `0x${bls_signature.x.toString(16).padStart(128, '0')}${bls_signature.y.toString(16).padStart(128, '0')}`
+  return `0x${blsSignature.x.toString(16).padStart(128, '0')}${blsSignature.y.toString(16).padStart(128, '0')}`
 }
 
 interface UnwrapOrderRequest {
@@ -3736,7 +3761,7 @@ interface UnwrapOrderRequest {
 interface UnwrapOrderResponse {
   success: boolean
 }
-async function sendUnwrapOrder(to_send: UnwrapOrderRequest): Promise<UnwrapOrderResponse> {
+async function sendUnwrapOrder(toSend: UnwrapOrderRequest): Promise<UnwrapOrderResponse> {
   const url = getSwapBackendUrl('unwrap')
 
   return fetchWithErrors<UnwrapOrderResponse>(url, {
@@ -3744,14 +3769,17 @@ async function sendUnwrapOrder(to_send: UnwrapOrderRequest): Promise<UnwrapOrder
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(to_send),
+    body: JSON.stringify(toSend),
   })
 }
 
 /**
+ * Prepares and sends an unwrap order to transfer WBTC from the smart wallet back to Bitcoin. The function retrieves the necessary swap information and connected wallet details, generates the required signatures for the unwrap order, and constructs the unwrap order parameters before sending the order to the backend API.
  *
- * @param pkscript
- * @param amt
+ * @param pkscript The pkscript of the target Bitcoin address where the unwrapped WBTC will be sent.
+ * @param amt The amount of WBTC to be unwrapped, represented as a bigint.
+ *
+ * @returns A promise that resolves to an object indicating the success of the unwrap order request.
  */
 export async function prepareAndSendUnwrapOrder(
   pkscript: string,
@@ -3767,31 +3795,31 @@ export async function prepareAndSendUnwrapOrder(
 
   const nonce = await getSwapWalletNonce()
 
-  const btc_fee = await requestMinerFee('unwrap')
-  const bip322_signature = await getUnwrapOrderSignature({
+  const btcFee = await requestMinerFee('unwrap')
+  const bip322Signature = await getUnwrapOrderSignature({
     pkscript,
     amt: amt.toString(),
     token1FeeBps: token1FeeBPS.toString(),
     token2FeeBps: token2FeeBPS.toString(),
-    btc_fee: btc_fee.toString(),
+    btc_fee: btcFee.toString(),
   })
 
-  const bls_signature = await getUnwrapBLSSignature({
+  const blsSignature = await getUnwrapBLSSignature({
     pubkey,
     nonce,
     pkscript,
     amt,
-    btc_fee,
+    btc_fee: btcFee,
   })
 
   return await sendUnwrapOrder({
     pubkey,
     pkscript,
     amt: amt.toString(),
-    bls_signature,
+    bls_signature: blsSignature,
     token1FeeBps: token1FeeBPS.toString(),
     token2FeeBps: token2FeeBPS.toString(),
-    btc_fee: btc_fee.toString(),
-    bip322_signature,
+    btc_fee: btcFee.toString(),
+    bip322_signature: bip322Signature,
   })
 }

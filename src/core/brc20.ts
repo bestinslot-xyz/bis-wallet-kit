@@ -7,14 +7,14 @@ import { encode as base64Encode } from 'base64-arraybuffer'
 import * as bitcoinjs from 'bitcoinjs-lib'
 import { getBitcoinNetwork } from '../lib/bitcoin'
 import { getWeb3 } from '../lib/web3'
-import { broadcast_txes, clearExtraUtxos, saveExtraUtxos } from './helpers'
+import { broadcastTxes, clearExtraUtxos, saveExtraUtxos } from './helpers'
 import {
   InscriptionDetails,
-  mint_all,
-  mint_all_payment_wallet,
-  send_inscription_all,
-  send_inscription_in_payment_wallet_to_op_return_all,
-  send_inscription_to_op_return_all,
+  mintAll,
+  mintAllPaymentWallet,
+  sendInscriptionAll,
+  sendInscriptionInPaymentWalletToOpReturnAll,
+  sendInscriptionToOpReturnAll,
   WalletInfo,
 } from './mint'
 import { getSignFn } from './providers'
@@ -254,31 +254,29 @@ export async function compressSmartContractData(inputHex: string): Promise<strin
   return base64WithoutPadding
 }
 
-// ignores payment_addr and payment if payment is <= 0
-// set dry_run to true to get the tx hexes without broadcasting
-// inscription_details must be of type bis.InscriptionDetails, you can use bis.Buff.hex, bis.Buff.str etc.. for parameters of the object (see @cmdcode/buff-utils)
-// payment_addr must be a string
-// payment must be an integer (in sats)
 /**
+ * Deploys a smart contract by creating an inscription with the provided input data and sending it to the OP_RETURN output. The function first compresses the input data, then creates an inscription with the compressed data and mints it. After minting, it sends the inscription to an OP_RETURN output with a specific format. The function also handles optional payment parameters and allows for a dry run mode where the transaction hexes are returned without broadcasting.
  *
- * @param input_hex
- * @param estimated_gas
- * @param gas_per_vbyte
- * @param fee_rate
- * @param postage
- * @param payment_addr
- * @param payment
- * @param dry_run
+ * @param inputHex - The input data for the smart contract deployment, represented as a hexadecimal string. This data will be compressed and included in the inscription.
+ * @param estimatedGas - The estimated gas required for the smart contract deployment, used to determine if padding is needed for the inscription content.
+ * @param gasPerVbyte - The gas cost per virtual byte, used to calculate the total gas cost of the inscription content and determine if padding is needed.
+ * @param feeRate - The fee rate in sats/vbyte to be used for the transactions involved in the deployment process.
+ * @param postage - An optional parameter representing the postage to be included in the minting transaction, specified in sats. If null, no postage will be included.
+ * @param paymentAddr - An optional parameter representing the Bitcoin address to which payment should be sent for the minting transaction. If null, no payment will be made.
+ * @param payment - An optional parameter representing the amount of payment to be sent for the minting transaction, specified in sats. If null or less than or equal to 0, no payment will be made.
+ * @param dryRun - A boolean flag indicating whether to perform a dry run. If true, the function will return the transaction hexes without broadcasting them to the network. If false, the transactions will be broadcasted after creation.
+ *
+ * @returns An object containing details of the deployment process, including transaction IDs, signed transaction hexes, inscription ID, postage, and secret used in the minting process. If dryRun is true, the transactions will not be broadcasted and the hexes will be returned for inspection.
  */
 export async function deploySmartContract(
-  input_hex: string,
-  estimated_gas: number,
-  gas_per_vbyte: number,
-  fee_rate: number,
+  inputHex: string,
+  estimatedGas: number,
+  gasPerVbyte: number,
+  feeRate: number,
   postage: number | null,
-  payment_addr: string | null,
+  paymentAddr: string | null,
   payment: number | null,
-  dry_run: boolean,
+  dryRun: boolean,
 ) {
   // Get connected wallet
   const walletInfo = getWalletInfo()
@@ -286,31 +284,31 @@ export async function deploySmartContract(
   if (!walletInfo || !walletInfo.wallets)
     throw new Error('Wallets not found')
 
-  if (typeof input_hex != 'string')
+  if (typeof inputHex != 'string')
     throw new Error('input_hex must be a string')
-  if (typeof fee_rate != 'number' || !Number.isInteger(fee_rate))
+  if (typeof feeRate != 'number' || !Number.isInteger(feeRate))
     throw new Error('fee_rate must be an integer')
   if (postage != null && (typeof postage != 'number' || !Number.isInteger(postage)))
     throw new Error('postage must be an integer or null')
-  if (payment_addr != null && typeof payment_addr != 'string')
+  if (paymentAddr != null && typeof paymentAddr != 'string')
     throw new Error('payment_addr must be a string')
   if (payment != null && (typeof payment != 'number' || !Number.isInteger(payment)))
     throw new Error('payment must be an integer')
-  if (typeof dry_run != 'boolean')
+  if (typeof dryRun != 'boolean')
     throw new Error('dry_run must be a boolean')
 
   // Compress
-  const input_b64 = await compressSmartContractData(input_hex)
+  const inputB64 = await compressSmartContractData(inputHex)
 
-  let content = Buff.str(`{"p":"brc20-prog","op":"d","b":"${input_b64}"}`)
-  if (content.length * gas_per_vbyte < estimated_gas) {
-    const gas_deficit = estimated_gas - content.length * gas_per_vbyte
-    const needed_padding = Math.ceil(gas_deficit / gas_per_vbyte)
-    const padding = '20'.repeat(needed_padding)
+  let content = Buff.str(`{"p":"brc20-prog","op":"d","b":"${inputB64}"}`)
+  if (content.length * gasPerVbyte < estimatedGas) {
+    const gasDeficit = estimatedGas - content.length * gasPerVbyte
+    const neededPadding = Math.ceil(gasDeficit / gasPerVbyte)
+    const padding = '20'.repeat(neededPadding)
     content = content.append(padding)
   }
 
-  const inscription_details = new InscriptionDetails(
+  const inscriptionDetails = new InscriptionDetails(
     Buff.str('text/plain'),
     null,
     null,
@@ -322,33 +320,33 @@ export async function deploySmartContract(
   // Sign function
   const signFn = getSignFn(walletInfo.provider)
 
-  const res = await mint_all(
-    inscription_details,
-    fee_rate,
+  const res = await mintAll(
+    inscriptionDetails,
+    feeRate,
     postage,
-    payment_addr,
+    paymentAddr,
     payment,
     true,
     signFn,
   )
-  const inscription_id = res.inscription_id
-  const satpoint = `${inscription_id.split('i')[0]}:0:0`
-  let send_inscription_tx = null
+  const inscriptionId = res.inscription_id
+  const satpoint = `${inscriptionId.split('i')[0]}:0:0`
+  let sendInscriptionTx = null
   try {
-    saveExtraUtxos([res.signed_commit_tx_hex, res.signed_reveal_tx_hex], [inscription_id, satpoint])
+    saveExtraUtxos([res.signed_commit_tx_hex, res.signed_reveal_tx_hex], [inscriptionId, satpoint])
 
-    const target_wallet = new WalletInfo(
+    const targetWallet = new WalletInfo(
       true,
       Buffer.from(Script.encode(['OP_RETURN', Buff.str('BRC20PROG')], false)),
       null,
       null,
       null,
     )
-    send_inscription_tx = await send_inscription_to_op_return_all(
-      inscription_id,
-      target_wallet,
+    sendInscriptionTx = await sendInscriptionToOpReturnAll(
+      inscriptionId,
+      targetWallet,
       1,
-      fee_rate,
+      feeRate,
       true,
       signFn,
     )
@@ -356,11 +354,11 @@ export async function deploySmartContract(
   finally {
     clearExtraUtxos()
   }
-  if (send_inscription_tx == null) {
+  if (sendInscriptionTx == null) {
     throw new Error('Failed to send inscription to OP_RETURN')
   }
 
-  if (dry_run) {
+  if (dryRun) {
     return {
       commit_txid: res.commit_txid,
       signed_commit_tx_hex: res.signed_commit_tx_hex,
@@ -369,17 +367,13 @@ export async function deploySmartContract(
       inscription_id: res.inscription_id,
       postage: res.postage,
       secret: res.secret,
-      send_to_op_return_txid: send_inscription_tx.txid,
-      signed_send_to_op_return_tx_hex: send_inscription_tx.signed_tx_hex,
+      send_to_op_return_txid: sendInscriptionTx.txId,
+      signed_send_to_op_return_tx_hex: sendInscriptionTx.signedPsbtHex,
     }
   }
 
-  const txes = [
-    res.signed_commit_tx_hex,
-    res.signed_reveal_tx_hex,
-    send_inscription_tx.signed_tx_hex,
-  ]
-  await broadcast_txes(txes)
+  const txes = [res.signed_commit_tx_hex, res.signed_reveal_tx_hex, sendInscriptionTx.signedPsbtHex]
+  await broadcastTxes(txes)
   return {
     commit_txid: res.commit_txid,
     signed_commit_tx_hex: res.signed_commit_tx_hex,
@@ -388,40 +382,38 @@ export async function deploySmartContract(
     inscription_id: res.inscription_id,
     postage: res.postage,
     secret: res.secret,
-    send_to_op_return_txid: send_inscription_tx.txid,
-    signed_send_to_op_return_tx_hex: send_inscription_tx.signed_tx_hex,
+    send_to_op_return_txid: sendInscriptionTx.txId,
+    signed_send_to_op_return_tx_hex: sendInscriptionTx.signedPsbtHex,
   }
 }
 
-// ignores payment_addr and payment if payment is <= 0
-// set dry_run to true to get the tx hexes without broadcasting
-// inscription_details must be of type bis.InscriptionDetails, you can use bis.Buff.hex, bis.Buff.str etc.. for parameters of the object (see @cmdcode/buff-utils)
-// payment_addr must be a string
-// payment must be an integer (in sats)
 /**
+ * Deploys a smart contract using the provided bytecode and ABI by creating an inscription with the encoded deployment data and sending it to the OP_RETURN output. The function first encodes the deployment data using the ABI and bytecode, then creates an inscription with the encoded data and mints it. After minting, it sends the inscription to an OP_RETURN output with a specific format. The function also handles optional payment parameters and allows for a dry run mode where the transaction hexes are returned without broadcasting.
  *
- * @param bytecode
- * @param abi
- * @param params
- * @param estimated_gas
- * @param gas_per_vbyte
- * @param fee_rate
- * @param postage
- * @param payment_addr
- * @param payment
- * @param dry_run
+ * @param bytecode - The bytecode of the smart contract to be deployed, represented as a hexadecimal string. This bytecode will be encoded with the ABI and included in the inscription.
+ * @param abi - The ABI of the smart contract, used to encode the deployment data along with the bytecode.
+ * @param params - An array of parameters to be passed to the contract constructor, which will be encoded along with the bytecode using the ABI.
+ * @param estimatedGas - The estimated gas required for the smart contract deployment, used to determine if padding is needed for the inscription content.
+ * @param gasPerVbyte - The gas cost per virtual byte, used to calculate the total gas cost of the inscription content and determine if padding is needed.
+ * @param feeRate - The fee rate in sats/vbyte to be used for the transactions involved in the deployment process.
+ * @param postage - An optional parameter representing the postage to be included in the minting transaction, specified in sats. If null, no postage will be included.
+ * @param paymentAddr - An optional parameter representing the Bitcoin address to which payment should be sent for the minting transaction. If null, no payment will be made.
+ * @param payment - An optional parameter representing the amount of payment to be sent for the minting transaction, specified in sats. If null or less than or equal to 0, no payment will be made.
+ * @param dryRun - A boolean flag indicating whether to perform a dry run. If true, the function will return the transaction hexes without broadcasting them to the network. If false, the transactions will be broadcasted after creation.
+ *
+ * @returns An object containing details of the deployment process, including transaction IDs, signed transaction hexes, inscription ID, postage, and secret used in the minting process. If dryRun is true, the transactions will not be broadcasted and the hexes will be returned for inspection.
  */
-export async function deploy_smart_contract_abi(
+export async function deploySmartContractAbi(
   bytecode: string,
   abi: any,
   params: any,
-  estimated_gas: number,
-  gas_per_vbyte: number,
-  fee_rate: number,
+  estimatedGas: number,
+  gasPerVbyte: number,
+  feeRate: number,
   postage: number | null,
-  payment_addr: string | null,
+  paymentAddr: string | null,
   payment: number | null,
-  dry_run: boolean,
+  dryRun: boolean,
 ) {
   if (typeof abi != 'object')
     throw new Error('abi must be an object')
@@ -430,46 +422,44 @@ export async function deploy_smart_contract_abi(
   if (!Array.isArray(params))
     throw new Error('params must be an array')
 
-  const encoded_deploy = evmEncodeDeploy(bytecode, abi, params)
+  const encodedDeploy = evmEncodeDeploy(bytecode, abi, params)
   return await deploySmartContract(
-    encoded_deploy,
-    estimated_gas,
-    gas_per_vbyte,
-    fee_rate,
+    encodedDeploy,
+    estimatedGas,
+    gasPerVbyte,
+    feeRate,
     postage,
-    payment_addr,
+    paymentAddr,
     payment,
-    dry_run,
+    dryRun,
   )
 }
 
-// ignores payment_addr and payment if payment is <= 0
-// set dry_run to true to get the tx hexes without broadcasting
-// inscription_details must be of type bis.InscriptionDetails, you can use bis.Buff.hex, bis.Buff.str etc.. for parameters of the object (see @cmdcode/buff-utils)
-// payment_addr must be a string
-// payment must be an integer (in sats)
 /**
+ * Calls a smart contract function by creating an inscription with the provided input data and sending it to the OP_RETURN output. The function first compresses the input data, then creates an inscription with the compressed data and mints it. After minting, it sends the inscription to an OP_RETURN output with a specific format. The function also handles optional payment parameters and allows for a dry run mode where the transaction hexes are returned without broadcasting.
  *
- * @param smart_contract_contract_addr
- * @param input_hex
- * @param estimated_gas
- * @param gas_per_vbyte
- * @param fee_rate
- * @param postage
- * @param payment_addr
- * @param payment
- * @param dry_run
+ * @param smartContractContractAddr - The address of the smart contract to call, represented as a string. This address will be included in the inscription content to indicate which contract function is being called.
+ * @param inputHex - The input data for the smart contract function call, represented as a hexadecimal string. This data will be compressed and included in the inscription.
+ * @param estimatedGas - The estimated gas required for the smart contract function call, used to determine if padding is needed for the inscription content.
+ * @param gasPerVbyte - The gas cost per virtual byte, used to calculate the total gas cost of the inscription content and determine if padding is needed.
+ * @param feeRate - The fee rate in sats/vbyte to be used for the transactions involved in the function call process.
+ * @param postage - An optional parameter representing the postage to be included in the minting transaction, specified in sats. If null, no postage will be included.
+ * @param paymentAddr - An optional parameter representing the Bitcoin address to which payment should be sent for the minting transaction. If null, no payment will be made.
+ * @param payment - An optional parameter representing the amount of payment to be sent for the minting transaction, specified in sats. If null or less than or equal to 0, no payment will be made.
+ * @param dryRun - A boolean flag indicating whether to perform a dry run. If true, the function will return the transaction hexes without broadcasting them to the network. If false, the transactions will be broadcasted after creation.
+ *
+ * @returns An object containing details of the function call process, including transaction IDs, signed transaction hexes, inscription ID, postage, and secret used in the minting process. If dryRun is true, the transactions will not be broadcasted and the hexes will be returned for inspection.
  */
-export async function call_smart_contract(
-  smart_contract_contract_addr: string,
-  input_hex: string,
-  estimated_gas: number,
-  gas_per_vbyte: number,
-  fee_rate: number,
+export async function callSmartContract(
+  smartContractContractAddr: string,
+  inputHex: string,
+  estimatedGas: number,
+  gasPerVbyte: number,
+  feeRate: number,
   postage: number | null,
-  payment_addr: string | null,
+  paymentAddr: string | null,
   payment: number | null,
-  dry_run: boolean,
+  dryRun: boolean,
 ) {
   // Get connected wallet
   const walletInfo = getWalletInfo()
@@ -477,35 +467,35 @@ export async function call_smart_contract(
   if (!walletInfo || !walletInfo.wallets)
     throw new Error('Wallets not found')
 
-  if (typeof smart_contract_contract_addr != 'string')
+  if (typeof smartContractContractAddr != 'string')
     throw new Error('smart_contract_contract_addr must be a string')
-  if (typeof input_hex != 'string')
+  if (typeof inputHex != 'string')
     throw new Error('input_hex must be a string')
-  if (typeof fee_rate != 'number' || !Number.isInteger(fee_rate))
+  if (typeof feeRate != 'number' || !Number.isInteger(feeRate))
     throw new Error('fee_rate must be an integer')
   if (postage != null && (typeof postage != 'number' || !Number.isInteger(postage)))
     throw new Error('postage must be an integer or null')
-  if (payment_addr != null && typeof payment_addr != 'string')
+  if (paymentAddr != null && typeof paymentAddr != 'string')
     throw new Error('payment_addr must be a string')
   if (payment != null && (typeof payment != 'number' || !Number.isInteger(payment)))
     throw new Error('payment must be an integer')
-  if (typeof dry_run != 'boolean')
+  if (typeof dryRun != 'boolean')
     throw new Error('dry_run must be a boolean')
 
   // Compress
-  const input_b64 = await compressSmartContractData(input_hex)
+  const inputB64 = await compressSmartContractData(inputHex)
 
   let content = Buff.str(
-    `{"p":"brc20-prog","op":"c","c":"${smart_contract_contract_addr}","b":"${input_b64}"}`,
+    `{"p":"brc20-prog","op":"c","c":"${smartContractContractAddr}","b":"${inputB64}"}`,
   )
-  if (content.length * gas_per_vbyte < estimated_gas) {
-    const gas_deficit = estimated_gas - content.length * gas_per_vbyte
-    const needed_padding = Math.ceil(gas_deficit / gas_per_vbyte)
-    const padding = '20'.repeat(needed_padding)
+  if (content.length * gasPerVbyte < estimatedGas) {
+    const gasDeficit = estimatedGas - content.length * gasPerVbyte
+    const neededPadding = Math.ceil(gasDeficit / gasPerVbyte)
+    const padding = '20'.repeat(neededPadding)
     content = content.append(padding)
   }
 
-  const inscription_details = new InscriptionDetails(
+  const inscriptionDetails = new InscriptionDetails(
     Buff.str('text/plain'),
     null,
     null,
@@ -517,33 +507,33 @@ export async function call_smart_contract(
   // Sign function
   const signFn = getSignFn(walletInfo.provider)
 
-  const res = await mint_all(
-    inscription_details,
-    fee_rate,
+  const res = await mintAll(
+    inscriptionDetails,
+    feeRate,
     postage,
-    payment_addr,
+    paymentAddr,
     payment,
     true,
     signFn,
   )
-  const inscription_id = res.inscription_id
-  const satpoint = `${inscription_id.split('i')[0]}:0:0`
-  let send_inscription_tx = null
+  const inscriptionId = res.inscription_id
+  const satpoint = `${inscriptionId.split('i')[0]}:0:0`
+  let sendInscriptionTx = null
   try {
-    saveExtraUtxos([res.signed_commit_tx_hex, res.signed_reveal_tx_hex], [inscription_id, satpoint])
+    saveExtraUtxos([res.signed_commit_tx_hex, res.signed_reveal_tx_hex], [inscriptionId, satpoint])
 
-    const target_wallet = new WalletInfo(
+    const targetWallet = new WalletInfo(
       true,
       Buffer.from(Script.encode(['OP_RETURN', Buff.str('BRC20PROG')], false)),
       null,
       null,
       null,
     )
-    send_inscription_tx = await send_inscription_to_op_return_all(
-      inscription_id,
-      target_wallet,
+    sendInscriptionTx = await sendInscriptionToOpReturnAll(
+      inscriptionId,
+      targetWallet,
       1,
-      fee_rate,
+      feeRate,
       true,
       signFn,
     )
@@ -551,11 +541,11 @@ export async function call_smart_contract(
   finally {
     clearExtraUtxos()
   }
-  if (send_inscription_tx == null) {
+  if (sendInscriptionTx == null) {
     throw new Error('Failed to send inscription to OP_RETURN')
   }
 
-  if (dry_run) {
+  if (dryRun) {
     return {
       commit_txid: res.commit_txid,
       signed_commit_tx_hex: res.signed_commit_tx_hex,
@@ -564,17 +554,13 @@ export async function call_smart_contract(
       inscription_id: res.inscription_id,
       postage: res.postage,
       secret: res.secret,
-      send_to_op_return_txid: send_inscription_tx.txid,
-      signed_send_to_op_return_tx_hex: send_inscription_tx.signed_tx_hex,
+      send_to_op_return_txid: sendInscriptionTx.txId,
+      signed_send_to_op_return_tx_hex: sendInscriptionTx.signedPsbtHex,
     }
   }
 
-  const txes = [
-    res.signed_commit_tx_hex,
-    res.signed_reveal_tx_hex,
-    send_inscription_tx.signed_tx_hex,
-  ]
-  await broadcast_txes(txes)
+  const txes = [res.signed_commit_tx_hex, res.signed_reveal_tx_hex, sendInscriptionTx.signedPsbtHex]
+  await broadcastTxes(txes)
   return {
     commit_txid: res.commit_txid,
     signed_commit_tx_hex: res.signed_commit_tx_hex,
@@ -583,74 +569,72 @@ export async function call_smart_contract(
     inscription_id: res.inscription_id,
     postage: res.postage,
     secret: res.secret,
-    send_to_op_return_txid: send_inscription_tx.txid,
-    signed_send_to_op_return_tx_hex: send_inscription_tx.signed_tx_hex,
+    send_to_op_return_txid: sendInscriptionTx.txId,
+    signed_send_to_op_return_tx_hex: sendInscriptionTx.signedPsbtHex,
   }
 }
 
-// ignores payment_addr and payment if payment is <= 0
-// set dry_run to true to get the tx hexes without broadcasting
-// inscription_details must be of type bis.InscriptionDetails, you can use bis.Buff.hex, bis.Buff.str etc.. for parameters of the object (see @cmdcode/buff-utils)
-// payment_addr must be a string
-// payment must be an integer (in sats)
 /**
+ * Calls a smart contract function by creating an inscription with the encoded function call data and sending it to the OP_RETURN output. The function takes the smart contract address, ABI, function name, and parameters, encodes the function call using the ABI, and then follows a similar process as `deploySmartContract` to create and send the inscription. It also handles optional payment parameters and allows for a dry run mode where the transaction hexes are returned without broadcasting.
  *
- * @param smart_contract_contract_addr
- * @param abi
- * @param func_name
- * @param params
- * @param estimated_gas
- * @param gas_per_vbyte
- * @param fee_rate
- * @param postage
- * @param payment_addr
- * @param payment
- * @param dry_run
+ * @param smartContractContractAddr - The address of the smart contract to call, represented as a string. This address will be included in the inscription content to indicate which contract function is being called.
+ * @param abi - The ABI of the smart contract, used to encode the function call data along with the function name and parameters.
+ * @param funcName - The name of the function to call on the smart contract, represented as a string. This will be used along with the ABI to encode the function call data.
+ * @param params - An array of parameters to be passed to the contract function, which will be encoded using the ABI along with the function name.
+ * @param estimatedGas - The estimated gas required for the smart contract function call, used to determine if padding is needed for the inscription content.
+ * @param gasPerVbyte - The gas cost per virtual byte, used to calculate the total gas cost of the inscription content and determine if padding is needed.
+ * @param feeRate - The fee rate in sats/vbyte to be used for the transactions involved in the function call process.
+ * @param postage - An optional parameter representing the postage to be included in the minting transaction, specified in sats. If null, no postage will be included.
+ * @param paymentAddr - An optional parameter representing the Bitcoin address to which payment should be sent for the minting transaction. If null, no payment will be made.
+ * @param payment - An optional parameter representing the amount of payment to be sent for the minting transaction, specified in sats. If null or less than or equal to 0, no payment will be made.
+ * @param dryRun - A boolean flag indicating whether to perform a dry run. If true, the function will return the transaction hexes without broadcasting them to the network. If false, the transactions will be broadcasted after creation.
+ *
+ * @returns An object containing details of the function call process, including transaction IDs, signed transaction hexes, inscription ID, postage, and secret used in the minting process. If dryRun is true, the transactions will not be broadcasted and the hexes will be returned for inspection.
  */
-export async function call_smart_contract_abi(
-  smart_contract_contract_addr: string,
+export async function callSmartContractAbi(
+  smartContractContractAddr: string,
   abi: any,
-  func_name: string,
+  funcName: string,
   params: any,
-  estimated_gas: number,
-  gas_per_vbyte: number,
-  fee_rate: number,
+  estimatedGas: number,
+  gasPerVbyte: number,
+  feeRate: number,
   postage: number | null,
-  payment_addr: string | null,
+  paymentAddr: string | null,
   payment: number | null,
-  dry_run: boolean,
+  dryRun: boolean,
 ) {
   if (typeof abi != 'object')
     throw new Error('abi must be an object')
-  if (typeof func_name != 'string')
+  if (typeof funcName != 'string')
     throw new Error('func_name must be a string')
   if (!Array.isArray(params))
     throw new Error('params must be an array')
 
-  const encoded_func_call = evmEncodeFunctionCall(abi, func_name, params)
-  return await call_smart_contract(
-    smart_contract_contract_addr,
-    encoded_func_call,
-    estimated_gas,
-    gas_per_vbyte,
-    fee_rate,
+  const encodedFuncCall = evmEncodeFunctionCall(abi, funcName, params)
+  return await callSmartContract(
+    smartContractContractAddr,
+    encodedFuncCall,
+    estimatedGas,
+    gasPerVbyte,
+    feeRate,
     postage,
-    payment_addr,
+    paymentAddr,
     payment,
-    dry_run,
+    dryRun,
   )
 }
 
-async function call_smart_contract_from_payment_wallet(
-  smart_contract_contract_addr: string,
-  input_hex: string,
-  estimated_gas: number,
-  gas_per_vbyte: number,
-  fee_rate: number,
+async function callSmartContractFromPaymentWallet(
+  smartContractContractAddr: string,
+  inputHex: string,
+  estimatedGas: number,
+  gasPerVbyte: number,
+  feeRate: number,
   postage: number | null,
-  payment_addr: string | null,
+  paymentAddr: string | null,
   payment: number | null,
-  dry_run: boolean,
+  dryRun: boolean,
 ) {
   // Get connected wallet
   const walletInfo = getWalletInfo()
@@ -658,35 +642,35 @@ async function call_smart_contract_from_payment_wallet(
   if (!walletInfo || !walletInfo.wallets)
     throw new Error('Wallets not found')
 
-  if (typeof smart_contract_contract_addr != 'string')
+  if (typeof smartContractContractAddr != 'string')
     throw new Error('smart_contract_contract_addr must be a string')
-  if (typeof input_hex != 'string')
+  if (typeof inputHex != 'string')
     throw new Error('input_hex must be a string')
-  if (typeof fee_rate != 'number' || !Number.isInteger(fee_rate))
+  if (typeof feeRate != 'number' || !Number.isInteger(feeRate))
     throw new Error('fee_rate must be an integer')
   if (postage != null && (typeof postage != 'number' || !Number.isInteger(postage)))
     throw new Error('postage must be an integer or null')
-  if (payment_addr != null && typeof payment_addr != 'string')
+  if (paymentAddr != null && typeof paymentAddr != 'string')
     throw new Error('payment_addr must be a string')
   if (payment != null && (typeof payment != 'number' || !Number.isInteger(payment)))
     throw new Error('payment must be an integer')
-  if (typeof dry_run != 'boolean')
+  if (typeof dryRun != 'boolean')
     throw new Error('dry_run must be a boolean')
 
   // Compress
-  const input_b64 = await compressSmartContractData(input_hex)
+  const inputB64 = await compressSmartContractData(inputHex)
 
   let content = Buff.str(
-    `{"p":"brc20-prog","op":"c","c":"${smart_contract_contract_addr}","b":"${input_b64}"}`,
+    `{"p":"brc20-prog","op":"c","c":"${smartContractContractAddr}","b":"${inputB64}"}`,
   )
-  if (content.length * gas_per_vbyte < estimated_gas) {
-    const gas_deficit = estimated_gas - content.length * gas_per_vbyte
-    const needed_padding = Math.ceil(gas_deficit / gas_per_vbyte)
-    const padding = '20'.repeat(needed_padding)
+  if (content.length * gasPerVbyte < estimatedGas) {
+    const gasDeficit = estimatedGas - content.length * gasPerVbyte
+    const neededPadding = Math.ceil(gasDeficit / gasPerVbyte)
+    const padding = '20'.repeat(neededPadding)
     content = content.append(padding)
   }
 
-  const inscription_details = new InscriptionDetails(
+  const inscriptionDetails = new InscriptionDetails(
     Buff.str('text/plain'),
     null,
     null,
@@ -698,36 +682,36 @@ async function call_smart_contract_from_payment_wallet(
   // Sign function
   const signFn = getSignFn(walletInfo.provider)
 
-  const mint_result = await mint_all_payment_wallet(
-    inscription_details,
-    fee_rate,
+  const mintResult = await mintAllPaymentWallet(
+    inscriptionDetails,
+    feeRate,
     postage,
-    payment_addr,
+    paymentAddr,
     payment,
     true,
     signFn,
   )
-  const inscription_id = mint_result.inscription_id
-  const satpoint = `${inscription_id.split('i')[0]}:0:0`
-  let send_inscription_tx = null
+  const inscriptionId = mintResult.inscription_id
+  const satpoint = `${inscriptionId.split('i')[0]}:0:0`
+  let sendInscriptionTx = null
   try {
     saveExtraUtxos(
-      [mint_result.signed_commit_tx_hex, mint_result.signed_reveal_tx_hex],
-      [inscription_id, satpoint],
+      [mintResult.signed_commit_tx_hex, mintResult.signed_reveal_tx_hex],
+      [inscriptionId, satpoint],
     )
 
-    const target_wallet = new WalletInfo(
+    const targetWallet = new WalletInfo(
       true,
       Buffer.from(Script.encode(['OP_RETURN', Buff.str('BRC20PROG')], false)),
       null,
       null,
       null,
     )
-    send_inscription_tx = await send_inscription_in_payment_wallet_to_op_return_all(
-      inscription_id,
-      target_wallet,
+    sendInscriptionTx = await sendInscriptionInPaymentWalletToOpReturnAll(
+      inscriptionId,
+      targetWallet,
       1,
-      fee_rate,
+      feeRate,
       true,
       signFn,
     )
@@ -735,109 +719,115 @@ async function call_smart_contract_from_payment_wallet(
   finally {
     clearExtraUtxos()
   }
-  if (send_inscription_tx == null) {
+  if (sendInscriptionTx == null) {
     throw new Error('Failed to send inscription to OP_RETURN')
   }
 
-  if (dry_run) {
+  if (dryRun) {
     return {
-      commit_txid: mint_result.commit_txid,
-      signed_commit_tx_hex: mint_result.signed_commit_tx_hex,
-      reveal_txid: mint_result.reveal_txid,
-      signed_reveal_tx_hex: mint_result.signed_reveal_tx_hex,
-      inscription_id: mint_result.inscription_id,
-      postage: mint_result.postage,
-      secret: mint_result.secret,
-      send_to_op_return_txid: send_inscription_tx.txid,
-      signed_send_to_op_return_tx_hex: send_inscription_tx.signed_tx_hex,
+      commit_txid: mintResult.commit_txid,
+      signed_commit_tx_hex: mintResult.signed_commit_tx_hex,
+      reveal_txid: mintResult.reveal_txid,
+      signed_reveal_tx_hex: mintResult.signed_reveal_tx_hex,
+      inscription_id: mintResult.inscription_id,
+      postage: mintResult.postage,
+      secret: mintResult.secret,
+      send_to_op_return_txid: sendInscriptionTx.txId,
+      signed_send_to_op_return_tx_hex: sendInscriptionTx.signedPsbtHex,
     }
   }
 
   const txes = [
-    mint_result.signed_commit_tx_hex,
-    mint_result.signed_reveal_tx_hex,
-    send_inscription_tx.signed_tx_hex,
+    mintResult.signed_commit_tx_hex,
+    mintResult.signed_reveal_tx_hex,
+    sendInscriptionTx.signedPsbtHex,
   ]
-  await broadcast_txes(txes)
+  await broadcastTxes(txes)
   return {
-    commit_txid: mint_result.commit_txid,
-    signed_commit_tx_hex: mint_result.signed_commit_tx_hex,
-    reveal_txid: mint_result.reveal_txid,
-    signed_reveal_tx_hex: mint_result.signed_reveal_tx_hex,
-    inscription_id: mint_result.inscription_id,
-    postage: mint_result.postage,
-    secret: mint_result.secret,
-    send_to_op_return_txid: send_inscription_tx.txid,
-    signed_send_to_op_return_tx_hex: send_inscription_tx.signed_tx_hex,
+    commit_txid: mintResult.commit_txid,
+    signed_commit_tx_hex: mintResult.signed_commit_tx_hex,
+    reveal_txid: mintResult.reveal_txid,
+    signed_reveal_tx_hex: mintResult.signed_reveal_tx_hex,
+    inscription_id: mintResult.inscription_id,
+    postage: mintResult.postage,
+    secret: mintResult.secret,
+    send_to_op_return_txid: sendInscriptionTx.txId,
+    signed_send_to_op_return_tx_hex: sendInscriptionTx.signedPsbtHex,
   }
 }
 
 /**
+ * Calls a smart contract function using the provided ABI and function name by encoding the function call data, creating an inscription with the encoded data, and sending it to the OP_RETURN output. The function takes the smart contract address, ABI, function name, and parameters, encodes the function call using the ABI, and then follows a similar process as `callSmartContract` to create and send the inscription. It also handles optional payment parameters and allows for a dry run mode where the transaction hexes are returned without broadcasting.
  *
- * @param smart_contract_contract_addr
- * @param abi
- * @param func_name
- * @param params
- * @param estimated_gas
- * @param gas_per_vbyte
- * @param fee_rate
- * @param postage
- * @param payment_addr
- * @param payment
- * @param dry_run
+ * @param smartContractContractAddr - The address of the smart contract to call, represented as a string. This address will be included in the inscription content to indicate which contract function is being called.
+ * @param abi - The ABI of the smart contract, used to encode the function call data along with the function name and parameters.
+ * @param funcName - The name of the function to call on the smart contract, represented as a string. This will be used along with the ABI to encode the function call data.
+ * @param params - An array of parameters to be passed to the contract function, which will be encoded using the ABI along with the function name.
+ * @param estimatedGas - The estimated gas required for the smart contract function call, used to determine if padding is needed for the inscription content.
+ * @param gasPerVbyte - The gas cost per virtual byte, used to calculate the total gas cost of the inscription content and determine if padding is needed.
+ * @param feeRate - The fee rate in sats/vbyte to be used for the transactions involved in the function call process.
+ * @param postage - An optional parameter representing the postage to be included in the minting transaction, specified in sats. If null, no postage will be included.
+ * @param paymentAddr - An optional parameter representing the Bitcoin address to which payment should be sent for the minting transaction. If null, no payment will be made.
+ * @param payment - An optional parameter representing the amount of payment to be sent for the minting transaction, specified in sats. If null or less than or equal to 0, no payment will be made.
+ * @param dryRun - A boolean flag indicating whether to perform a dry run. If true, the function will return the transaction hexes without broadcasting them to the network. If false, the transactions will be broadcasted after creation.
+ *
+ * @returns An object containing details of the function call process, including transaction IDs, signed transaction hexes, inscription ID, postage, and secret used in the minting process. If dryRun is true, the transactions will not be broadcasted and the hexes will be returned for inspection.
  */
-export async function call_smart_contract_abi_from_payment_wallet(
-  smart_contract_contract_addr: string,
+export async function callSmartContractAbiFromPaymentWallet(
+  smartContractContractAddr: string,
   abi: any,
-  func_name: string,
+  funcName: string,
   params: any,
-  estimated_gas: number,
-  gas_per_vbyte: number,
-  fee_rate: number,
+  estimatedGas: number,
+  gasPerVbyte: number,
+  feeRate: number,
   postage: number | null,
-  payment_addr: string | null,
+  paymentAddr: string | null,
   payment: number | null,
-  dry_run: boolean,
+  dryRun: boolean,
 ) {
   if (typeof abi != 'object')
     throw new Error('abi must be an object')
-  if (typeof func_name != 'string')
+  if (typeof funcName != 'string')
     throw new Error('func_name must be a string')
   if (!Array.isArray(params))
     throw new Error('params must be an array')
 
-  const encoded_func_call = evmEncodeFunctionCall(abi, func_name, params)
-  return await call_smart_contract_from_payment_wallet(
-    smart_contract_contract_addr,
-    encoded_func_call,
-    estimated_gas,
-    gas_per_vbyte,
-    fee_rate,
+  const encodedFuncCall = evmEncodeFunctionCall(abi, funcName, params)
+  return await callSmartContractFromPaymentWallet(
+    smartContractContractAddr,
+    encodedFuncCall,
+    estimatedGas,
+    gasPerVbyte,
+    feeRate,
     postage,
-    payment_addr,
+    paymentAddr,
     payment,
-    dry_run,
+    dryRun,
   )
 }
 
 /**
+ * Deposits a BRC-20 token into the BRC2.0 programmable module by creating an inscription with the transfer operation and sending it to the OP_RETURN output. The function takes the token tick, amount, fee rate, and optional payment parameters, creates an inscription with the transfer operation, mints it, and then sends it to an OP_RETURN output with a specific format. It also allows for a dry run mode where the transaction hexes are returned without broadcasting.
  *
- * @param tick
- * @param amount
- * @param fee_rate
- * @param postage
- * @param payment_addr
- * @param payment
- * @param dry_run
+ * @param tick - The tick of the BRC-20 token to be deposited, represented as a string. This will be included in the inscription content to indicate which token is being transferred.
+ * @param amount - The amount of the BRC-20 token to be deposited, represented as a string. This will be included in the inscription content to indicate how many tokens are being transferred.
+ * @param feeRate - The fee rate in sats/vbyte to be used for the transactions involved in the deposit process.
+ * @param postage - An optional parameter representing the postage to be included in the minting transaction, specified in sats. If null, no postage will be included.
+ * @param paymentAddr - An optional parameter representing the Bitcoin address to which payment should be sent for the minting transaction. If null, no payment will be made.
+ * @param payment - An optional parameter representing the amount of payment to be sent for the minting transaction, specified in sats. If null or less than or equal to 0, no payment will be made.
+ * @param dryRun - A boolean flag indicating whether to perform a dry run. If true, the function will return the transaction hexes without broadcasting them to the network. If false, the transactions will be broadcasted after creation.
+ *
+ * @returns An object containing details of the deposit process, including transaction IDs, signed transaction hexes, inscription ID, postage, and secret used in the minting process. If dryRun is true, the transactions will not be broadcasted and the hexes will be returned for inspection.
  */
-export async function deposit_to_brc20_prog(
+export async function depositToBrc20Prog(
   tick: string,
   amount: string,
-  fee_rate: number,
+  feeRate: number,
   postage: number | null,
-  payment_addr: string | null,
+  paymentAddr: string | null,
   payment: number | null,
-  dry_run: boolean,
+  dryRun: boolean,
 ) {
   // Get connected wallet
   const walletInfo = getWalletInfo()
@@ -848,19 +838,19 @@ export async function deposit_to_brc20_prog(
     throw new Error('tick must be a string')
   if (typeof amount != 'string')
     throw new Error('amount must be a string')
-  if (typeof fee_rate != 'number' || !Number.isInteger(fee_rate))
+  if (typeof feeRate != 'number' || !Number.isInteger(feeRate))
     throw new Error('fee_rate must be an integer')
   if (postage != null && (typeof postage != 'number' || !Number.isInteger(postage)))
     throw new Error('postage must be an integer or null')
-  if (payment_addr != null && typeof payment_addr != 'string')
+  if (paymentAddr != null && typeof paymentAddr != 'string')
     throw new Error('payment_addr must be a string')
   if (payment != null && (typeof payment != 'number' || !Number.isInteger(payment)))
     throw new Error('payment must be an integer')
-  if (typeof dry_run != 'boolean')
+  if (typeof dryRun != 'boolean')
     throw new Error('dry_run must be a boolean')
 
   const content = Buff.str(`{"p":"brc-20","op":"transfer","tick":"${tick}","amt":"${amount}"}`)
-  const inscription_details = new InscriptionDetails(
+  const inscriptionDetails = new InscriptionDetails(
     Buff.str('text/plain'),
     null,
     null,
@@ -872,36 +862,36 @@ export async function deposit_to_brc20_prog(
   // Sign function
   const signFn = getSignFn(walletInfo.provider)
 
-  const mint_result = await mint_all(
-    inscription_details,
-    fee_rate,
+  const mintResult = await mintAll(
+    inscriptionDetails,
+    feeRate,
     postage,
-    payment_addr,
+    paymentAddr,
     payment,
     true,
     signFn,
   )
-  const inscription_id = mint_result.inscription_id
-  const satpoint = `${inscription_id.split('i')[0]}:0:0`
-  let send_inscription_tx = null
+  const inscriptionId = mintResult.inscription_id
+  const satpoint = `${inscriptionId.split('i')[0]}:0:0`
+  let sendInscriptionTx = null
   try {
     saveExtraUtxos(
-      [mint_result.signed_commit_tx_hex, mint_result.signed_reveal_tx_hex],
-      [inscription_id, satpoint],
+      [mintResult.signed_commit_tx_hex, mintResult.signed_reveal_tx_hex],
+      [inscriptionId, satpoint],
     )
 
-    const target_wallet = new WalletInfo(
+    const targetWallet = new WalletInfo(
       true,
       Buffer.from(Script.encode(['OP_RETURN', Buff.str('BRC20PROG')], false)),
       null,
       null,
       null,
     )
-    send_inscription_tx = await send_inscription_to_op_return_all(
-      inscription_id,
-      target_wallet,
+    sendInscriptionTx = await sendInscriptionToOpReturnAll(
+      inscriptionId,
+      targetWallet,
       1,
-      fee_rate,
+      feeRate,
       true,
       signFn,
     )
@@ -909,63 +899,66 @@ export async function deposit_to_brc20_prog(
   finally {
     clearExtraUtxos()
   }
-  if (send_inscription_tx == null) {
+  if (sendInscriptionTx == null) {
     throw new Error('Failed to send inscription to OP_RETURN')
   }
 
-  if (dry_run) {
+  if (dryRun) {
     return {
-      commit_txid: mint_result.commit_txid,
-      signed_commit_tx_hex: mint_result.signed_commit_tx_hex,
-      reveal_txid: mint_result.reveal_txid,
-      signed_reveal_tx_hex: mint_result.signed_reveal_tx_hex,
-      inscription_id: mint_result.inscription_id,
-      postage: mint_result.postage,
-      secret: mint_result.secret,
-      send_to_op_return_txid: send_inscription_tx.txid,
-      signed_send_to_op_return_tx_hex: send_inscription_tx.signed_tx_hex,
+      commit_txid: mintResult.commit_txid,
+      signed_commit_tx_hex: mintResult.signed_commit_tx_hex,
+      reveal_txid: mintResult.reveal_txid,
+      signed_reveal_tx_hex: mintResult.signed_reveal_tx_hex,
+      inscription_id: mintResult.inscription_id,
+      postage: mintResult.postage,
+      secret: mintResult.secret,
+      send_to_op_return_txid: sendInscriptionTx.txId,
+      signed_send_to_op_return_tx_hex: sendInscriptionTx.signedPsbtHex,
     }
   }
 
   const txes = [
-    mint_result.signed_commit_tx_hex,
-    mint_result.signed_reveal_tx_hex,
-    send_inscription_tx.signed_tx_hex,
+    mintResult.signed_commit_tx_hex,
+    mintResult.signed_reveal_tx_hex,
+    sendInscriptionTx.signedPsbtHex,
   ]
-  await broadcast_txes(txes)
+  await broadcastTxes(txes)
   return {
-    commit_txid: mint_result.commit_txid,
-    signed_commit_tx_hex: mint_result.signed_commit_tx_hex,
-    reveal_txid: mint_result.reveal_txid,
-    signed_reveal_tx_hex: mint_result.signed_reveal_tx_hex,
-    inscription_id: mint_result.inscription_id,
-    postage: mint_result.postage,
-    secret: mint_result.secret,
-    send_to_op_return_txid: send_inscription_tx.txid,
-    signed_send_to_op_return_tx_hex: send_inscription_tx.signed_tx_hex,
+    commit_txid: mintResult.commit_txid,
+    signed_commit_tx_hex: mintResult.signed_commit_tx_hex,
+    reveal_txid: mintResult.reveal_txid,
+    signed_reveal_tx_hex: mintResult.signed_reveal_tx_hex,
+    inscription_id: mintResult.inscription_id,
+    postage: mintResult.postage,
+    secret: mintResult.secret,
+    send_to_op_return_txid: sendInscriptionTx.txId,
+    signed_send_to_op_return_tx_hex: sendInscriptionTx.signedPsbtHex,
   }
 }
 
 /**
+ * Withdraws a BRC-20 token from the BRC2.0 programmable module by creating an inscription with the transfer operation and sending it to the target address. The function takes the token tick, amount, target address, fee rate, and optional payment parameters, creates an inscription with the transfer operation, mints it, and then sends it to the target address. It also allows for a dry run mode where the transaction hexes are returned without broadcasting.
  *
- * @param tick
- * @param amount
- * @param target_addr
- * @param fee_rate
- * @param postage
- * @param payment_addr
- * @param payment
- * @param dry_run
+ * @param tick - The tick of the BRC-20 token to be withdrawn, represented as a string. This will be included in the inscription content to indicate which token is being transferred.
+ * @param amount - The amount of the BRC-20 token to be withdrawn, represented as a string. This will be included in the inscription content to indicate how many tokens are being transferred.
+ * @param targetAddr - The Bitcoin address to which the withdrawn BRC-20 tokens should be sent, represented as a string. This will be used as the destination for the inscription after minting.
+ * @param feeRate - The fee rate in sats/vbyte to be used for the transactions involved in the withdrawal process.
+ * @param postage - An optional parameter representing the postage to be included in the minting transaction, specified in sats. If null, no postage will be included.
+ * @param paymentAddr - An optional parameter representing the Bitcoin address to which payment should be sent for the minting transaction. If null, no payment will be made.
+ * @param payment - An optional parameter representing the amount of payment to be sent for the minting transaction, specified in sats. If null or less than or equal to 0, no payment will be made.
+ * @param dryRun - A boolean flag indicating whether to perform a dry run. If true, the function will return the transaction hexes without broadcasting them to the network. If false, the transactions will be broadcasted after creation.
+ *
+ * @returns An object containing details of the withdrawal process, including transaction IDs, signed transaction hexes, inscription ID, postage, and secret used in the minting process. If dryRun is true, the transactions will not be broadcasted and the hexes will be returned for inspection.
  */
-export async function withdraw_from_brc20_prog(
+export async function withdrawFromBrc20Prog(
   tick: string,
   amount: string,
-  target_addr: string,
-  fee_rate: number,
+  targetAddr: string,
+  feeRate: number,
   postage: number | null,
-  payment_addr: string | null,
+  paymentAddr: string | null,
   payment: number | null,
-  dry_run: boolean,
+  dryRun: boolean,
 ) {
   // Get connected wallet
   const walletInfo = getWalletInfo()
@@ -976,23 +969,23 @@ export async function withdraw_from_brc20_prog(
     throw new Error('tick must be a string')
   if (typeof amount != 'string')
     throw new Error('amount must be a string')
-  if (typeof target_addr != 'string')
+  if (typeof targetAddr != 'string')
     throw new Error('target_addr must be a string')
-  if (typeof fee_rate != 'number' || !Number.isInteger(fee_rate))
+  if (typeof feeRate != 'number' || !Number.isInteger(feeRate))
     throw new Error('fee_rate must be an integer')
   if (postage != null && (typeof postage != 'number' || !Number.isInteger(postage)))
     throw new Error('postage must be an integer or null')
-  if (payment_addr != null && typeof payment_addr != 'string')
+  if (paymentAddr != null && typeof paymentAddr != 'string')
     throw new Error('payment_addr must be a string')
   if (payment != null && (typeof payment != 'number' || !Number.isInteger(payment)))
     throw new Error('payment must be an integer')
-  if (typeof dry_run != 'boolean')
+  if (typeof dryRun != 'boolean')
     throw new Error('dry_run must be a boolean')
 
   const content = Buff.str(
     `{"p":"brc20-module","op":"withdraw","tick":"${tick}","amt":"${amount}","module":"BRC20PROG"}`,
   )
-  const inscription_details = new InscriptionDetails(
+  const inscriptionDetails = new InscriptionDetails(
     Buff.str('text/plain'),
     null,
     null,
@@ -1004,30 +997,30 @@ export async function withdraw_from_brc20_prog(
   // Sign function
   const signFn = getSignFn(walletInfo.provider)
 
-  const mint_result = await mint_all(
-    inscription_details,
-    fee_rate,
+  const mintResult = await mintAll(
+    inscriptionDetails,
+    feeRate,
     postage,
-    payment_addr,
+    paymentAddr,
     payment,
     true,
     signFn,
   )
-  const inscription_id = mint_result.inscription_id
-  const satpoint = `${inscription_id.split('i')[0]}:0:0`
-  let send_inscription_tx = null
+  const inscriptionId = mintResult.inscription_id
+  const satpoint = `${inscriptionId.split('i')[0]}:0:0`
+  let sendInscriptionTx = null
   try {
     saveExtraUtxos(
-      [mint_result.signed_commit_tx_hex, mint_result.signed_reveal_tx_hex],
-      [inscription_id, satpoint],
+      [mintResult.signed_commit_tx_hex, mintResult.signed_reveal_tx_hex],
+      [inscriptionId, satpoint],
     )
 
-    const target_wallet = new WalletInfo(false, null, target_addr, null, null)
-    send_inscription_tx = await send_inscription_all(
-      inscription_id,
-      target_wallet,
+    const targetWallet = new WalletInfo(false, null, targetAddr, null, null)
+    sendInscriptionTx = await sendInscriptionAll(
+      inscriptionId,
+      targetWallet,
       null,
-      fee_rate,
+      feeRate,
       true,
       signFn,
     )
@@ -1035,39 +1028,39 @@ export async function withdraw_from_brc20_prog(
   finally {
     clearExtraUtxos()
   }
-  if (send_inscription_tx == null) {
+  if (sendInscriptionTx == null) {
     throw new Error('Failed to send inscription to OP_RETURN')
   }
 
-  if (dry_run) {
+  if (dryRun) {
     return {
-      commit_txid: mint_result.commit_txid,
-      signed_commit_tx_hex: mint_result.signed_commit_tx_hex,
-      reveal_txid: mint_result.reveal_txid,
-      signed_reveal_tx_hex: mint_result.signed_reveal_tx_hex,
-      inscription_id: mint_result.inscription_id,
-      postage: mint_result.postage,
-      secret: mint_result.secret,
-      transfer_txid: send_inscription_tx.txid,
-      signed_transfer_tx_hex: send_inscription_tx.signed_tx_hex,
+      commit_txid: mintResult.commit_txid,
+      signed_commit_tx_hex: mintResult.signed_commit_tx_hex,
+      reveal_txid: mintResult.reveal_txid,
+      signed_reveal_tx_hex: mintResult.signed_reveal_tx_hex,
+      inscription_id: mintResult.inscription_id,
+      postage: mintResult.postage,
+      secret: mintResult.secret,
+      transfer_txid: sendInscriptionTx.txid,
+      signed_transfer_tx_hex: sendInscriptionTx.signed_tx_hex,
     }
   }
 
   const txes = [
-    mint_result.signed_commit_tx_hex,
-    mint_result.signed_reveal_tx_hex,
-    send_inscription_tx.signed_tx_hex,
+    mintResult.signed_commit_tx_hex,
+    mintResult.signed_reveal_tx_hex,
+    sendInscriptionTx.signed_tx_hex,
   ]
-  await broadcast_txes(txes)
+  await broadcastTxes(txes)
   return {
-    commit_txid: mint_result.commit_txid,
-    signed_commit_tx_hex: mint_result.signed_commit_tx_hex,
-    reveal_txid: mint_result.reveal_txid,
-    signed_reveal_tx_hex: mint_result.signed_reveal_tx_hex,
-    inscription_id: mint_result.inscription_id,
-    postage: mint_result.postage,
-    secret: mint_result.secret,
-    transfer_txid: send_inscription_tx.txid,
-    signed_transfer_tx_hex: send_inscription_tx.signed_tx_hex,
+    commit_txid: mintResult.commit_txid,
+    signed_commit_tx_hex: mintResult.signed_commit_tx_hex,
+    reveal_txid: mintResult.reveal_txid,
+    signed_reveal_tx_hex: mintResult.signed_reveal_tx_hex,
+    inscription_id: mintResult.inscription_id,
+    postage: mintResult.postage,
+    secret: mintResult.secret,
+    transfer_txid: sendInscriptionTx.txid,
+    signed_transfer_tx_hex: sendInscriptionTx.signed_tx_hex,
   }
 }

@@ -1,0 +1,101 @@
+import type { BISWallet } from '../types/common'
+
+/**
+ * Defines the structure of the response returned by the sign function in the BISProvider interface. The SignResponse interface includes a transaction ID (txId) as a string and the signed PSBT (Partially Signed Bitcoin Transaction) in hexadecimal format as a string. This structure allows developers to easily access the results of the signing process, including the transaction ID for tracking purposes and the signed PSBT for further processing or broadcasting to the network.
+ *
+ * txId: A string representing the transaction ID (txid) of the signed transaction. This value is useful for tracking the transaction on the blockchain after it has been signed and potentially broadcasted.
+ * signedPsbtHex: A string containing the signed PSBT in hexadecimal format. This value can be used for further processing, such as broadcasting the transaction to the network or extracting information from the signed PSBT.
+ */
+export interface SignResponse {
+  txId: string
+  signedPsbtHex: string
+}
+
+/**
+ * Defines the type for the sign function used in the BISProvider interface. The SignFunction type specifies the parameters and return type for a function that signs a PSBT (Partially Signed Bitcoin Transaction) with specific handling for inscriptions. The function takes an unsigned PSBT in hexadecimal format, payment and ordinal addresses, indexes for inputs to sign, and optional parameters for tweaking and excluding certain indexes from signing. It returns a promise that resolves to an object containing the signed PSBT as a hexadecimal string and optionally the transaction ID (txid) if the transaction was broadcasted. This type definition ensures that any implementation of the sign function adheres to the expected structure and behavior when used within the BISProvider interface.
+ *
+ * @param unsignedPsbtHex The unsigned PSBT to be signed, provided in hexadecimal format as a string. This PSBT will be processed and sent to the provider for signing.
+ * @param paymentAddr The payment address associated with the PSBT, provided as a string. This address is used in the signing process to identify the relevant inputs and outputs in the PSBT.
+ * @param ordAddr The ordinal address associated with the PSBT, provided as a string. This address is used in the signing process to identify the relevant inputs and outputs in the PSBT, particularly for inscriptions.
+ * @param ordAddrIdxes An array of indexes for the ordinal address inputs that should be signed. This array specifies which inputs in the PSBT are associated with the ordinal address and should be included in the signing process.
+ * @param useTweakSignerIdxes An array of indexes for inputs that should use a tweaked signer during the signing process. This allows for specific inputs to be signed with additional security measures, if supported by the provider.
+ * @param noSignIdxes An array of indexes for inputs that should be excluded from signing. This allows for specific inputs to be left unsigned, which can be useful in certain scenarios where not all inputs should be signed.
+ *
+ * @returns A promise that resolves to an object containing the signed PSBT as a hexadecimal string and optionally the transaction ID (txid) if the transaction was broadcasted. This allows developers to use the signed PSBT for further processing or to track the transaction on the blockchain. If there is an error in signing the PSBT, the promise will be rejected with a descriptive error message.
+ */
+export type SignFunction = (
+  unsignedPsbtHex: string,
+  paymentAddr: string,
+  ordAddr: string,
+  ordAddrIdxes: number[],
+  useTweakSignerIdxes?: number[],
+  noSignIdxes?: number[],
+) => Promise<SignResponse>
+
+/**
+ * Defines the interface for a BISProvider, which includes methods for retrieving wallets, signing messages, and sending Bitcoin. The BISProvider interface specifies the structure that any wallet provider must implement to be compatible with the BIS Wallet Kit. This includes methods for getting the list of wallets, signing messages in both standard and deterministic ways, sending Bitcoin transactions, and signing PSBTs (Partially Signed Bitcoin Transactions). By adhering to this interface, different wallet providers can be integrated into the BIS Wallet Kit while ensuring a consistent API for developers using the kit.
+ */
+export interface BISProvider {
+  /**
+   * Checks the current network of the provider. The checkNetwork method is an optional function that, when implemented, allows the provider to verify and update its network status. This can be useful for providers that need to ensure they are connected to the correct Bitcoin network (e.g., mainnet, testnet) before performing operations such as signing messages or sending transactions. If the provider implements this method, it should return a promise that resolves when the network check is complete, allowing developers to handle any necessary updates or error handling related to network changes.
+   *
+   * @returns A promise that resolves when the network check is complete. This allows developers to handle any necessary updates or error handling related to network changes. If the provider does not implement this method, it can be safely ignored, and the provider will be assumed to be on the correct network by default.
+   */
+  checkNetwork?: () => Promise<void>
+
+  /**
+   * Retrieves the wallets associated with the provider. The getWallets method returns a promise that resolves to an array of BISWallet objects, each representing a wallet associated with the provider. This method allows developers to access the wallets available through the provider, enabling them to perform operations such as signing messages or sending transactions using those wallets.
+   *
+   * @returns A promise that resolves to an array of BISWallet objects, each representing a wallet associated with the provider. This allows developers to access the wallets available through the provider and perform various operations with them. If there is an error in retrieving the wallets, the promise will be rejected with an appropriate error message.
+   */
+  getWallets: () => Promise<BISWallet[]>
+
+  /**
+   * Signs a message using the provider. The signMessage method takes a message as a string and returns a promise that resolves to the signature of the message as a hexadecimal string. This method allows developers to sign messages using the wallets associated with the provider, enabling functionalities such as authentication or transaction signing. If there is an error in signing the message, the promise will be rejected with an appropriate error message.
+   *
+   * @param message The message to be signed as a string. This message will be sent to the provider for signing, and the resulting signature will be returned as a hexadecimal string.
+   * @returns A promise that resolves to the signature of the message as a hexadecimal string. This allows developers to use the signature for verification or other purposes. If there is an error in signing the message, the promise will be rejected with a descriptive error message.
+   */
+  signMessage: (message: string, walletType: 'ordinals' | 'payment', walletAddress: string) => Promise<string>
+
+  /**
+   * Signs a message using the provider with a deterministic signing method. The signMessageDeterministic method takes a message as a string and returns a promise that resolves to an object containing the signature of the message as a hexadecimal string and the address of the wallet used for signing. This method allows developers to sign messages in a deterministic way, which can be useful for certain applications where the same message should produce the same signature. If there is an error in signing the message, the promise will be rejected with an appropriate error message.
+   *
+   * @param message The message to be signed as a string. This message will be sent to the provider for signing using a deterministic method, and the resulting signature and signing address will be returned.
+   * @returns A promise that resolves to an object containing the signature of the message as a hexadecimal string and the address of the wallet used for signing. This allows developers to use the signature for verification or other purposes, along with the address of the signing wallet. If there is an error in signing the message, the promise will be rejected with a descriptive error message.
+   */
+  signMessageDeterministic: (message: string) => Promise<{ signature: string, address: string }>
+
+  /**
+   * Sends Bitcoin using the provider. The sendBTC method takes the amount of Bitcoin to send in satoshis and the address to which the Bitcoin should be sent, and returns a promise that resolves to the transaction ID (txid) of the sent transaction as a string. This method allows developers to send Bitcoin transactions using the wallets associated with the provider. If there is an error in sending the Bitcoin, such as if the sending request fails, the promise will be rejected with an appropriate error message.
+   *
+   * @param amountSats The amount of Bitcoin to send in satoshis. This value will be sent to the provider to initiate the transaction.
+   * @param toAddress The address to which the Bitcoin should be sent. This value will be sent to the provider along with the amount to initiate the transaction.
+   * @returns A promise that resolves to the transaction ID (txid) of the sent transaction as a string. This allows developers to track the transaction on the blockchain. If there is an error in sending the Bitcoin, the promise will be rejected with a descriptive error message.
+   */
+  sendBTC: (amountSats: string, toAddress: string) => Promise<string>
+  /**
+   * Signs a PSBT (Partially Signed Bitcoin Transaction) with specific handling for inscriptions using the provider. The signPSBT method takes an unsigned PSBT in hexadecimal format, a boolean indicating whether to broadcast the transaction after signing, and an array of input objects that specify which inputs in the PSBT should be signed along with any specific options for signing those inputs. It returns a promise that resolves to the signed PSBT as a hexadecimal string if broadcast is false, or the transaction ID (txid) of the broadcasted transaction if broadcast is true. This method allows developers to sign PSBTs with various input configurations and optionally broadcast them to the network. If there is an error in signing the PSBT or broadcasting it, the promise will be rejected with an appropriate error message.
+   *
+   * @param psbtBase64 The unsigned PSBT to be signed, provided in Base64 format as a string. This PSBT will be processed and sent to the provider for signing.
+   * @param broadcast A boolean indicating whether the signed PSBT should be broadcasted to the network after signing. If true, the function will attempt to push the signed PSBT to the network using the provider's method for broadcasting transactions.
+   * @param inputsToSign An array of input objects that specify which inputs in the PSBT should be signed, along with any specific options for signing those inputs. Each input object can include the address associated with the input, the indexes of the inputs to sign, and whether to use a tweaked signer for those inputs. This information is used to construct the signing request sent to the provider, allowing for flexible signing of PSBTs with various input configurations.
+   *
+   * @returns A promise that resolves to the signed PSBT as a hexadecimal string if broadcast is false, or the transaction ID (txid) of the broadcasted transaction if broadcast is true. This allows developers to use the signed PSBT for further processing or to track the transaction on the blockchain. If there is an error in signing the PSBT or broadcasting it, the promise will be rejected with a descriptive error message.
+   */
+  signPSBT: (psbtBase64: string, broadcast: boolean, inputsToSign: any[], message?: string) => Promise<string>
+
+  /**
+   * Signs a PSBT (Partially Signed Bitcoin Transaction) with specific handling for inscriptions using the provider. The sign function takes an unsigned PSBT in hexadecimal format, payment and ordinal addresses, indexes for inputs to sign, and optional parameters for tweaking and excluding certain indexes from signing. It constructs the necessary data for signing the PSBT with the provider and returns the signed transaction details, including the transaction ID and signed transaction hex. If the provider is not found or if the signing process fails, the function throws an error with an appropriate message.
+   *
+   * @param unsignedPsbtHex The unsigned PSBT to be signed, provided in hexadecimal format as a string. This PSBT will be processed and sent to the provider for signing.
+   * @param paymentAddr The payment address associated with the PSBT, provided as a string. This address is used in the signing process to identify the relevant inputs and outputs in the PSBT.
+   * @param ordAddr The ordinal address associated with the PSBT, provided as a string. This address is used in the signing process to identify the relevant inputs and outputs in the PSBT, particularly for inscriptions.
+   * @param ordAddrIdxes An array of indexes for the ordinal address inputs that should be signed. This array specifies which inputs in the PSBT are associated with the ordinal address and should be included in the signing process.
+   * @param useTweakSignerIdxes An array of indexes for inputs that should use a tweaked signer during the signing process. This allows for specific inputs to be signed with additional security measures, if supported by the provider.
+   * @param noSignIdxes An array of indexes for inputs that should be excluded from signing. This allows for specific inputs to be left unsigned, which can be useful in certain scenarios where not all inputs should be signed.
+   *
+   * @returns A promise that resolves to an object containing the signed PSBT as a hexadecimal string and optionally the transaction ID (txid) if the transaction was broadcasted. This allows developers to use the signed PSBT for further processing or to track the transaction on the blockchain. If there is an error in signing the PSBT, the promise will be rejected with a descriptive error message.
+   */
+  sign: SignFunction
+}

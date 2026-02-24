@@ -9,9 +9,9 @@ globalThis.addEventListener('message', async (e) => {
     const response = await fetch(`https://binaries.soliditylang.org/bin/${compilerVersion}`)
     const jsCode = await response.text()
 
-    const Module: any = {
+    const module: any = {
       onRuntimeInitialized() {
-        const wrapped = wrapper(Module)
+        const wrapped = wrapper(module)
         compiler = wrapped
 
         const output = JSON.parse(compiler.compile(JSON.stringify(sourceCode)))
@@ -19,12 +19,12 @@ globalThis.addEventListener('message', async (e) => {
       },
     }
 
-    // Inject the existing Module into the compiler context
-    const wrappedCode = `(function(Module) { ${jsCode}; return Module; })`
+    // Inject the existing module into the compiler context
+    const wrappedCode = `(function(module) { ${jsCode}; return module; })`
 
     // eslint-disable-next-line no-new-func
-    const runCompiler = new Function('Module', `return ${wrappedCode}`)()
-    runCompiler(Module)
+    const runCompiler = new Function('module', `return ${wrappedCode}`)()
+    runCompiler(module)
   }
   else {
     const output = JSON.parse(compiler.compile(JSON.stringify(sourceCode)))

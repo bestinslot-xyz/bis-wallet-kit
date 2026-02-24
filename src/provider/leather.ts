@@ -1,5 +1,5 @@
-import type { SignResponse } from '../core/providers'
 import type { BISWallet } from '../main'
+import type { BISProvider, SignResponse } from './api'
 import { Buffer } from 'node:buffer'
 import * as bitcoinjs from 'bitcoinjs-lib'
 import { getNetwork } from '../core/bis'
@@ -11,10 +11,7 @@ function isInstalled() {
   return typeof window.LeatherProvider !== 'undefined'
 }
 
-/**
- *
- */
-export async function getWallets(): Promise<BISWallet[]> {
+async function getWallets(): Promise<BISWallet[]> {
   // Check if Leather is available
   if (!window.LeatherProvider)
     throw new Error('Leather extension not found.')
@@ -37,24 +34,22 @@ export async function getWallets(): Promise<BISWallet[]> {
   return wallets
 }
 
-/**
- *
- * @param message
- * @param wallet_type
- */
-export async function signMessage(
+async function signMessage(
   message: string,
-  wallet_type: 'ordinals' | 'payment',
+  walletType: 'ordinals' | 'payment' | undefined,
 ): Promise<string> {
   // Check if Leather is available
   if (!window.LeatherProvider)
     throw new Error('Leather extension not found.')
 
+  if (!walletType)
+    throw new Error('Wallet type is required for signing messages with Leather.')
+
   try {
     // Request signature
     const response = await window.LeatherProvider.request('signMessage', {
       message,
-      paymentType: wallet_type === 'ordinals' ? 'p2tr' : 'p2wpkh',
+      paymentType: walletType === 'ordinals' ? 'p2tr' : 'p2wpkh',
       network: getNetwork(),
     })
 
@@ -64,11 +59,7 @@ export async function signMessage(
     throw new Error(`Failed to sign message: ${error.message}`)
   }
 }
-/**
- *
- * @param message
- */
-export async function signMessageDeterministic(
+async function signMessageDeterministic(
   message: string,
 ): Promise<{ signature: string, address: string }> {
   // Check if Leather is available
@@ -93,13 +84,7 @@ export async function signMessageDeterministic(
   }
 }
 
-// returns txid
-/**
- *
- * @param amountSats
- * @param toAddress
- */
-export async function sendBTC(amountSats: string, toAddress: string): Promise<string> {
+async function sendBTC(amountSats: string, toAddress: string): Promise<string> {
   // Check if Leather is available
   if (!window.LeatherProvider)
     throw new Error('Leather extension not found.')
@@ -122,13 +107,7 @@ export async function sendBTC(amountSats: string, toAddress: string): Promise<st
   }
 }
 
-/**
- *
- * @param psbtBase64
- * @param broadcast
- * @param inputsToSign
- */
-export async function signPSBT(psbtBase64: string, broadcast: boolean, inputsToSign: any[]) {
+async function signPSBT(psbtBase64: string, broadcast: boolean, inputsToSign: any[]) {
   // Check if Leather is available
   if (!window.LeatherProvider)
     throw new Error('Leather extension not found.')
@@ -149,41 +128,32 @@ export async function signPSBT(psbtBase64: string, broadcast: boolean, inputsToS
   return (response.result as unknown as { hex: string })?.hex ?? ''
 }
 
-/**
- *
- * @param unsigned_psbt_hex
- * @param payment_addr
- * @param ord_addr
- * @param ord_addr_idxes
- * @param _use_tweak_signer_idxes
- * @param no_sign_idxes
- */
-export async function sign(
-  unsigned_psbt_hex: string,
-  payment_addr: string,
-  ord_addr: string,
-  ord_addr_idxes: number[],
-  _use_tweak_signer_idxes?: number[], // not used in Leather
-  no_sign_idxes?: number[],
+async function sign(
+  unsignedPsbtHex: string,
+  paymentAddr: string,
+  ordAddr: string,
+  ordAddrIdxes: number[],
+  _useTweakSignerIdxes: number[] | undefined, // not used in Leather
+  noSignIdxes?: number[],
 ): Promise<SignResponse> {
-  const psbt = bitcoinjs.Psbt.fromHex(unsigned_psbt_hex)
+  const psbt = bitcoinjs.Psbt.fromHex(unsignedPsbtHex)
   const inscriptionToSign = []
   for (let i = 0; i < psbt.inputCount; i++) {
-    if (no_sign_idxes && no_sign_idxes.includes(i))
+    if (noSignIdxes && noSignIdxes.includes(i))
       continue
-    if (ord_addr_idxes.includes(i))
+    if (ordAddrIdxes.includes(i))
       continue
     inscriptionToSign.push(i)
   }
-  const signed = await signPSBT(hexToBase64(unsigned_psbt_hex), false, [
+  const signed = await signPSBT(hexToBase64(unsignedPsbtHex), false, [
     {
-      address: payment_addr,
+      address: paymentAddr,
       signingIndexes: inscriptionToSign,
       sigHash: bitcoinjs.Transaction.SIGHASH_DEFAULT,
     },
     {
-      address: ord_addr,
-      signingIndexes: ord_addr_idxes,
+      address: ordAddr,
+      signingIndexes: ordAddrIdxes,
       sigHash: bitcoinjs.Transaction.SIGHASH_DEFAULT,
     },
   ])
@@ -191,7 +161,7 @@ export async function sign(
   const signedPsbt = bitcoinjs.Psbt.fromHex(signed)
   try {
     for (let i = 0; i < signedPsbt.inputCount; i++) {
-      if (no_sign_idxes && no_sign_idxes.includes(i))
+      if (noSignIdxes && noSignIdxes.includes(i))
         continue
       signedPsbt.finalizeInput(i)
     }
@@ -205,7 +175,16 @@ export async function sign(
   const signedTxHex = signedTx.toHex()
 
   return {
-    txid: signedTx.getId(),
-    signed_tx_hex: signedTxHex,
+    txId: signedTx.getId(),
+    signedPsbtHex: signedTxHex,
   }
+}
+
+export const LEATHER: BISProvider = {
+  getWallets,
+  signMessage,
+  signMessageDeterministic,
+  sendBTC,
+  signPSBT,
+  sign,
 }

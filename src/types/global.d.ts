@@ -8,7 +8,6 @@ declare global {
       request: RequestFn
       listen: ListenFn
     }
-    OrangeBitcoinProvider?: any
     magicEden?: any
     okxwallet?: any
     XverseProviders?: any
