@@ -47,7 +47,7 @@ pnpm publish
 ## 📃 Examples
 
 ```ts
-import { modal, wallet } from '@bis/wallet-kit'
+import { modal, wallet } from '@bestinslot/wallet-kit'
 
 // Connect wallet
 try {
