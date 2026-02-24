@@ -31,6 +31,7 @@ export type {
   BISWalletPurpose,
   ConnectCallbacks,
   ModalTheme,
+  PaymentOpts,
 } from './types/common'
 
 // ---- Re-exports ----
