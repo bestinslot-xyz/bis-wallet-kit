@@ -1272,17 +1272,17 @@ async function buildPsbtFromTx(
     const utxo = `${input.hash.toString('hex')}:${input.index}`
     let utxo_obj = null
     let signer_wallet = payer_wallet
-    for (const utxo_obj_ of cardinalUtxos) {
-      if (utxo_obj_.utxo === utxo) {
-        utxo_obj = utxo_obj_
+    for (const cardinalUtxoObj of cardinalUtxos) {
+      if (cardinalUtxoObj.utxo === utxo) {
+        utxo_obj = cardinalUtxoObj
         break
       }
     }
     if (utxo_obj == null && force_in_utxos) {
-      for (const utxo_obj_ of force_in_utxos) {
-        if (utxo_obj_.utxo === utxo) {
-          utxo_obj = utxo_obj_
-          signer_wallet = utxo_obj_.wallet
+      for (const forcedInUtxoObj of force_in_utxos) {
+        if (forcedInUtxoObj.utxo === utxo) {
+          utxo_obj = forcedInUtxoObj
+          signer_wallet = forcedInUtxoObj.wallet
           break
         }
       }
@@ -1730,7 +1730,7 @@ async function build_commit_tx_with_parent(
 
 /**
  *
- * @param utxos_
+ * @param utxoArray
  * @param force_in_utxos
  * @param payer_wallet
  * @param output_wallets
@@ -1739,7 +1739,7 @@ async function build_commit_tx_with_parent(
  * @param fee_rate
  */
 export function build_transaction_multi_output(
-  utxos_: UtxoInfo[],
+  utxoArray: UtxoInfo[],
   force_in_utxos: UtxoInfoWithWallet[],
   payer_wallet: WalletInfo,
   output_wallets: WalletInfo[],
@@ -1749,7 +1749,7 @@ export function build_transaction_multi_output(
 ): BuildTransactionResult {
   if (output_wallets.length !== amounts.length)
     throw new Error('output_wallets and amounts must have the same length')
-  const utxos = utxos_.slice()
+  const utxos = utxoArray.slice()
 
   utxos.sort((a: UtxoInfo, b: UtxoInfo) => a.value - b.value)
   const inputs = []
