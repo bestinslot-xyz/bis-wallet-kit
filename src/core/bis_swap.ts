@@ -10,6 +10,7 @@ import { sha256 } from '@noble/hashes/sha2.js'
 import * as bitcoinjs from 'bitcoinjs-lib'
 import * as ethers from 'ethers'
 import { getBitcoinNetwork } from '../lib/bitcoin'
+import { compressSmartContractData } from '../lib/brc20'
 import {
   addLiquidityRequest,
   removeLiquidityRequest,
@@ -19,17 +20,16 @@ import {
   unwrapRequest,
   withdrawRequest,
 } from '../lib/uniswap_ops'
-import { compressSmartContractData } from './brc20'
+import { InscriptionDetails } from '../types/inscription'
+import { WalletInfo } from '../types/wallet'
 import { clearExtraUtxos, saveExtraUtxos, utxoOutputTypeFromOutputScript } from './helpers'
 import {
-  InscriptionDetails,
   mintAll,
   mintAllCheckFees,
   mintWithExtraInputInCommitAll,
   mintWithExtraInputInCommitFeeRate,
   sendInscriptionToOpReturnWithExtraInputsAndExtraOutputAll,
   sendInscriptionToOpReturnWithExtraInputsAndExtraOutputFeeRate,
-  WalletInfo,
 } from './mint'
 import {
   getOrdinalsWallet,
@@ -1410,9 +1410,9 @@ export async function createAndBroadcastDepositOrder(
       true,
       signFn,
     )
-    depositCommitTxHex = depositMintRes.signed_commit_tx_hex
-    depositRevealTxHex = depositMintRes.signed_reveal_tx_hex
-    depositInscriptionId = depositMintRes.inscription_id
+    depositCommitTxHex = depositMintRes.signedCommitTxHex
+    depositRevealTxHex = depositMintRes.signedRevealTxHex
+    depositInscriptionId = depositMintRes.inscriptionId
     const depositSatpoint = `${depositInscriptionId.split('i')[0]}:0:0`
     depositSecret = depositMintRes.secret
     extraTxHexes.push(depositCommitTxHex!, depositRevealTxHex!)
@@ -1447,9 +1447,9 @@ export async function createAndBroadcastDepositOrder(
   const depositSendToOpReturnTxid = sendToOpreturnRes.txId
 
   const toSendForBroadcast: BroadcastDepositOrderRequest = {
-    commit_txid: depositMintRes.commit_txid,
+    commit_txid: depositMintRes.commitTxId,
     commit_txhex: depositCommitTxHex,
-    reveal_txid: depositMintRes.reveal_txid,
+    reveal_txid: depositMintRes.revealTxId,
     reveal_txhex: depositRevealTxHex,
     send_to_opreturn_txid: depositSendToOpReturnTxid,
     send_to_opreturn_txhex: depositSendToOpReturnTxHex,
@@ -2035,9 +2035,9 @@ export async function createAndBroadcastWrapOrder(
       true,
       signFn,
     )
-    const depositCommitTxHex = depositMintRes.signed_commit_tx_hex
-    const depositRevealTxHex = depositMintRes.signed_reveal_tx_hex
-    const depositInscriptionId = depositMintRes.inscription_id
+    const depositCommitTxHex = depositMintRes.signedCommitTxHex
+    const depositRevealTxHex = depositMintRes.signedRevealTxHex
+    const depositInscriptionId = depositMintRes.inscriptionId
     const depositSatpoint = `${depositInscriptionId.split('i')[0]}:0:0`
     const depositSecret = depositMintRes.secret
     let sendToOpreturnRes = null
@@ -2084,9 +2084,9 @@ export async function createAndBroadcastWrapOrder(
     const depositSendToOpReturnTxid = sendToOpreturnRes.txId
 
     const toSendForBroadcast: BroadcastWrapOrderRequest = {
-      commit_txid: depositMintRes.commit_txid,
+      commit_txid: depositMintRes.commitTxId,
       commit_txhex: depositCommitTxHex,
-      reveal_txid: depositMintRes.reveal_txid,
+      reveal_txid: depositMintRes.revealTxId,
       reveal_txhex: depositRevealTxHex,
       send_to_opreturn_txid: depositSendToOpReturnTxid,
       send_to_opreturn_txhex: depositSendToOpReturnTxHex,

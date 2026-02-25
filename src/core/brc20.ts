@@ -1,21 +1,19 @@
 import { Buffer } from 'node:buffer'
-import { encode as nadaEncode } from '@bestinslot/nada'
-import { init as initZstd, compress as zstdCompress } from '@bokuweb/zstd-wasm'
 import { Buff } from '@cmdcode/buff-utils'
 import { Script } from '@cmdcode/tapscript'
-import { encode as base64Encode } from 'base64-arraybuffer'
 import * as bitcoinjs from 'bitcoinjs-lib'
 import { getBitcoinNetwork } from '../lib/bitcoin'
+import { compressSmartContractData } from '../lib/brc20'
 import { getWeb3 } from '../lib/web3'
+import { InscriptionDetails } from '../types/inscription'
+import { WalletInfo } from '../types/wallet'
 import { broadcastTxes, clearExtraUtxos, saveExtraUtxos } from './helpers'
 import {
-  InscriptionDetails,
   mintAll,
   mintAllPaymentWallet,
   sendInscriptionAll,
   sendInscriptionInPaymentWalletToOpReturnAll,
   sendInscriptionToOpReturnAll,
-  WalletInfo,
 } from './mint'
 import { getSignFn } from './providers'
 import { getWalletInfo } from './store'
@@ -160,98 +158,6 @@ function decodeTupleComponents(components: any[], decoded: any) {
   })
 
   return result
-}
-
-/**
- * Decodes a responseHex from a contract call using function name and ABI.
- */
-interface TypedValue {
-  type: string
-  value: string | number | boolean | TypedValue | TypedValue[] | { [key: string]: TypedValue }
-}
-
-export type DecodedFnResponse = Record<string, TypedValue>
-
-/**
- * Decodes a response hex string from a contract function call using the provided ABI and function name. It returns an object
- * mapping output parameter names to their types and decoded values.
- *
- * @param abi - The ABI of the contract.
- * @param functionName - The name of the function whose response is being decoded.
- * @param responseHex - The hex string response from the contract function call to decode.
- * @returns  An object mapping output parameter names to their types and decoded values.
- */
-export function decodeFunctionResponseWithTypes(
-  abi: any,
-  functionName: string,
-  responseHex: string,
-) {
-  const w3 = getWeb3()
-
-  const fnAbi = abi.find((item: any) => item.name === functionName && item.type === 'function')
-
-  if (!fnAbi || !fnAbi.outputs) {
-    throw new Error(`Function "${functionName}" not found or has no outputs.`)
-  }
-
-  const outputTypes = fnAbi.outputs.map(buildType)
-  const decoded = w3.eth.abi.decodeParameters(outputTypes, responseHex)
-
-  const result: DecodedFnResponse = {}
-  fnAbi.outputs.forEach((outDef: any, i: any) => {
-    const name = outDef.name || `output${i}`
-    const value = decoded[i]
-    result[name] = decodeValue(outDef, value)
-  })
-
-  return result
-}
-
-/**
- * Compresses the input hex string using both Zstd and Nada compression algorithms, and returns the shortest result encoded in base64 without padding.
- *
- * @param inputHex - The input data in hexadecimal string format to be compressed.
- * @returns A base64 encoded string representing the compressed data, prefixed with a byte indicating the compression method used (0x00 for uncompressed, 0x01 for Nada, 0x02 for Zstd), and without any padding characters.
- */
-export async function compressSmartContractData(inputHex: string): Promise<string> {
-  await initZstd() // Needed before using zstdCompress
-
-  // Remove '0x' prefix if present
-  if (inputHex.startsWith('0x')) {
-    inputHex = inputHex.slice(2)
-  }
-
-  const originalBytes = Buff.hex(inputHex).to_bytes()
-
-  // 1. Run Zstd compression and store the raw result
-  const zstdResult = zstdCompress(new Uint8Array(originalBytes), 22)
-
-  // 2. Check if the result is just zeros (a sign of failure)
-  const isZstdResultInvalid = zstdResult.length > 0 && zstdResult.every(byte => byte === 0)
-
-  // 3. Prepare the list of compression variants
-  const uncompressed = [0x00, ...Array.from(originalBytes)]
-  const nadaCompressed = [0x01, ...nadaEncode(originalBytes)]
-  const allVariants = [uncompressed, nadaCompressed]
-
-  // 4. Only add the Zstd result if it's valid
-  if (!isZstdResultInvalid) {
-    const zstdCompressed = [0x02, ...Array.from(zstdResult)]
-    allVariants.push(zstdCompressed)
-  }
-
-  // 5. Find the shortest variant
-  const shortest = allVariants.reduce((a, b) => (a.length <= b.length ? a : b))
-
-  // Convert to base64
-  // Use Uint8Array.from to ensure we are working with a Uint8Array
-  const typedArray = Uint8Array.from(shortest)
-  const base64Encoded = base64Encode(typedArray.buffer)
-
-  // Remove suffix '=', could be more than one
-  const base64WithoutPadding = base64Encoded.replace(/=+$/, '')
-
-  return base64WithoutPadding
 }
 
 /**
@@ -691,12 +597,12 @@ async function callSmartContractFromPaymentWallet(
     true,
     signFn,
   )
-  const inscriptionId = mintResult.inscription_id
+  const inscriptionId = mintResult.inscriptionId
   const satpoint = `${inscriptionId.split('i')[0]}:0:0`
   let sendInscriptionTx = null
   try {
     saveExtraUtxos(
-      [mintResult.signed_commit_tx_hex, mintResult.signed_reveal_tx_hex],
+      [mintResult.signedCommitTxHex, mintResult.signedRevealTxHex],
       [inscriptionId, satpoint],
     )
 
@@ -725,11 +631,11 @@ async function callSmartContractFromPaymentWallet(
 
   if (dryRun) {
     return {
-      commit_txid: mintResult.commit_txid,
-      signed_commit_tx_hex: mintResult.signed_commit_tx_hex,
-      reveal_txid: mintResult.reveal_txid,
-      signed_reveal_tx_hex: mintResult.signed_reveal_tx_hex,
-      inscription_id: mintResult.inscription_id,
+      commit_txid: mintResult.commitTxId,
+      signed_commit_tx_hex: mintResult.signedCommitTxHex,
+      reveal_txid: mintResult.revealTxId,
+      signed_reveal_tx_hex: mintResult.signedRevealTxHex,
+      inscription_id: mintResult.inscriptionId,
       postage: mintResult.postage,
       secret: mintResult.secret,
       send_to_op_return_txid: sendInscriptionTx.txId,
@@ -738,17 +644,17 @@ async function callSmartContractFromPaymentWallet(
   }
 
   const txes = [
-    mintResult.signed_commit_tx_hex,
-    mintResult.signed_reveal_tx_hex,
+    mintResult.signedCommitTxHex,
+    mintResult.signedRevealTxHex,
     sendInscriptionTx.signedPsbtHex,
   ]
   await broadcastTxes(txes)
   return {
-    commit_txid: mintResult.commit_txid,
-    signed_commit_tx_hex: mintResult.signed_commit_tx_hex,
-    reveal_txid: mintResult.reveal_txid,
-    signed_reveal_tx_hex: mintResult.signed_reveal_tx_hex,
-    inscription_id: mintResult.inscription_id,
+    commit_txid: mintResult.commitTxId,
+    signed_commit_tx_hex: mintResult.signedCommitTxHex,
+    reveal_txid: mintResult.revealTxId,
+    signed_reveal_tx_hex: mintResult.signedRevealTxHex,
+    inscription_id: mintResult.inscriptionId,
     postage: mintResult.postage,
     secret: mintResult.secret,
     send_to_op_return_txid: sendInscriptionTx.txId,

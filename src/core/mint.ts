@@ -1,15 +1,15 @@
+import type { APIOrdinalUtxoInfo } from '../core/helpers'
 import type { SignFunction, SignResponse } from '../provider/api'
 import type { PaymentOpts } from '../types/common'
-import type { APIOrdinalUtxoInfo } from './helpers'
+import type { InscribeFees, InscribeResult } from '../types/inscription'
 import { Buffer } from 'node:buffer'
 import { Buff } from '@cmdcode/buff-utils'
 import {
-  get_pubkey, // Generate a secp256k1 public key for a given secret ke
+  get_pubkey, // Generate a secp256k1 public key for a given secret key
   get_seckey, // Convert a number or byte value into a secp256k1 secret key.
 } from '@cmdcode/crypto-tools/keys'
 import { Address, Script, Signer, Tap, Tx } from '@cmdcode/tapscript'
 import * as bitcoinjs from 'bitcoinjs-lib'
-import { getBitcoinNetwork } from '../lib/bitcoin'
 import {
   broadcastTxes,
   clearExtraUtxos,
@@ -20,9 +20,12 @@ import {
   txHexByIdCache,
   validateTxes,
   witnessStackToScriptWitness,
-} from './helpers'
-import { getOrdinalsWallet, getPaymentWallet, getSignFn } from './providers'
-import { getWalletInfo } from './store'
+} from '../core/helpers'
+import { getOrdinalsWallet, getPaymentWallet, getSignFn } from '../core/providers'
+import { getWalletInfo } from '../core/store'
+import { getBitcoinNetwork } from '../lib/bitcoin'
+import { InscriptionDetails } from '../types/inscription'
+import { WalletInfo } from '../types/wallet'
 
 const ENABLE_RBF_NO_LOCKTIME = 0xFFFFFFFD
 
@@ -37,212 +40,6 @@ const DUST_VALUE_MAX = Math.max(
   DUST_VALUE_P2TR,
 )
 
-/**
- * Class representing the details of an inscription to be minted. This class is used to encapsulate
- * the various properties of an inscription, such as its MIME type, metadata, metaprotocol, content
- * encoding, delegate, and file data. Each property is optional and can be null. The constructor
- * validates the types of the properties to ensure they are either Buff instances or null.
- *
- * @class InscriptionDetails
- *
- * @property {Buff|null} mime_type - The MIME type of the inscription content, or null if not specified.
- * @property {Buff|null} metadata - Additional metadata associated with the inscription, or null if not specified.
- * @property {Buff|null} metaprotocol - The metaprotocol information for the inscription, or null if not specified.
- * @property {Buff|null} content_encoding - The content encoding used for the inscription, or null if not specified.
- * @property {Buff|null} delegate - The delegate information for the inscription, or null if not specified.
- * @property {Buff|null} file_data - The actual file data to be inscribed, or null if not specified.
- */
-export class InscriptionDetails {
-  mimeType: Buff | null
-  metadata: Buff | null
-  metaprotocol: Buff | null
-  contentEncoding: Buff | null
-  delegate: Buff | null
-  data: Buff | null
-
-  /**
-   * Creates an instance of InscriptionDetails.
-   *
-   * @param {Buff|null} mimeType - The MIME type of the inscription content, or null if not specified.
-   * @param {Buff|null} metadata - Additional metadata associated with the inscription, or null if not specified.
-   * @param {Buff|null} metaprotocol - The metaprotocol information for the inscription, or null if not specified.
-   * @param {Buff|null} contentEncoding - The content encoding used for the inscription, or null if not specified.
-   * @param {Buff|null} delegate - The delegate information for the inscription, or null if not specified.
-   * @param {Buff|null} data - The actual file data to be inscribed, or null if not specified.
-   * @throws {Error} Throws an error if any of the parameters are not of type Buff or null.
-   * @returns {InscriptionDetails} An instance of the InscriptionDetails class.
-   * @example
-   *  const inscriptionDetails = new InscriptionDetails(
-   *    Buff.from('text/plain'),
-   *    Buff.from('{"name": "My Inscription", "description": "This is an example inscription."}'),
-   *    Buff.from('my-metaprotocol'),
-   *    Buff.from('utf-8'),
-   *    Buff.from('delegate-info'),
-   *    Buff.from('file data to be inscribed'),
-   *  );
-   */
-  constructor(
-    mimeType: Buff | null,
-    metadata: Buff | null,
-    metaprotocol: Buff | null,
-    contentEncoding: Buff | null,
-    delegate: Buff | null,
-    data: Buff | null,
-  ) {
-    if (mimeType != null && !(mimeType instanceof Buff)) {
-      throw new Error('mimeType must be of type Buff or null')
-    }
-    if (metadata != null && !(metadata instanceof Buff)) {
-      throw new Error('metadata must be of type Buff or null')
-    }
-    if (metaprotocol != null && !(metaprotocol instanceof Buff)) {
-      throw new Error('metaprotocol must be of type Buff or null')
-    }
-    if (contentEncoding != null && !(contentEncoding instanceof Buff)) {
-      throw new Error('contentEncoding must be of type Buff or null')
-    }
-    if (delegate != null && !(delegate instanceof Buff)) {
-      throw new Error('delegate must be of type Buff or null')
-    }
-    if (data != null && !(data instanceof Buff)) {
-      throw new Error('data must be of type Buff or null')
-    }
-
-    this.mimeType = mimeType
-    this.metadata = metadata
-    this.metaprotocol = metaprotocol
-    this.contentEncoding = contentEncoding
-    this.delegate = delegate
-    this.data = data
-  }
-}
-
-/**
- * Helper function to create an InscriptionDetails instance for a JSON file. This function takes a Buff
- * containing JSON data and returns an InscriptionDetails instance with the appropriate MIME type, content
- * encoding, and file data set. The metadata, metaprotocol, and delegate properties are set to null.
- *
- * @param {Buff} jsonData - A Buff containing the JSON data to be inscribed.
- * @returns {InscriptionDetails} An instance of the InscriptionDetails class with the JSON data set for inscription.
- */
-export function jsonInscription(jsonData: Buff): InscriptionDetails {
-  return new InscriptionDetails(Buff.str('application/json'), null, null, null, null, jsonData)
-}
-
-/**
- * Helper function to create an InscriptionDetails instance for a text file. This function takes a string
- * containing the text data and returns an InscriptionDetails instance with the appropriate MIME type, content
- * encoding, and file data set. The metadata, metaprotocol, and delegate properties are set to null.
- *
- * @param {string} text - A string containing the text data to be inscribed.
- * @returns {InscriptionDetails} An instance of the InscriptionDetails class with the text data set for inscription.
- */
-export function textInscription(text: string): InscriptionDetails {
-  return new InscriptionDetails(Buff.str('text/plain'), null, null, null, null, Buff.str(text))
-}
-
-/**
- * Helper function to create an InscriptionDetails instance for a delegated inscription. This function takes an inscription ID
- * and returns an InscriptionDetails instance with the delegate property set to the provided inscription ID. The MIME type, metadata,
- * metaprotocol, content encoding, and file data properties are set to null.
- *
- * @param inscriptionId - A string representing the inscription ID to delegate to.
- * @returns An instance of the InscriptionDetails class with the delegate property set.
- */
-export function delegateInscription(inscriptionId: string): InscriptionDetails {
-  return new InscriptionDetails(null, null, null, null, Buff.str(inscriptionId), null)
-}
-
-/**
- * Class representing wallet information for a Bitcoin address. This class is used to encapsulate the properties of a wallet, such as its address,
- * redeem script, whether it is an OP_RETURN output, the output script, and the public key. The constructor validates the properties and sets the output
- * script based on the provided address and output script. The class also includes a method to retrieve the redeem script, which can be derived from the public key if not provided.
- *
- * @class WalletInfo
- * @property {string|null|undefined} addr - The Bitcoin address associated with the wallet, or null/undefined if not specified.
- * @property {Buffer|null} redeemScript - The redeem script for the wallet, or null if not specified.
- * @property {boolean} is_op_return - A boolean indicating whether the wallet is an OP_RETURN output.
- * @property {Buffer} outputScript - The output script for the wallet, derived from the address or provided directly.
- * @property {string|null} publicKey - The public key associated with the wallet, or null if not specified.
- */
-export class WalletInfo {
-  addr: string | null | undefined
-  redeemScript: Buffer | null
-  isOpReturn: boolean
-  outputScript: Buffer
-  publicKey: string | null
-
-  /**
-   * Creates an instance of WalletInfo.
-   *
-   * @param {boolean} isOpReturn - A boolean indicating whether the wallet is an OP_RETURN output.
-   * @param {Buffer|null} outputScript - The output script for the wallet, or null if it should be derived from the address.
-   * @param {string|null|undefined} addr - The Bitcoin address associated with the wallet, or null/undefined if not specified.
-   * @param {Buffer|null} redeemScript - The redeem script for the wallet, or null if not specified.
-   * @param {string|null} publicKey - The public key associated with the wallet, or null if not specified.
-   */
-  constructor(
-    isOpReturn: boolean,
-    outputScript: Buffer | null,
-    addr: string | null | undefined,
-    redeemScript: Buffer | null,
-    publicKey: string | null,
-  ) {
-    this.addr = addr
-    this.redeemScript = redeemScript
-    this.isOpReturn = isOpReturn
-    this.publicKey = publicKey
-
-    // Set outputScript based on conditions
-    if (addr != null && outputScript == null) {
-      this.outputScript = Buffer.from(Script.encode(Address.toScriptPubKey(addr), false))
-    }
-    else {
-      if (outputScript == null) {
-        throw new Error('outputScript and addr cannot be null')
-      }
-      this.outputScript = outputScript
-    }
-  }
-
-  /**
-   * Get the redeem script for the wallet. If the redeem script is already set, it returns the cached redeem script. If not, it derives the redeem script from the public key.
-   *
-   * @returns {Buffer} The redeem script for the wallet.
-   */
-  getRedeemScript(): Buffer {
-    // Return the cached redeemScript if it exists
-    if (this.redeemScript != null) {
-      return this.redeemScript
-    }
-
-    // Derive redeemScript from publicKey
-    if (this.publicKey == null) {
-      throw new Error('publicKey is required to derive redeemScript')
-    }
-
-    const network = getBitcoinNetwork()
-
-    const pubKeyBuffer = Buffer.from(this.publicKey, 'hex')
-    const p2wpkh = bitcoinjs.payments.p2wpkh({
-      pubkey: pubKeyBuffer,
-      network,
-    })
-
-    const p2sh = bitcoinjs.payments.p2sh({
-      redeem: p2wpkh,
-      network,
-    })
-
-    if (!p2sh.redeem?.output) {
-      throw new Error('Failed to derive redeemScript')
-    }
-
-    return p2sh.redeem.output
-  }
-}
-
-// get_secret
 function createSecretToken(): string {
   const array = new Uint8Array(32)
   crypto.getRandomValues(array)
@@ -373,17 +170,6 @@ function calculateAdditionalFee(scriptType: string, feeRate: number): number {
 }
 
 const TO_X_ONLY = (pubKey: Buffer) => (pubKey.length === 32 ? pubKey : pubKey.slice(1, 33))
-
-/**
- * Inscribe fees for a single inscription, including total fee, commit fee, reveal fee, postage, and secret.
- */
-export interface InscribeFees {
-  totalFee: number
-  commitFee: number
-  revealFee: number
-  postage: number
-  secret: string
-}
 
 async function getMintMultipleFeeAll(
   inscriptionDetailsArray: InscriptionDetails[],
@@ -1288,7 +1074,7 @@ async function buildPsbtFromTx(
       try {
         tx.setWitness(Number.parseInt(output), [])
       }
-      catch {}
+      catch { }
     }
 
     if (utxoObj.script_type === 'pubkeyhash') {
@@ -2980,15 +2766,6 @@ export async function mintAll(
   }
 }
 
-interface InscribeResult {
-  commit_txid: string
-  signed_commit_tx_hex: string
-  reveal_txid: string
-  signed_reveal_tx_hex: string
-  inscription_id: string
-  postage: number
-  secret: string
-}
 /**
  * Mints an inscription using the connected payment wallet for both the commit and reveal transactions. This function is a wrapper around the mintAll function that simplifies the minting process when the user wants to use the same wallet for both transactions. It retrieves the connected wallets, builds and signs the transactions, validates them, and broadcasts them to the network. If dryRun is true, it returns the signed transaction hex without broadcasting.
  *
@@ -3073,11 +2850,11 @@ export async function mintAllPaymentWallet(
 
   if (dryRun) {
     return {
-      commit_txid: signedCommitTx.txId,
-      signed_commit_tx_hex: signedCommitTx.signedPsbtHex,
-      reveal_txid: revealTx.txId,
-      signed_reveal_tx_hex: revealTx.signedPsbtHex,
-      inscription_id: `${revealTx.txId}i0`,
+      commitTxId: signedCommitTx.txId,
+      signedCommitTxHex: signedCommitTx.signedPsbtHex,
+      revealTxId: revealTx.txId,
+      signedRevealTxHex: revealTx.signedPsbtHex,
+      inscriptionId: `${revealTx.txId}i0`,
       postage,
       secret,
     }
@@ -3085,11 +2862,11 @@ export async function mintAllPaymentWallet(
 
   await broadcastTxes([signedCommitTx.signedPsbtHex, revealTx.signedPsbtHex])
   return {
-    commit_txid: signedCommitTx.txId,
-    signed_commit_tx_hex: signedCommitTx.signedPsbtHex,
-    reveal_txid: revealTx.txId,
-    signed_reveal_tx_hex: revealTx.signedPsbtHex,
-    inscription_id: `${revealTx.txId}i0`,
+    commitTxId: signedCommitTx.txId,
+    signedCommitTxHex: signedCommitTx.signedPsbtHex,
+    revealTxId: revealTx.txId,
+    signedRevealTxHex: revealTx.signedPsbtHex,
+    inscriptionId: `${revealTx.txId}i0`,
     postage,
     secret,
   }
@@ -3501,22 +3278,22 @@ export async function mintWithParentAll(
 
   if (dryRun) {
     return {
-      commit_txid: signedCommitTx.txId,
-      signed_commit_tx_hex: signedCommitTx.signedPsbtHex,
-      reveal_txid: signedRevealTx.txId,
-      signed_reveal_tx_hex: signedRevealTx.signedPsbtHex,
-      inscription_id: `${signedRevealTx.txId}i0`,
+      commitTxId: signedCommitTx.txId,
+      signedCommitTxHex: signedCommitTx.signedPsbtHex,
+      revealTxId: signedRevealTx.txId,
+      signedRevealTxHex: signedRevealTx.signedPsbtHex,
+      inscriptionId: `${signedRevealTx.txId}i0`,
       postage,
       secret,
     }
   }
   await broadcastTxes([signedCommitTx.signedPsbtHex, signedRevealTx.signedPsbtHex])
   return {
-    commit_txid: signedCommitTx.txId,
-    signed_commit_tx_hex: signedCommitTx.signedPsbtHex,
-    reveal_txid: signedRevealTx.txId,
-    signed_reveal_tx_hex: signedRevealTx.signedPsbtHex,
-    inscription_id: `${signedRevealTx.txId}i0`,
+    commitTxId: signedCommitTx.txId,
+    signedCommitTxHex: signedCommitTx.signedPsbtHex,
+    revealTxId: signedRevealTx.txId,
+    signedRevealTxHex: signedRevealTx.signedPsbtHex,
+    inscriptionId: `${signedRevealTx.txId}i0`,
     postage,
     secret,
   }
@@ -3841,11 +3618,11 @@ export async function mintWithExtraInputInCommitAll(
 
   if (dryRun) {
     return {
-      commit_txid: signedCommitTx.txId,
-      signed_commit_tx_hex: signedCommitTx.signedPsbtHex,
-      reveal_txid: revealTx.txId,
-      signed_reveal_tx_hex: revealTx.signedPsbtHex,
-      inscription_id: `${revealTx.txId}i0`,
+      commitTxId: signedCommitTx.txId,
+      signedCommitTxHex: signedCommitTx.signedPsbtHex,
+      revealTxId: revealTx.txId,
+      signedRevealTxHex: revealTx.signedPsbtHex,
+      inscriptionId: `${revealTx.txId}i0`,
       postage,
       secret,
     }
@@ -3853,11 +3630,11 @@ export async function mintWithExtraInputInCommitAll(
 
   await broadcastTxes([signedCommitTx.signedPsbtHex, revealTx.signedPsbtHex])
   return {
-    commit_txid: signedCommitTx.txId,
-    signed_commit_tx_hex: signedCommitTx.signedPsbtHex,
-    reveal_txid: revealTx.txId,
-    signed_reveal_tx_hex: revealTx.signedPsbtHex,
-    inscription_id: `${revealTx.txId}i0`,
+    commitTxId: signedCommitTx.txId,
+    signedCommitTxHex: signedCommitTx.signedPsbtHex,
+    revealTxId: revealTx.txId,
+    signedRevealTxHex: revealTx.signedPsbtHex,
+    inscriptionId: `${revealTx.txId}i0`,
     postage,
     secret,
   }

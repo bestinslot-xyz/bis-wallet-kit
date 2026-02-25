@@ -20,8 +20,10 @@ export * as balances from './core/balances'
 
 // ---- Types ----
 export type { BISSwapWalletInfo as SwapWalletInfo } from './core/store'
-
 export type { LocalWalletSource, LocalWalletType } from './provider/local'
+export { InscriptionDetails } from './types/inscription'
+export type { InscribeFees, InscribeResult } from './types/inscription'
+export { WalletInfo } from './types/wallet'
 
 export type {
   BISNetwork,
