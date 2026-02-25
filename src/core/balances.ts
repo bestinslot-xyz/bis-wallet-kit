@@ -60,7 +60,10 @@ export async function getBaseBRC20BalanceOfAddress(
  *
  * @returns {Promise<bigint>} A promise that resolves to a bigint representing the total balance in 18 decimals for the specified Bitcoin address and BRC-20 token address.
  */
-export async function getBRC20ProgBalanceOfAddress(bitcoinAddress: string, tokenAddress: string): Promise<bigint> {
+export async function getBRC20ProgBalanceOfAddress(
+  bitcoinAddress: string,
+  tokenAddress: string,
+): Promise<bigint> {
   const url = getSwapBackendUrl('check_brc20_balance')
   const body = {
     ordinal_address: bitcoinAddress,

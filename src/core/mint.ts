@@ -1074,7 +1074,7 @@ async function buildPsbtFromTx(
       try {
         tx.setWitness(Number.parseInt(output), [])
       }
-      catch { }
+      catch {}
     }
 
     if (utxoObj.script_type === 'pubkeyhash') {

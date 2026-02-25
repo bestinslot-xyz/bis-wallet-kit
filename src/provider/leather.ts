@@ -34,10 +34,7 @@ async function getWallets(): Promise<BISWallet[]> {
   return wallets
 }
 
-async function signMessage(
-  message: string,
-  walletType: BISWalletPurpose,
-): Promise<string> {
+async function signMessage(message: string, walletType: BISWalletPurpose): Promise<string> {
   // Check if Leather is available
   if (!window.LeatherProvider)
     throw new Error('Leather extension not found.')

@@ -123,10 +123,7 @@ export function getSignFn(provider: BISWalletProvider): SignFunction {
  * @returns A promise that resolves to the signature string if the signing and verification processes are successful, or throws an error if there is a failure in signing or if the signature verification fails.
  * @throws An error if there is a failure in signing the message or if the signature verification fails, with a message indicating the reason for the failure.
  */
-export async function signMessage(
-  message: string,
-  walletType: BISWalletPurpose,
-): Promise<string> {
+export async function signMessage(message: string, walletType: BISWalletPurpose): Promise<string> {
   const provider = getWalletInfo()?.provider
   let signature: string | undefined
 
