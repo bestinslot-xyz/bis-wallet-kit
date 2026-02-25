@@ -8,7 +8,7 @@ import type { BISWallet, BISWalletPurpose } from '../types/common'
  */
 export interface SignResponse {
   txId: string
-  signedPsbtHex: string
+  signedTxHex: string
 }
 
 /**

@@ -1,4 +1,4 @@
-import type { BISSession } from '../main'
+import type { BISSession } from '../types/common'
 import { browserStorage, memoryStorage } from './storage'
 
 const LS_KEY = 'bis-cw-wallets'

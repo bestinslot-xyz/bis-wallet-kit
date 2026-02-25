@@ -1,6 +1,6 @@
 import type { Network, Signer } from 'bitcoinjs-lib'
 import type { ECPairInterface } from 'ecpair'
-import type { BISNetwork, BISWallet } from '../main'
+import type { BISNetwork, BISWallet } from '../types/common'
 import type { BISProvider, SignResponse } from './api'
 import { Buffer } from 'node:buffer'
 import { Signer as BIP322Signer } from 'bip322-js'
@@ -11,8 +11,8 @@ import * as tinysecp from 'tiny-secp256k1'
 import { broadcastTxes, hexToBase64 } from '../core/helpers'
 import { memoryStorage } from '../core/storage'
 import { saveWalletInfo } from '../core/store'
+import { getNetwork, setNetwork } from '../core/store-network'
 import { getBitcoinNetwork } from '../lib/bitcoin'
-import { wallet } from '../main'
 
 // @ts-expect-error not in use
 // eslint-disable-next-line unused-imports/no-unused-vars
@@ -35,7 +35,7 @@ async function checkNetwork() {
     throw new TypeError('Local provider is only available in Node.js environment.')
   }
 
-  const bisNetwork = wallet.getNetwork()
+  const bisNetwork = getNetwork()
   const walletNetwork = await getWalletNetwork()
 
   if (bisNetwork !== walletNetwork) {
@@ -48,7 +48,7 @@ async function checkNetwork() {
 /**
  * Saves the wallet information to memory. The saveWallet function takes the private key, network, wallet type, and source wallet as parameters and stores this information in the local wallet storage. It also updates the wallet's network setting and saves the wallet information using the saveWalletInfo function. This function is crucial for allowing users to store their wallet information locally and retrieve it later for signing messages or sending transactions. It includes error handling to ensure that only valid wallet types and sources are accepted, and it throws an error if there is an issue with saving the wallet information.
  *
- * @param privkey The private key of the wallet as a string. This is the key that will be used for signing messages and transactions, and it should be kept secure and not shared with others.
+ * @param privKeyWIF The private key of the wallet as a string in WIF format. This is the key that will be used for signing messages and transactions, and it should be kept secure and not shared with others.
  * @param network The network associated with the wallet, such as 'mainnet' or 'testnet'. This information is important for ensuring that the wallet is used on the correct blockchain network and for deriving the correct addresses and transaction formats.
  * @param walletType The type of wallet being saved, which can be either 'p2wpkh' (Pay-to-Witness-Public-Key-Hash) or 'p2tr' (Pay-to-Taproot). This determines the address format and signing method used by the wallet.
  * @param sourceWallet The source of the wallet, which can be either 'unisat' or 'okx'. This information can be used to identify where the wallet information originated from and may be useful for debugging or analytics purposes.
@@ -56,7 +56,7 @@ async function checkNetwork() {
  * @returns A promise that resolves when the wallet information has been successfully saved to memory. If there is an error during the saving process, such as an invalid wallet type or source, the function will throw an error with a descriptive message.
  */
 export async function saveWallet(
-  privkey: string,
+  privKeyWIF: string,
   network: BISNetwork,
   walletType: LocalWalletType = 'p2wpkh',
   sourceWallet: LocalWalletSource = 'unisat',
@@ -69,8 +69,8 @@ export async function saveWallet(
     throw new Error('Invalid wallet source. Supported sources are unisat and okx.')
   }
 
-  wallet.setNetwork(network)
-  LOCAL_WALLET_STORAGE.set(PRIV_KEY, privkey)
+  setNetwork(network)
+  LOCAL_WALLET_STORAGE.set(PRIV_KEY, privKeyWIF)
   LOCAL_WALLET_STORAGE.set(NETWORK_KEY, network)
   LOCAL_WALLET_STORAGE.set(WALLET_TYPE_KEY, walletType)
   LOCAL_WALLET_STORAGE.set(SOURCE_KEY, sourceWallet)
@@ -368,7 +368,7 @@ async function sign(
 
   return {
     txId: signedTx.getId(),
-    signedPsbtHex: signedTxHex,
+    signedTxHex,
   }
 }
 

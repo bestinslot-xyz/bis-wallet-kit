@@ -1,6 +1,5 @@
 import antfu from '@antfu/eslint-config'
 import tsParser from '@typescript-eslint/parser'
-import jsdoc from 'eslint-plugin-jsdoc'
 
 export default antfu(
   // Configures for antfu's config
@@ -61,6 +60,11 @@ export default antfu(
           format: ['UPPER_CASE'],
         },
       ],
+    },
+  },
+  {
+    files: ['**/main.ts'],
+    rules: {
       'jsdoc/require-jsdoc': [
         'warn',
         {

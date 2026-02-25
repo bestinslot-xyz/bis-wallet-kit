@@ -1,9 +1,11 @@
 import { Buffer } from 'node:buffer'
+import { encode as nadaEncode } from '@bestinslot/nada'
+import { init as initZstd, compress as zstdCompress } from '@bokuweb/zstd-wasm'
 import { Buff } from '@cmdcode/buff-utils'
 import { Script } from '@cmdcode/tapscript'
+import { encode as base64Encode } from 'base64-arraybuffer'
 import * as bitcoinjs from 'bitcoinjs-lib'
 import { getBitcoinNetwork } from '../lib/bitcoin'
-import { compressSmartContractData } from '../lib/brc20'
 import { getWeb3 } from '../lib/web3'
 import { InscriptionDetails } from '../types/inscription'
 import { WalletInfo } from '../types/wallet'
@@ -18,6 +20,53 @@ import {
 import { getSignFn } from './providers'
 import { getWalletInfo } from './store'
 
+/**
+ * Compresses the input hex string using both Zstd and Nada compression algorithms, and returns the shortest result encoded in base64 without padding.
+ *
+ * @param inputHex - The input data in hexadecimal string format to be compressed.
+ * @returns A base64 encoded string representing the compressed data, prefixed with a byte indicating the compression method used (0x00 for uncompressed, 0x01 for Nada, 0x02 for Zstd), and without any padding characters.
+ */
+export async function compressSmartContractData(inputHex: string): Promise<string> {
+  await initZstd() // Needed before using zstdCompress
+
+  // Remove '0x' prefix if present
+  if (inputHex.startsWith('0x')) {
+    inputHex = inputHex.slice(2)
+  }
+
+  const originalBytes = Buff.hex(inputHex).to_bytes()
+
+  // 1. Run Zstd compression and store the raw result
+  const zstdResult = zstdCompress(new Uint8Array(originalBytes), 22)
+
+  // 2. Check if the result is just zeros (a sign of failure)
+  const isZstdResultInvalid = zstdResult.length > 0 && zstdResult.every(byte => byte === 0)
+
+  // 3. Prepare the list of compression variants
+  const uncompressed = [0x00, ...Array.from(originalBytes)]
+  const nadaCompressed = [0x01, ...nadaEncode(originalBytes)]
+  const allVariants = [uncompressed, nadaCompressed]
+
+  // 4. Only add the Zstd result if it's valid
+  if (!isZstdResultInvalid) {
+    const zstdCompressed = [0x02, ...Array.from(zstdResult)]
+    allVariants.push(zstdCompressed)
+  }
+
+  // 5. Find the shortest variant
+  const shortest = allVariants.reduce((a, b) => (a.length <= b.length ? a : b))
+
+  // Convert to base64
+  // Use Uint8Array.from to ensure we are working with a Uint8Array
+  const typedArray = Uint8Array.from(shortest)
+  const base64Encoded = base64Encode(typedArray.buffer)
+
+  // Remove suffix '=', could be more than one
+  const base64WithoutPadding = base64Encoded.replace(/=+$/, '')
+
+  return base64WithoutPadding
+}
+
 function evmEncodeDeploy(bytecode: string, abi: any, params: any): string {
   if (bytecode.slice(0, 2) !== '0x') {
     bytecode = `0x${bytecode}`
@@ -30,7 +79,16 @@ function evmEncodeDeploy(bytecode: string, abi: any, params: any): string {
   return encoded
 }
 
-function evmEncodeFunctionCall(abi: any, functionName: string, params: any): string {
+/**
+ * Encodes a function call to a smart contract using the provided ABI and function name, along with the parameters for the function call. This function uses the Web3 library to create a contract instance and encode the function call data according to the ABI specification. It also includes error handling to ensure that the specified function exists in the ABI and that the parameters are correctly formatted.
+ *
+ * @param abi - The ABI of the smart contract, which defines the functions and their parameters.
+ * @param functionName - The name of the function to call on the smart contract.
+ * @param params - An array of parameters to be passed to the function call, which should match the types defined in the ABI for the specified function.
+ * @returns A hexadecimal string representing the encoded function call data, which can be included in a transaction to call the smart contract function. The encoding is done according to the ABI specification, and the resulting string can be used as the calldata for a transaction.
+ * @throws Will throw an error if the specified function name does not exist in the ABI or if the parameters do not match the expected types defined in the ABI for that function. It will also throw an error if there is an issue with the Web3 library during encoding.
+ */
+export function evmEncodeFunctionCall(abi: any, functionName: string, params: any): string {
   const web3 = getWeb3()
   const contract = new web3.eth.Contract(abi)
   if (typeof contract.methods[functionName] !== 'function') {
@@ -41,13 +99,6 @@ function evmEncodeFunctionCall(abi: any, functionName: string, params: any): str
   return encoded
 }
 
-/**
- * Derives an EVM address from a given Bitcoin address by converting the Bitcoin address to its corresponding output script,
- * hashing it with Keccak256, and taking the last 20 bytes of the hash as the EVM address.
- *
- * @param bitcoinAddress - The Bitcoin address to derive the EVM address from.
- * @returns A string representing the derived EVM address in hexadecimal format, prefixed with '0x'.
- */
 export function getEvmAddressFromBitcoinAddress(bitcoinAddress: string) {
   const network = getBitcoinNetwork()
   const pkscript = bitcoinjs.address.toOutputScript(bitcoinAddress, network).toString('hex')
@@ -61,13 +112,6 @@ export function getEvmAddressFromBitcoinAddress(bitcoinAddress: string) {
   return `0x${addr}`
 }
 
-/**
- * Derives an EVM address from a given Bitcoin output script (pkscript) by hashing it with Keccak256 and taking the last
- * 20 bytes of the hash as the EVM address.
- *
- * @param pkscript - The Bitcoin output script (pkscript) in hexadecimal format to derive the EVM address from.
- * @returns A string representing the derived EVM address in hexadecimal format, prefixed with '0x'.
- */
 export function getEvmAddressFromPkScript(pkscript: string) {
   const pkscriptBuffer = Buff.hex(pkscript)
 
@@ -266,30 +310,30 @@ export async function deploySmartContract(
 
   if (dryRun) {
     return {
-      commit_txid: res.commit_txid,
-      signed_commit_tx_hex: res.signed_commit_tx_hex,
-      reveal_txid: res.reveal_txid,
-      signed_reveal_tx_hex: res.signed_reveal_tx_hex,
-      inscription_id: res.inscription_id,
+      commitTxId: res.commit_txid,
+      signedCommitTxHex: res.signed_commit_tx_hex,
+      revealTxId: res.reveal_txid,
+      signedRevealTxHex: res.signed_reveal_tx_hex,
+      inscriptionId: res.inscription_id,
       postage: res.postage,
       secret: res.secret,
-      send_to_op_return_txid: sendInscriptionTx.txId,
-      signed_send_to_op_return_tx_hex: sendInscriptionTx.signedPsbtHex,
+      sendToOpReturnTxId: sendInscriptionTx.txId,
+      signedSendToOpReturnTxHex: sendInscriptionTx.signedTxHex,
     }
   }
 
-  const txes = [res.signed_commit_tx_hex, res.signed_reveal_tx_hex, sendInscriptionTx.signedPsbtHex]
+  const txes = [res.signed_commit_tx_hex, res.signed_reveal_tx_hex, sendInscriptionTx.signedTxHex]
   await broadcastTxes(txes)
   return {
-    commit_txid: res.commit_txid,
-    signed_commit_tx_hex: res.signed_commit_tx_hex,
-    reveal_txid: res.reveal_txid,
-    signed_reveal_tx_hex: res.signed_reveal_tx_hex,
-    inscription_id: res.inscription_id,
+    commitTxId: res.commit_txid,
+    signedCommitTxHex: res.signed_commit_tx_hex,
+    revealTxId: res.reveal_txid,
+    signedRevealTxHex: res.signed_reveal_tx_hex,
+    inscriptionId: res.inscription_id,
     postage: res.postage,
     secret: res.secret,
-    send_to_op_return_txid: sendInscriptionTx.txId,
-    signed_send_to_op_return_tx_hex: sendInscriptionTx.signedPsbtHex,
+    sendToOpReturnTxId: sendInscriptionTx.txId,
+    signedSendToOpReturnTxHex: sendInscriptionTx.signedTxHex,
   }
 }
 
@@ -453,30 +497,30 @@ export async function callSmartContract(
 
   if (dryRun) {
     return {
-      commit_txid: res.commit_txid,
-      signed_commit_tx_hex: res.signed_commit_tx_hex,
-      reveal_txid: res.reveal_txid,
-      signed_reveal_tx_hex: res.signed_reveal_tx_hex,
-      inscription_id: res.inscription_id,
+      commitTxId: res.commit_txid,
+      signedCommitTxHex: res.signed_commit_tx_hex,
+      revealTxId: res.reveal_txid,
+      signedRevealTxHex: res.signed_reveal_tx_hex,
+      inscriptionId: res.inscription_id,
       postage: res.postage,
       secret: res.secret,
-      send_to_op_return_txid: sendInscriptionTx.txId,
-      signed_send_to_op_return_tx_hex: sendInscriptionTx.signedPsbtHex,
+      sendToOpReturnTxId: sendInscriptionTx.txId,
+      signedSendToOpReturnTxHex: sendInscriptionTx.signedTxHex,
     }
   }
 
-  const txes = [res.signed_commit_tx_hex, res.signed_reveal_tx_hex, sendInscriptionTx.signedPsbtHex]
+  const txes = [res.signed_commit_tx_hex, res.signed_reveal_tx_hex, sendInscriptionTx.signedTxHex]
   await broadcastTxes(txes)
   return {
-    commit_txid: res.commit_txid,
-    signed_commit_tx_hex: res.signed_commit_tx_hex,
-    reveal_txid: res.reveal_txid,
-    signed_reveal_tx_hex: res.signed_reveal_tx_hex,
-    inscription_id: res.inscription_id,
+    commitTxId: res.commit_txid,
+    signedCommitTxHex: res.signed_commit_tx_hex,
+    revealTxId: res.reveal_txid,
+    signedRevealTxHex: res.signed_reveal_tx_hex,
+    inscriptionId: res.inscription_id,
     postage: res.postage,
     secret: res.secret,
-    send_to_op_return_txid: sendInscriptionTx.txId,
-    signed_send_to_op_return_tx_hex: sendInscriptionTx.signedPsbtHex,
+    sendToOpReturnTxId: sendInscriptionTx.txId,
+    signedSendToOpReturnTxHex: sendInscriptionTx.signedTxHex,
   }
 }
 
@@ -531,7 +575,23 @@ export async function callSmartContractAbi(
   )
 }
 
-async function callSmartContractFromPaymentWallet(
+/**
+ * Calls a smart contract function by creating an inscription with the provided input data and sending it to the OP_RETURN output. The function first compresses the input data, then creates an inscription with the compressed data and mints it. After minting, it sends the inscription to an OP_RETURN output with a specific format. The function also handles optional payment parameters and allows for a dry run mode where the transaction hexes are returned without broadcasting.
+ *
+ * @param smartContractContractAddr - The address of the smart contract to call, represented as a string. This address will be included in the inscription content to indicate which contract function is being called.
+ * @param inputHex - The input data for the smart contract function call, represented as a hexadecimal string. This data will be compressed and included in the inscription.
+ * @param estimatedGas - The estimated gas required for the smart contract function call, used to determine if padding is needed for the inscription content.
+ * @param gasPerVbyte - The gas cost per virtual byte, used to calculate the total gas cost of the inscription content and determine if padding is needed.
+ * @param feeRate - The fee rate in sats/vbyte to be used for the transactions involved in the function call process.
+ * @param postage - An optional parameter representing the postage to be included in the minting transaction, specified in sats. If null, no postage will be included.
+ * @param paymentAddr - An optional parameter representing the Bitcoin address to which payment should be sent for the minting transaction. If null, no payment will be made.
+ * @param payment - An optional parameter representing the amount of payment to be sent for the minting transaction, specified in sats. If null or less than or equal to 0, no payment will be made.
+ * @param dryRun - A boolean flag indicating whether to perform a dry run. If true, the function will return the transaction hexes without broadcasting them to the network. If false, the transactions will be broadcasted after creation.
+ *
+ * @returns An object containing details of the function call process, including transaction IDs, signed transaction hexes, inscription ID, postage, and secret used in the minting process. If dryRun is true, the transactions will not be broadcasted and the hexes will be returned for inspection.
+ * @throws Will throw an error if the wallet is not connected, if the input parameters are of incorrect types, or if there is a failure in creating or sending the inscription.
+ */
+export async function callSmartContractFromPaymentWallet(
   smartContractContractAddr: string,
   inputHex: string,
   estimatedGas: number,
@@ -631,34 +691,34 @@ async function callSmartContractFromPaymentWallet(
 
   if (dryRun) {
     return {
-      commit_txid: mintResult.commitTxId,
-      signed_commit_tx_hex: mintResult.signedCommitTxHex,
-      reveal_txid: mintResult.revealTxId,
-      signed_reveal_tx_hex: mintResult.signedRevealTxHex,
-      inscription_id: mintResult.inscriptionId,
+      commitTxId: mintResult.commitTxId,
+      signedCommitTxHex: mintResult.signedCommitTxHex,
+      revealTxId: mintResult.revealTxId,
+      signedRevealTxHex: mintResult.signedRevealTxHex,
+      inscriptionId: mintResult.inscriptionId,
       postage: mintResult.postage,
       secret: mintResult.secret,
-      send_to_op_return_txid: sendInscriptionTx.txId,
-      signed_send_to_op_return_tx_hex: sendInscriptionTx.signedPsbtHex,
+      sendToOpReturnTxId: sendInscriptionTx.txId,
+      signedSendToOpReturnTxHex: sendInscriptionTx.signedTxHex,
     }
   }
 
   const txes = [
     mintResult.signedCommitTxHex,
     mintResult.signedRevealTxHex,
-    sendInscriptionTx.signedPsbtHex,
+    sendInscriptionTx.signedTxHex,
   ]
   await broadcastTxes(txes)
   return {
-    commit_txid: mintResult.commitTxId,
-    signed_commit_tx_hex: mintResult.signedCommitTxHex,
-    reveal_txid: mintResult.revealTxId,
-    signed_reveal_tx_hex: mintResult.signedRevealTxHex,
-    inscription_id: mintResult.inscriptionId,
+    commitTxId: mintResult.commitTxId,
+    signedCommitTxHex: mintResult.signedCommitTxHex,
+    revealTxId: mintResult.revealTxId,
+    signedRevealTxHex: mintResult.signedRevealTxHex,
+    inscriptionId: mintResult.inscriptionId,
     postage: mintResult.postage,
     secret: mintResult.secret,
-    send_to_op_return_txid: sendInscriptionTx.txId,
-    signed_send_to_op_return_tx_hex: sendInscriptionTx.signedPsbtHex,
+    sendToOpReturnTxId: sendInscriptionTx.txId,
+    signedSendToOpReturnTxHex: sendInscriptionTx.signedTxHex,
   }
 }
 
@@ -811,34 +871,34 @@ export async function depositToBrc20Prog(
 
   if (dryRun) {
     return {
-      commit_txid: mintResult.commit_txid,
-      signed_commit_tx_hex: mintResult.signed_commit_tx_hex,
-      reveal_txid: mintResult.reveal_txid,
-      signed_reveal_tx_hex: mintResult.signed_reveal_tx_hex,
-      inscription_id: mintResult.inscription_id,
+      commitTxId: mintResult.commit_txid,
+      signedCommitTxHex: mintResult.signed_commit_tx_hex,
+      revealTxId: mintResult.reveal_txid,
+      signedRevealTxHex: mintResult.signed_reveal_tx_hex,
+      inscriptionId: mintResult.inscription_id,
       postage: mintResult.postage,
       secret: mintResult.secret,
-      send_to_op_return_txid: sendInscriptionTx.txId,
-      signed_send_to_op_return_tx_hex: sendInscriptionTx.signedPsbtHex,
+      sendToOpReturnTxId: sendInscriptionTx.txId,
+      signedSendToOpReturnTxHex: sendInscriptionTx.signedTxHex,
     }
   }
 
   const txes = [
     mintResult.signed_commit_tx_hex,
     mintResult.signed_reveal_tx_hex,
-    sendInscriptionTx.signedPsbtHex,
+    sendInscriptionTx.signedTxHex,
   ]
   await broadcastTxes(txes)
   return {
-    commit_txid: mintResult.commit_txid,
-    signed_commit_tx_hex: mintResult.signed_commit_tx_hex,
-    reveal_txid: mintResult.reveal_txid,
-    signed_reveal_tx_hex: mintResult.signed_reveal_tx_hex,
-    inscription_id: mintResult.inscription_id,
+    commitTxId: mintResult.commit_txid,
+    signedCommitTxHex: mintResult.signed_commit_tx_hex,
+    revealTxId: mintResult.reveal_txid,
+    signedRevealTxHex: mintResult.signed_reveal_tx_hex,
+    inscriptionId: mintResult.inscription_id,
     postage: mintResult.postage,
     secret: mintResult.secret,
-    send_to_op_return_txid: sendInscriptionTx.txId,
-    signed_send_to_op_return_tx_hex: sendInscriptionTx.signedPsbtHex,
+    sendToOpReturnTxId: sendInscriptionTx.txId,
+    signedSendToOpReturnTxHex: sendInscriptionTx.signedTxHex,
   }
 }
 
@@ -940,33 +1000,33 @@ export async function withdrawFromBrc20Prog(
 
   if (dryRun) {
     return {
-      commit_txid: mintResult.commit_txid,
-      signed_commit_tx_hex: mintResult.signed_commit_tx_hex,
-      reveal_txid: mintResult.reveal_txid,
-      signed_reveal_tx_hex: mintResult.signed_reveal_tx_hex,
-      inscription_id: mintResult.inscription_id,
+      commitTxId: mintResult.commit_txid,
+      signedCommitTxHex: mintResult.signed_commit_tx_hex,
+      revealTxId: mintResult.reveal_txid,
+      signedRevealTxHex: mintResult.signed_reveal_tx_hex,
+      inscriptionId: mintResult.inscription_id,
       postage: mintResult.postage,
       secret: mintResult.secret,
-      transfer_txid: sendInscriptionTx.txid,
-      signed_transfer_tx_hex: sendInscriptionTx.signed_tx_hex,
+      transferTxId: sendInscriptionTx.txId,
+      signedTransferTxHex: sendInscriptionTx.signedTxHex,
     }
   }
 
   const txes = [
     mintResult.signed_commit_tx_hex,
     mintResult.signed_reveal_tx_hex,
-    sendInscriptionTx.signed_tx_hex,
+    sendInscriptionTx.signedTxHex,
   ]
   await broadcastTxes(txes)
   return {
-    commit_txid: mintResult.commit_txid,
-    signed_commit_tx_hex: mintResult.signed_commit_tx_hex,
-    reveal_txid: mintResult.reveal_txid,
-    signed_reveal_tx_hex: mintResult.signed_reveal_tx_hex,
-    inscription_id: mintResult.inscription_id,
+    commitTxId: mintResult.commit_txid,
+    signedCommitTxHex: mintResult.signed_commit_tx_hex,
+    revealTxId: mintResult.reveal_txid,
+    signedRevealTxHex: mintResult.signed_reveal_tx_hex,
+    inscriptionId: mintResult.inscription_id,
     postage: mintResult.postage,
     secret: mintResult.secret,
-    transfer_txid: sendInscriptionTx.txid,
-    signed_transfer_tx_hex: sendInscriptionTx.signed_tx_hex,
+    transferTxId: sendInscriptionTx.txId,
+    signedTransferTxHex: sendInscriptionTx.signedTxHex,
   }
 }

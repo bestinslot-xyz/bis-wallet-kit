@@ -1,40 +1,28 @@
 /* eslint-disable perfectionist/sort-exports */
 
 // -------- Wallet API --------
-export * as wallet from './core/bis'
+export * as wallet from './api/wallet'
 
 // -------- Modal API --------
-export * as modal from './core/modal'
+export * as modal from './api/modal'
 
 // -------- Swap API --------
-export * as swap from './core/bis_swap'
+export * as swap from './api/swap'
 
 // -------- BRC20 API --------
-export * as brc20 from './core/brc20'
+export * as brc20 from './api/brc20'
 
 // -------- Mint API --------
-export * as mint from './core/mint'
+export * as mint from './api/mint'
 
 // -------- Balances API --------
-export * as balances from './core/balances'
+export * as balances from './api/balances'
 
-// ---- Types ----
-export type { BISSwapWalletInfo as SwapWalletInfo } from './core/store'
-export type { LocalWalletSource, LocalWalletType } from './provider/local'
-export { InscriptionDetails } from './types/inscription'
-export type { InscribeFees, InscribeResult } from './types/inscription'
-export { WalletInfo } from './types/wallet'
+// -------- Helpers API --------
+export * as helpers from './api/helpers'
 
-export type {
-  BISNetwork,
-  BISSession,
-  BISWallet,
-  BISWalletProvider,
-  BISWalletPurpose,
-  ConnectCallbacks,
-  ModalTheme,
-  PaymentOpts,
-} from './types/common'
+// -------- Common types -------
+export type { PaymentOpts } from './types/common'
 
 // ---- Re-exports ----
 export * as bitcoinjs from 'bitcoinjs-lib'

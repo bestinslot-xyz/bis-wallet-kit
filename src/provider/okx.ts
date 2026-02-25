@@ -1,4 +1,4 @@
-import type { BISWallet } from '../main'
+import type { BISWallet } from '../types/common'
 import type { BISProvider, SignResponse } from './api'
 import { Buffer } from 'node:buffer'
 import * as bitcoinjs from 'bitcoinjs-lib'
@@ -220,7 +220,7 @@ async function sign(
 
   return {
     txId: signedTx.getId(),
-    signedPsbtHex: signedTxHex,
+    signedTxHex,
   }
 }
 

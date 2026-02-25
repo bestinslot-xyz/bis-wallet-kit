@@ -26,6 +26,12 @@ export interface BISWallet {
   purpose: BISWalletPurpose
 }
 
+/**
+ * Represents a payment option with a payment address and amount.
+ *
+ * @property paymentAddress - The address to which the payment should be sent.
+ * @property paymentAmount - The amount to be paid, represented as a number.
+ */
 export interface PaymentOpts {
   paymentAddress: string
   paymentAmount: number

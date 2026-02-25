@@ -1,7 +1,7 @@
 import { Buffer } from 'node:buffer'
 import { Address, Script } from '@cmdcode/tapscript'
+import * as bitcoinjs from 'bitcoinjs-lib'
 import { getBitcoinNetwork } from '../lib/bitcoin'
-import { bitcoinjs } from '../main'
 
 /**
  * Class representing wallet information for a Bitcoin address. This class is used to encapsulate the properties of a wallet, such as its address,
@@ -90,4 +90,24 @@ export class WalletInfo {
 
     return p2sh.redeem.output
   }
+}
+
+/**
+ * Utility function to create a WalletInfo instance for an OP_RETURN output. This function takes an output script as input and returns a WalletInfo instance with the isOpReturn property set to true.
+ *
+ * @param outputScript - The output script for the OP_RETURN output, provided as a Buffer.
+ * @returns {WalletInfo} A WalletInfo instance representing the OP_RETURN output.
+ */
+export function opReturnWalletInfo(outputScript: Buffer): WalletInfo {
+  return new WalletInfo(true, outputScript, null, null, null)
+}
+
+/**
+ * Utility function to create a WalletInfo instance for a standard Bitcoin address. This function takes a Bitcoin address as input and returns a WalletInfo instance with the isOpReturn property set to false and the output script derived from the address.
+ *
+ * @param addr - The Bitcoin address for which to create the WalletInfo instance, provided as a string.
+ * @returns {WalletInfo} A WalletInfo instance representing the standard Bitcoin address.
+ */
+export function addressWalletInfo(addr: string): WalletInfo {
+  return new WalletInfo(false, null, addr, null, null)
 }

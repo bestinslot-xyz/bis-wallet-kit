@@ -1,4 +1,4 @@
-import type { BISWalletProvider, ConnectCallbacks, ModalTheme } from '../main'
+import type { BISWalletProvider, ConnectCallbacks, ModalTheme } from '../types/common'
 import { createApp } from 'vue'
 import css from '../assets/style/main.css?inline' // https://vite.dev/guide/features#import-inlining-and-rebasing
 import Modal from '../components/Modal.vue'
@@ -50,21 +50,21 @@ export function create() {
   document.body.appendChild(container)
 }
 
-function showConnect(callbacks: ConnectCallbacks) {
+export function showConnect(callbacks: ConnectCallbacks) {
   modalInstance?.showConnect(callbacks)
 }
 
-function showConnectConfirmation(_provider: BISWalletProvider) {
+export function showConnectConfirmation(_provider: BISWalletProvider) {
   modalInstance?.showConnectConfirmation(_provider)
 }
 
-function showError(msg: string | null | undefined = null) {
+export function showError(msg: string | null | undefined = null) {
   const genericMsg = 'An error occurred. Please try again.'
 
   modalInstance?.showError(msg || genericMsg)
 }
 
-function hide() {
+export function hide() {
   // SSR-SAFU
   if (typeof window === 'undefined')
     return
@@ -77,15 +77,6 @@ function hide() {
  *
  * @param theme The theme to set for the modal, which can be 'light', 'dark', or 'auto'.
  */
-function setTheme(theme: ModalTheme) {
+export function setTheme(theme: ModalTheme) {
   modalInstance?.setTheme(theme)
-}
-
-export const modal = {
-  create,
-  showConnect,
-  showConnectConfirmation,
-  showError,
-  hide,
-  setTheme,
 }

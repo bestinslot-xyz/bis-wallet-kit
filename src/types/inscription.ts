@@ -85,11 +85,11 @@ export class InscriptionDetails {
  * containing JSON data and returns an InscriptionDetails instance with the appropriate MIME type, content
  * encoding, and file data set. The metadata, metaprotocol, and delegate properties are set to null.
  *
- * @param {Buff} jsonData - A Buff containing the JSON data to be inscribed.
+ * @param {any} jsonData - The JSON data to be inscribed.
  * @returns {InscriptionDetails} An instance of the InscriptionDetails class with the JSON data set for inscription.
  */
-export function jsonInscription(jsonData: Buff): InscriptionDetails {
-  return new InscriptionDetails(Buff.str('application/json'), null, null, null, null, jsonData)
+export function jsonInscription(jsonData: any): InscriptionDetails {
+  return new InscriptionDetails(Buff.str('application/json'), null, null, null, null, Buff.str(JSON.stringify(jsonData)))
 }
 
 /**
@@ -118,6 +118,13 @@ export function delegateInscription(inscriptionId: string): InscriptionDetails {
 
 /**
  * Inscribe fees for a single inscription, including total fee, commit fee, reveal fee, postage, and secret.
+ *
+ * @interface InscribeFees
+ * @property {number} totalFee - The total fee in satoshis for the inscription process, including both commit and reveal transactions.
+ * @property {number} commitFee - The fee in satoshis for the commit transaction that initiates the inscription process.
+ * @property {number} revealFee - The fee in satoshis for the reveal transaction that completes the inscription process.
+ * @property {number} postage - The amount of postage in satoshis included in the inscription transactions, which indicates the size of the utxo that holds the inscription.
+ * @property {string} secret - A secret token used during the inscription process, which may be required for certain operations related to the inscription.
  */
 export interface InscribeFees {
   totalFee: number
@@ -129,6 +136,15 @@ export interface InscribeFees {
 
 /**
  * Result of an inscription minting process, including commit transaction ID, signed commit transaction hex, reveal transaction ID, signed reveal transaction hex, inscription ID, postage used, and the secret token used for minting.
+ *
+ * @interface InscribeResult
+ * @property {string} commitTxId - The transaction ID of the commit transaction that initiated the inscription process.
+ * @property {string} signedCommitTxHex - The signed transaction hex of the commit transaction, which can be used for broadcasting or record-keeping purposes.
+ * @property {string} revealTxId - The transaction ID of the reveal transaction that completed the inscription process and revealed the inscription on the blockchain.
+ * @property {string} signedRevealTxHex - The signed transaction hex of the reveal transaction, which can be used for broadcasting or record-keeping purposes.
+ * @property {string} inscriptionId - The unique identifier of the newly minted inscription, which can be used to reference and interact with the inscription in future operations.
+ * @property {number} postage - The amount of postage in satoshis that was included in the inscription transactions, which indicates the cost paid for inscribing the content on the blockchain.
+ * @property {string} secret - The secret token used during the inscription process, which may be required for certain operations related to the inscription.
  */
 export interface InscribeResult {
   commitTxId: string
@@ -138,4 +154,42 @@ export interface InscribeResult {
   inscriptionId: string
   postage: number
   secret: string
+}
+
+/**
+ * Inscribe multiple inscriptions result, including commit transaction ID, signed commit transaction hex, reveal transaction ID, signed reveal transaction hex, an array of inscription IDs, postage used, and the secret token used for minting.
+ *
+ * @interface InscribeMultipleResult
+ * @property {string} commitTxId - The transaction ID of the commit transaction that initiated the inscription process for multiple inscriptions.
+ * @property {string} signedCommitTxHex - The signed transaction hex of the commit transaction, which can be used for broadcasting or record-keeping purposes.
+ * @property {string} revealTxId - The transaction ID of the reveal transaction that completed the inscription process for multiple inscriptions.
+ * @property {string} signedRevealTxHex - The signed transaction hex of the reveal transaction, which can be used for broadcasting or record-keeping purposes.
+ * @property {string[]} inscriptionIds - An array of strings representing the IDs of the inscriptions that were minted in this batch process.
+ * @property {number} postage - The amount of postage in satoshis that was included in the inscription transactions, which indicates the cost associated with minting the inscriptions.
+ * @property {string} secret - A secret token used during the inscription process, which may be required
+ */
+export interface InscribeMultipleResult {
+  commitTxId: string
+  signedCommitTxHex: string
+  revealTxId: string
+  signedRevealTxHex: string
+  inscriptionIds: string[]
+  postage: number
+  secret: string
+}
+
+/**
+ * Result of sending an inscription, including the transaction ID of the send transaction, the signed transaction hex, the vout index of the output containing the inscription, and the value of that output in satoshis.
+ *
+ * @interface SendInscriptionResult
+ * @property {string} txId - The transaction ID of the send transaction that transferred the inscription to its new location.
+ * @property {string} signedTxHex - The signed transaction hex of the send transaction, which can be used for broadcasting or record-keeping purposes.
+ * @property {number} vout - The index of the output in the send transaction that contains the inscription after it has been transferred.
+ * @property {number} outputValue - The value of the output containing the inscription in satoshis, which indicates the amount of Bitcoin associated with the inscription after it has been sent.
+ */
+export interface SendInscriptionResult {
+  txId: string
+  signedTxHex: string
+  vout: number
+  outputValue: number
 }

@@ -1,5 +1,5 @@
-import type { BISSession, BISWallet, BISWalletProvider, BISWalletPurpose } from '../main'
 import type { BISProvider, SignFunction } from '../provider/api'
+import type { BISSession, BISWallet, BISWalletProvider, BISWalletPurpose } from '../types/common'
 import { LEATHER } from '../provider/leather'
 import { LOCAL } from '../provider/local'
 import { ME } from '../provider/me'

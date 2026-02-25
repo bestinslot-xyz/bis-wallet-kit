@@ -10,7 +10,6 @@ import { sha256 } from '@noble/hashes/sha2.js'
 import * as bitcoinjs from 'bitcoinjs-lib'
 import * as ethers from 'ethers'
 import { getBitcoinNetwork } from '../lib/bitcoin'
-import { compressSmartContractData } from '../lib/brc20'
 import {
   addLiquidityRequest,
   removeLiquidityRequest,
@@ -22,6 +21,7 @@ import {
 } from '../lib/uniswap_ops'
 import { InscriptionDetails } from '../types/inscription'
 import { WalletInfo } from '../types/wallet'
+import { compressSmartContractData } from './brc20'
 import { clearExtraUtxos, saveExtraUtxos, utxoOutputTypeFromOutputScript } from './helpers'
 import {
   mintAll,
@@ -235,7 +235,7 @@ export async function generateAndStoreSwapWallet(): Promise<BISSwapWalletInfo> {
   return swapWalletInfo
 }
 
-interface GetSwapStatusResponse {
+export interface GetSwapStatusResponse {
   reorg_handler_running: boolean
   emergency_stop: boolean
 }
@@ -512,7 +512,7 @@ async function getSwapBalanceOf(pubkey: string, tokenAddress: string): Promise<b
   return BigInt(result.result)
 }
 
-interface PairReserves {
+export interface PairReserves {
   reserveA: bigint
   reserveB: bigint
   total_supply: bigint
@@ -609,11 +609,11 @@ export async function requestMinerFee(
   return BigInt(result.result)
 }
 
-interface GetPairVolumeRequest {
+export interface GetPairVolumeRequest {
   pair_address: string
   days: number
 }
-interface GetPairVolumeResponse {
+export interface GetPairVolumeResponse {
   pair_address: string
   token_a_address: string
   token_a_symbol: string
@@ -646,14 +646,14 @@ export async function getPairVolumeOverDays(
   return result
 }
 
-interface GetKlinesRequest {
+export interface GetKlinesRequest {
   pair_address: string
   interval: '1m' | '5m' | '15m' | '1h' | '4h' | '1d'
   limit: number // max 1000
   startTime: number | null
   endTime: number | null
 }
-interface Kline {
+export interface Kline {
   open_time: number
   close_time: number
   open: number
@@ -663,7 +663,7 @@ interface Kline {
   volume_wbtc: string
   trades: number
 }
-interface GetKlinesResponse {
+export interface GetKlinesResponse {
   pair_address: string
   token_a_address: string
   token_a_symbol: string
@@ -1268,7 +1268,7 @@ export async function createAndBroadcastDepositOrder(
       throw new Error('Failed to send inscription to OP_RETURN')
     }
 
-    baseDepositSendToOpReturnTxHex = sendToOpreturnRes.signedPsbtHex
+    baseDepositSendToOpReturnTxHex = sendToOpreturnRes.signedTxHex
     baseDepositSendToOpReturnTxId = sendToOpreturnRes.txId
   }
 
@@ -1353,7 +1353,7 @@ export async function createAndBroadcastDepositOrder(
       throw new Error('Failed to send inscription to OP_RETURN')
     }
 
-    allowanceSendToOpReturnTxHex = sendToOpreturnRes.signedPsbtHex
+    allowanceSendToOpReturnTxHex = sendToOpreturnRes.signedTxHex
     allowanceSendToOpReturnTxid = sendToOpreturnRes.txId
   }
 
@@ -1443,7 +1443,7 @@ export async function createAndBroadcastDepositOrder(
     throw new Error('Failed to send inscription to OP_RETURN')
   }
 
-  const depositSendToOpReturnTxHex = sendToOpreturnRes.signedPsbtHex
+  const depositSendToOpReturnTxHex = sendToOpreturnRes.signedTxHex
   const depositSendToOpReturnTxid = sendToOpreturnRes.txId
 
   const toSendForBroadcast: BroadcastDepositOrderRequest = {
@@ -2080,7 +2080,7 @@ export async function createAndBroadcastWrapOrder(
       throw new Error('Failed to send inscription to OP_RETURN')
     }
 
-    const depositSendToOpReturnTxHex = sendToOpreturnRes.signedPsbtHex
+    const depositSendToOpReturnTxHex = sendToOpreturnRes.signedTxHex
     const depositSendToOpReturnTxid = sendToOpreturnRes.txId
 
     const toSendForBroadcast: BroadcastWrapOrderRequest = {
@@ -3436,7 +3436,7 @@ interface WithdrawOrderRequest {
   btc_fee: string
   bip322_signature: string
 }
-interface WithdrawOrderResponse {
+export interface WithdrawOrderResponse {
   success: boolean
 }
 async function sendWithdrawOrder(toSend: WithdrawOrderRequest): Promise<WithdrawOrderResponse> {

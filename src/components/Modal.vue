@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { BISWalletProvider } from '../main'
+import type { BISWalletProvider } from '../types/common'
 import type { ConnectCallbacks, ModalState, ModalTheme } from '../types/common'
 import { computed, nextTick, ref } from 'vue'
 import errorImage from '../assets/img/error.png'

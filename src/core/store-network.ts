@@ -1,4 +1,4 @@
-import type { BISNetwork } from '../main'
+import type { BISNetwork } from '../types/common'
 import { ref, watch } from 'vue'
 import { PROVIDERS } from './providers'
 import { getWalletInfo } from './store'

@@ -1,7 +1,7 @@
 import type { APIOrdinalUtxoInfo } from '../core/helpers'
 import type { SignFunction, SignResponse } from '../provider/api'
 import type { PaymentOpts } from '../types/common'
-import type { InscribeFees, InscribeResult } from '../types/inscription'
+import type { InscribeFees, InscribeMultipleResult, InscribeResult, SendInscriptionResult } from '../types/inscription'
 import { Buffer } from 'node:buffer'
 import { Buff } from '@cmdcode/buff-utils'
 import {
@@ -227,24 +227,6 @@ async function getMintMultipleFeeAll(
 }
 
 /**
- * Calculate the fees for inscribing an inscription with the given details, fee rate, and postage.
- * This function uses the checkMintMultipleFeeAll helper function to perform the fee calculation for
- * a single inscription by passing an array with one InscriptionDetails instance.
- *
- * @param inscriptionDetails - An instance of the InscriptionDetails class containing the details of the inscription to be minted.
- * @param feeRate - The fee rate in satoshis per virtual byte to be used for the fee calculation.
- * @param postage - The postage amount in satoshis to be included in the fee calculation, or null to use the default dust value.
- * @returns A promise that resolves to an object containing the total fee, commit fee, reveal fee, postage, and secret for the inscription.
- */
-export async function getInscribeFee(
-  inscriptionDetails: InscriptionDetails,
-  feeRate: number,
-  postage: number | null,
-): Promise<InscribeFees> {
-  return await getMintMultipleFeeAll([inscriptionDetails], feeRate, postage, null, null)
-}
-
-/**
  * Calculate the fees for inscribing multiple inscriptions with the given details, fee rate, postage, payment address, and payment amount.
  *
  * @param inscriptionDetailsArray - An array of InscriptionDetails instances containing the details of each inscription to be minted.
@@ -297,47 +279,50 @@ export async function getInscribeMultipleFee(
   )
 }
 
-export interface InscribeMultipleResult {
-  commitTxId: string
-  signedCommitTxHex: string
-  revealTxId: string
-  signedRevealTxHex: string
-  inscriptionIds: string[]
-  postage: number
-  secret: string
-}
-
-/**
- * Inscribe an inscription with the given details, fee rate, postage, and payment options. This function uses the inscribeMultiple helper function to perform the inscription for
- * a single inscription by passing an array with one InscriptionDetails instance. The function returns the transaction IDs and signed transaction hex for both the commit and reveal transactions, as well as the inscription IDs, postage, and secret used for the inscription.
- *
- * @param inscriptionDetails - The details of the inscription to be minted.
- * @param feeRate - The fee rate in satoshis per virtual byte to be used for the inscription transactions.
- * @param postage - The postage amount in satoshis to be included in the inscription transactions, or null to use the default dust value.
- * @param dryRun - A boolean indicating whether to perform a dry run of the inscription, which will return the transaction details without broadcasting them to the network.
- * @param paymentOpts - An object containing the payment address and payment amount, or null if no payment is required for the inscription.
- * @returns A promise that resolves to an object containing the transaction IDs and signed transaction hex for both the commit and reveal transactions, as well as the inscription IDs, postage, and secret used for the inscription.
- */
-export async function inscribe(
+export async function inscribeWithParent(
   inscriptionDetails: InscriptionDetails,
+  parentInscriptionId: string,
   feeRate: number,
   postage: number | null,
   dryRun: boolean,
   paymentOpts?: PaymentOpts,
-): Promise<InscribeMultipleResult> {
-  return await inscribeMultiple([inscriptionDetails], feeRate, postage, dryRun, paymentOpts)
+): Promise<InscribeResult> {
+  // Get connected wallet
+  const walletInfo = getWalletInfo()
+  if (!walletInfo || !walletInfo.wallets)
+    throw new Error('Wallets not found')
+  if (!(inscriptionDetails instanceof InscriptionDetails))
+    throw new Error('inscriptionDetails must be of type bis.InscriptionDetails')
+  if (typeof parentInscriptionId !== 'string')
+    throw new Error('parentInscriptionId must be a string')
+  if (typeof feeRate != 'number' || !Number.isInteger(feeRate))
+    throw new Error('feeRate must be an integer')
+  if (postage != null && (typeof postage != 'number' || !Number.isInteger(postage)))
+    throw new Error('postage must be an integer or null')
+  if (paymentOpts != null) {
+    if (typeof paymentOpts.paymentAddress != 'string')
+      throw new Error('paymentAddress must be a string')
+    if (
+      typeof paymentOpts.paymentAmount != 'number'
+      || !Number.isInteger(paymentOpts.paymentAmount)
+    ) {
+      throw new TypeError('paymentAmount must be an integer')
+    }
+  }
+
+  const signFn = getSignFn(walletInfo.provider)
+  return await mintWithParentAll(
+    inscriptionDetails,
+    parentInscriptionId,
+    feeRate,
+    postage,
+    paymentOpts?.paymentAddress ?? null,
+    paymentOpts?.paymentAmount ?? null,
+    dryRun,
+    signFn,
+  )
 }
 
-/**
- * Inscribe multiple inscriptions with the given details, fee rate, postage, and payment options. This function performs the inscription process for multiple inscriptions in a single batch, which can be more efficient than inscribing them individually. The function returns the transaction IDs and signed transaction hex for both the commit and reveal transactions, as well as the inscription IDs, postage, and secret used for the inscriptions.
- *
- * @param inscriptionDetailsArray - An array of InscriptionDetails instances containing the details of each inscription to be minted.
- * @param feeRate - The fee rate in satoshis per virtual byte to be used for the inscription transactions.
- * @param postage - The postage amount in satoshis to be included in the inscription transactions, or null to use the default dust value.
- * @param dryRun - A boolean indicating whether to perform a dry run of the inscription, which will return the transaction details without broadcasting them to the network.
- * @param paymentOpts - An object containing the payment address and payment amount, or null if no payment is required for the inscriptions.
- * @returns A promise that resolves to an object containing the transaction IDs and signed transaction hex for both the commit and reveal transactions, as well as the inscription IDs, postage, and secret used for the inscriptions.
- */
 export async function inscribeMultiple(
   inscriptionDetailsArray: InscriptionDetails[],
   feeRate: number,
@@ -534,7 +519,7 @@ async function mintMultipleAll(
     paymentWallet,
     payment,
   )
-  const isValid = await validateTxes([signedCommitTx.signedPsbtHex, revealTx.signed_reveal_tx_hex])
+  const isValid = await validateTxes([signedCommitTx.signedTxHex, revealTx.signed_reveal_tx_hex])
 
   for (const entry of isValid) {
     if (!entry.allowed) {
@@ -550,7 +535,7 @@ async function mintMultipleAll(
   if (dryRun) {
     return {
       commitTxId: signedCommitTx.txId,
-      signedCommitTxHex: signedCommitTx.signedPsbtHex,
+      signedCommitTxHex: signedCommitTx.signedTxHex,
       revealTxId: revealTx.txid,
       signedRevealTxHex: revealTx.signed_reveal_tx_hex,
       inscriptionIds,
@@ -559,11 +544,11 @@ async function mintMultipleAll(
     }
   }
 
-  await broadcastTxes([signedCommitTx.signedPsbtHex, revealTx.signed_reveal_tx_hex])
+  await broadcastTxes([signedCommitTx.signedTxHex, revealTx.signed_reveal_tx_hex])
 
   return {
     commitTxId: signedCommitTx.txId,
-    signedCommitTxHex: signedCommitTx.signedPsbtHex,
+    signedCommitTxHex: signedCommitTx.signedTxHex,
     revealTxId: revealTx.txid,
     signedRevealTxHex: revealTx.signed_reveal_tx_hex,
     inscriptionIds,
@@ -1662,20 +1647,7 @@ interface SendMultiInscriptionWithBufferResult {
   buffer_utxo: string
   buffer_output_value: number
 }
-/**
- * Sends multiple inscriptions in one transaction with a buffer output. This is used for batch minting or batch sending.
- *
- * @param inscriptionIds - array of inscription IDs to send
- * @param targetPostages - array of target postages for each inscription
- * @param targetAddr - address to send the inscriptions to
- * @param bufferValue - value of the buffer output
- * @param feeRate - fee rate in sat/vbyte
- * @param paymentAddr - address to send the payment to (if payment is not null)
- * @param payment - amount to pay (if payment is not null)
- * @param dryRun - if true, the transaction will not be broadcasted and the signed transaction hex will be returned for inspection
- *
- * @returns an object containing the transaction ID, signed transaction hex, output UTXOs, output values, buffer UTXO, and buffer output value
- */
+
 export async function sendMultiInscriptionWithBuffer(
   inscriptionIds: string[],
   targetPostages: number[],
@@ -1867,7 +1839,7 @@ async function sendMultiInscriptionWithBufferAll(
     inscrWalletSignIdxes,
   )
 
-  const isValid = await validateTxes([signedTx.signedPsbtHex])
+  const isValid = await validateTxes([signedTx.signedTxHex])
   for (const entry of isValid) {
     if (!entry.allowed) {
       throw new Error(entry['reject-reason'])
@@ -1887,10 +1859,10 @@ async function sendMultiInscriptionWithBufferAll(
 
   if (dryRun) {
     // TODO: hacky part, change or remove
-    txHexByIdCache[signedTx.txId] = signedTx.signedPsbtHex
+    txHexByIdCache[signedTx.txId] = signedTx.signedTxHex
     return {
       txid: signedTx.txId,
-      signed_tx_hex: signedTx.signedPsbtHex,
+      signed_tx_hex: signedTx.signedTxHex,
       output_utxos: outputUtxos,
       output_values: outputValues,
       buffer_utxo: bufferUtxo,
@@ -1898,11 +1870,11 @@ async function sendMultiInscriptionWithBufferAll(
     }
   }
 
-  await broadcastTxes([signedTx.signedPsbtHex])
+  await broadcastTxes([signedTx.signedTxHex])
 
   return {
     txid: signedTx.txId,
-    signed_tx_hex: signedTx.signedPsbtHex,
+    signed_tx_hex: signedTx.signedTxHex,
     output_utxos: outputUtxos,
     output_values: outputValues,
     buffer_utxo: bufferUtxo,
@@ -1910,12 +1882,6 @@ async function sendMultiInscriptionWithBufferAll(
   }
 }
 
-interface SendInscriptionAllResult {
-  txid: string
-  signed_tx_hex: string
-  vout: number
-  output_value: number
-}
 /**
  * Sends an inscription to a target address with specified postage and fee rate. This function is used for sending a single inscription, but it can also be used for batch sending by calling it multiple times with different inscription IDs and the same target address.
  *
@@ -1935,7 +1901,7 @@ export async function sendInscriptionAll(
   feeRate: number,
   dryRun: boolean,
   signFunc: SignFunction,
-): Promise<SendInscriptionAllResult> {
+): Promise<SendInscriptionResult> {
   // Get connected wallet
   const userPaymentWallet = getPaymentWallet()
   const userOrdinalsWallet = getOrdinalsWallet()
@@ -2003,7 +1969,7 @@ export async function sendInscriptionAll(
 
   const signedTx = await signFunc(unsignedPsbtHex, payerWallet.addr, inscriptionWallet.addr, [0])
 
-  const isValid = await validateTxes([signedTx.signedPsbtHex])
+  const isValid = await validateTxes([signedTx.signedTxHex])
   for (const entry of isValid) {
     if (!entry.allowed) {
       throw new Error(entry['reject-reason'])
@@ -2011,22 +1977,22 @@ export async function sendInscriptionAll(
   }
 
   if (dryRun) {
-    txHexByIdCache[signedTx.txId] = signedTx.signedPsbtHex
+    txHexByIdCache[signedTx.txId] = signedTx.signedTxHex
     return {
-      txid: signedTx.txId,
-      signed_tx_hex: signedTx.signedPsbtHex,
+      txId: signedTx.txId,
+      signedTxHex: signedTx.signedTxHex,
       vout: 0,
-      output_value: unsignedTx.outs[0]!.value,
+      outputValue: unsignedTx.outs[0]!.value,
     }
   }
 
-  await broadcastTxes([signedTx.signedPsbtHex])
+  await broadcastTxes([signedTx.signedTxHex])
 
   return {
-    txid: signedTx.txId,
-    signed_tx_hex: signedTx.signedPsbtHex,
+    txId: signedTx.txId,
+    signedTxHex: signedTx.signedTxHex,
     vout: 0,
-    output_value: unsignedTx.outs[0]!.value,
+    outputValue: unsignedTx.outs[0]!.value,
   }
 }
 
@@ -2328,7 +2294,7 @@ async function buildRevealTx(
 
   return {
     txId: Tx.util.getTxid(txdata),
-    signedPsbtHex: Tx.encode(txdata).hex,
+    signedTxHex: Tx.encode(txdata).hex,
   }
 }
 
@@ -2734,7 +2700,7 @@ export async function mintAll(
     payment,
   )
 
-  const isValid = await validateTxes([signedCommitTx.signedPsbtHex, revealTx.signedPsbtHex])
+  const isValid = await validateTxes([signedCommitTx.signedTxHex, revealTx.signedTxHex])
 
   for (const entry of isValid) {
     if (!entry.allowed) {
@@ -2745,21 +2711,21 @@ export async function mintAll(
   if (dryRun) {
     return {
       commit_txid: signedCommitTx.txId,
-      signed_commit_tx_hex: signedCommitTx.signedPsbtHex,
+      signed_commit_tx_hex: signedCommitTx.signedTxHex,
       reveal_txid: revealTx.txId,
-      signed_reveal_tx_hex: revealTx.signedPsbtHex,
+      signed_reveal_tx_hex: revealTx.signedTxHex,
       inscription_id: `${revealTx.txId}i0`,
       postage,
       secret,
     }
   }
 
-  await broadcastTxes([signedCommitTx.signedPsbtHex, revealTx.signedPsbtHex])
+  await broadcastTxes([signedCommitTx.signedTxHex, revealTx.signedTxHex])
   return {
     commit_txid: signedCommitTx.txId,
-    signed_commit_tx_hex: signedCommitTx.signedPsbtHex,
+    signed_commit_tx_hex: signedCommitTx.signedTxHex,
     reveal_txid: revealTx.txId,
-    signed_reveal_tx_hex: revealTx.signedPsbtHex,
+    signed_reveal_tx_hex: revealTx.signedTxHex,
     inscription_id: `${revealTx.txId}i0`,
     postage,
     secret,
@@ -2840,7 +2806,7 @@ export async function mintAllPaymentWallet(
     payment,
   )
 
-  const isValid = await validateTxes([signedCommitTx.signedPsbtHex, revealTx.signedPsbtHex])
+  const isValid = await validateTxes([signedCommitTx.signedTxHex, revealTx.signedTxHex])
 
   for (const entry of isValid) {
     if (!entry.allowed) {
@@ -2851,21 +2817,21 @@ export async function mintAllPaymentWallet(
   if (dryRun) {
     return {
       commitTxId: signedCommitTx.txId,
-      signedCommitTxHex: signedCommitTx.signedPsbtHex,
+      signedCommitTxHex: signedCommitTx.signedTxHex,
       revealTxId: revealTx.txId,
-      signedRevealTxHex: revealTx.signedPsbtHex,
+      signedRevealTxHex: revealTx.signedTxHex,
       inscriptionId: `${revealTx.txId}i0`,
       postage,
       secret,
     }
   }
 
-  await broadcastTxes([signedCommitTx.signedPsbtHex, revealTx.signedPsbtHex])
+  await broadcastTxes([signedCommitTx.signedTxHex, revealTx.signedTxHex])
   return {
     commitTxId: signedCommitTx.txId,
-    signedCommitTxHex: signedCommitTx.signedPsbtHex,
+    signedCommitTxHex: signedCommitTx.signedTxHex,
     revealTxId: revealTx.txId,
-    signedRevealTxHex: revealTx.signedPsbtHex,
+    signedRevealTxHex: revealTx.signedTxHex,
     inscriptionId: `${revealTx.txId}i0`,
     postage,
     secret,
@@ -2957,7 +2923,7 @@ export async function mintAllCheckFees(
     reveal_fee: commitTx.reveal_fee,
     total_fee: commitTx.commit_fee + commitTx.reveal_fee,
     unsigned_commit_tx_hex: commitTx.unsigned_commit_tx.toHex(),
-    signed_reveal_tx_hex: revealTx.signedPsbtHex,
+    signed_reveal_tx_hex: revealTx.signedTxHex,
     inscription_id: `${revealTx.txId}i0`,
     postage,
   }
@@ -2978,16 +2944,20 @@ export async function mintAllCheckFees(
 export async function sendInscriptionToOpReturnAll(
   inscriptionId: string,
   targetWallet: WalletInfo,
-  targetPostage: number,
+  targetPostage: number | null,
   feeRate: number,
   dryRun: boolean,
   signFunc: SignFunction,
-): Promise<SignResponse> {
+): Promise<SendInscriptionResult> {
   // Get connected wallet
   const userPaymentWallet = getPaymentWallet()
   const userOrdinalsWallet = getOrdinalsWallet()
   if (!userPaymentWallet || !userOrdinalsWallet)
     throw new Error('Wallets not found')
+
+  if (targetPostage == null || targetPostage <= 0) {
+    targetPostage = 1 // 1 sat for inscription
+  }
 
   const paymentAddr = userPaymentWallet.address
   const paymentPublicKey = userPaymentWallet.pubkey
@@ -3050,7 +3020,7 @@ export async function sendInscriptionToOpReturnAll(
 
   const signedTx = await signFunc(unsignedPsbtHex, payerWallet.addr, inscriptionWallet.addr, [0])
 
-  const isValid = await validateTxes([signedTx.signedPsbtHex])
+  const isValid = await validateTxes([signedTx.signedTxHex])
 
   for (const entry of isValid) {
     if (!entry.allowed) {
@@ -3059,12 +3029,22 @@ export async function sendInscriptionToOpReturnAll(
   }
 
   if (dryRun) {
-    return signedTx
+    return {
+      txId: signedTx.txId,
+      signedTxHex: signedTx.signedTxHex,
+      vout: 0,
+      outputValue: targetPostage,
+    }
   }
 
-  await broadcastTxes([signedTx.signedPsbtHex])
+  await broadcastTxes([signedTx.signedTxHex])
 
-  return signedTx
+  return {
+    txId: signedTx.txId,
+    signedTxHex: signedTx.signedTxHex,
+    vout: 0,
+    outputValue: targetPostage,
+  }
 }
 
 /**
@@ -3082,16 +3062,20 @@ export async function sendInscriptionToOpReturnAll(
 export async function sendInscriptionInPaymentWalletToOpReturnAll(
   inscriptionId: string,
   targetWallet: WalletInfo,
-  targetPostage: number,
+  targetPostage: number | null,
   feeRate: number,
   dryRun: boolean,
   signFunc: SignFunction,
-): Promise<SignResponse> {
+): Promise<SendInscriptionResult> {
   // Get connected wallet
   const userPaymentWallet = getPaymentWallet()
   const userOrdinalsWallet = getOrdinalsWallet()
   if (!userPaymentWallet || !userOrdinalsWallet)
     throw new Error('Wallets not found')
+
+  if (targetPostage == null || targetPostage <= 0) {
+    targetPostage = 1 // 1 sat for inscription
+  }
 
   const paymentAddr = userPaymentWallet.address
   const paymentPublicKey = userPaymentWallet.pubkey
@@ -3150,7 +3134,7 @@ export async function sendInscriptionInPaymentWalletToOpReturnAll(
 
   const signedTx = await signFunc(unsignedPsbtHex, payerWallet.addr, inscriptionWallet.addr, [])
 
-  const isValid = await validateTxes([signedTx.signedPsbtHex])
+  const isValid = await validateTxes([signedTx.signedTxHex])
 
   for (const entry of isValid) {
     if (!entry.allowed) {
@@ -3159,11 +3143,21 @@ export async function sendInscriptionInPaymentWalletToOpReturnAll(
   }
 
   if (dryRun) {
-    return signedTx
+    return {
+      txId: signedTx.txId,
+      signedTxHex: signedTx.signedTxHex,
+      vout: 0,
+      outputValue: targetPostage,
+    }
   }
 
-  await broadcastTxes([signedTx.signedPsbtHex])
-  return signedTx
+  await broadcastTxes([signedTx.signedTxHex])
+  return {
+    txId: signedTx.txId,
+    signedTxHex: signedTx.signedTxHex,
+    vout: 0,
+    outputValue: targetPostage,
+  }
 }
 
 /**
@@ -3239,7 +3233,7 @@ export async function mintWithParentAll(
   let signedRevealTx = null
   try {
     saveExtraUtxos(
-      [signedCommitTx.signedPsbtHex],
+      [signedCommitTx.signedTxHex],
       ['0000000000000000000000000000000000000000000000000000000000000000i0', `${commitTxid}:0:0`],
     )
     const revealTx = await buildRevealTxWithParent(
@@ -3268,7 +3262,7 @@ export async function mintWithParentAll(
     clearExtraUtxos()
   }
 
-  const isValid = await validateTxes([signedCommitTx.signedPsbtHex, signedRevealTx.signedPsbtHex])
+  const isValid = await validateTxes([signedCommitTx.signedTxHex, signedRevealTx.signedTxHex])
 
   for (const entry of isValid) {
     if (!entry.allowed) {
@@ -3279,20 +3273,20 @@ export async function mintWithParentAll(
   if (dryRun) {
     return {
       commitTxId: signedCommitTx.txId,
-      signedCommitTxHex: signedCommitTx.signedPsbtHex,
+      signedCommitTxHex: signedCommitTx.signedTxHex,
       revealTxId: signedRevealTx.txId,
-      signedRevealTxHex: signedRevealTx.signedPsbtHex,
+      signedRevealTxHex: signedRevealTx.signedTxHex,
       inscriptionId: `${signedRevealTx.txId}i0`,
       postage,
       secret,
     }
   }
-  await broadcastTxes([signedCommitTx.signedPsbtHex, signedRevealTx.signedPsbtHex])
+  await broadcastTxes([signedCommitTx.signedTxHex, signedRevealTx.signedTxHex])
   return {
     commitTxId: signedCommitTx.txId,
-    signedCommitTxHex: signedCommitTx.signedPsbtHex,
+    signedCommitTxHex: signedCommitTx.signedTxHex,
     revealTxId: signedRevealTx.txId,
-    signedRevealTxHex: signedRevealTx.signedPsbtHex,
+    signedRevealTxHex: signedRevealTx.signedTxHex,
     inscriptionId: `${signedRevealTx.txId}i0`,
     postage,
     secret,
@@ -3401,7 +3395,7 @@ export async function sendInscriptionToOpReturnWithExtraInputsAndExtraOutputAll(
 
   const signedTx = await signFunc(unsignedPsbtHex, payerWallet.addr, inscriptionWallet.addr, [0])
 
-  const isValid = await validateTxes([signedTx.signedPsbtHex])
+  const isValid = await validateTxes([signedTx.signedTxHex])
 
   for (const entry of isValid) {
     if (!entry.allowed) {
@@ -3412,14 +3406,14 @@ export async function sendInscriptionToOpReturnWithExtraInputsAndExtraOutputAll(
   if (dryRun) {
     return {
       txId: signedTx.txId,
-      signedPsbtHex: signedTx.signedPsbtHex,
+      signedTxHex: signedTx.signedTxHex,
     }
   }
 
-  await broadcastTxes([signedTx.signedPsbtHex])
+  await broadcastTxes([signedTx.signedTxHex])
   return {
     txId: signedTx.txId,
-    signedPsbtHex: signedTx.signedPsbtHex,
+    signedTxHex: signedTx.signedTxHex,
   }
 }
 
@@ -3608,7 +3602,7 @@ export async function mintWithExtraInputInCommitAll(
     payment,
   )
 
-  const isValid = await validateTxes([signedCommitTx.signedPsbtHex, revealTx.signedPsbtHex])
+  const isValid = await validateTxes([signedCommitTx.signedTxHex, revealTx.signedTxHex])
 
   for (const entry of isValid) {
     if (!entry.allowed) {
@@ -3619,21 +3613,21 @@ export async function mintWithExtraInputInCommitAll(
   if (dryRun) {
     return {
       commitTxId: signedCommitTx.txId,
-      signedCommitTxHex: signedCommitTx.signedPsbtHex,
+      signedCommitTxHex: signedCommitTx.signedTxHex,
       revealTxId: revealTx.txId,
-      signedRevealTxHex: revealTx.signedPsbtHex,
+      signedRevealTxHex: revealTx.signedTxHex,
       inscriptionId: `${revealTx.txId}i0`,
       postage,
       secret,
     }
   }
 
-  await broadcastTxes([signedCommitTx.signedPsbtHex, revealTx.signedPsbtHex])
+  await broadcastTxes([signedCommitTx.signedTxHex, revealTx.signedTxHex])
   return {
     commitTxId: signedCommitTx.txId,
-    signedCommitTxHex: signedCommitTx.signedPsbtHex,
+    signedCommitTxHex: signedCommitTx.signedTxHex,
     revealTxId: revealTx.txId,
-    signedRevealTxHex: revealTx.signedPsbtHex,
+    signedRevealTxHex: revealTx.signedTxHex,
     inscriptionId: `${revealTx.txId}i0`,
     postage,
     secret,
@@ -3718,7 +3712,7 @@ export async function mintWithExtraInputInCommitFeeRate(
     reveal_fee: commitTx.reveal_fee,
     total_fee: commitTx.commit_fee + commitTx.reveal_fee,
     unsigned_commit_tx_hex: commitTx.unsigned_commit_tx.toHex(),
-    signed_reveal_tx_hex: revealTx.signedPsbtHex,
+    signed_reveal_tx_hex: revealTx.signedTxHex,
     inscription_id: `${revealTx.txId}i0`,
     postage,
   }

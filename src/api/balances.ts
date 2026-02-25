@@ -1,4 +1,4 @@
-import { fetchWithErrors, getSwapBackendUrl } from './helpers'
+import { fetchWithErrors, getSwapBackendUrl } from '../core/helpers'
 
 /**
  * Interface representing the balance information for a base BRC-20 token, including the available balance, transferrable balance, decimals, and ticker.
