@@ -1055,7 +1055,6 @@ async function buildPsbtFromTx(
     const txhex = await getTxhex(input.hash.toString('hex'))
     const tx = bitcoinjs.Transaction.fromHex(txhex)
     for (const output in tx.outs) {
-      // TODO: what tf this is doing man?!?
       try {
         tx.setWitness(Number.parseInt(output), [])
       }
