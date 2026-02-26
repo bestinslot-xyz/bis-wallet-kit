@@ -1,5 +1,4 @@
 import antfu from '@antfu/eslint-config'
-import tsParser from '@typescript-eslint/parser'
 
 export default antfu(
   // Configures for antfu's config
@@ -7,27 +6,11 @@ export default antfu(
     ignores: [
       'dist',
       'node_modules',
-      'src/**/*.d.ts',
-      '**/*.vue',
-      'examples/*',
-      '**/*.json',
-      '**/*.md',
-      '**/*.txt',
-      '**/*.config.*',
-      'scripts/*',
     ],
     rules: {},
-    languageOptions: {
-      ecmaVersion: 2022,
-      parser: tsParser,
-      parserOptions: {
-        project: './tsconfig.eslint.json',
-        tsconfigRootDir: new URL('.', import.meta.url).pathname,
-        sourceType: 'module',
-      },
-    },
   },
   {
+    files: ['**/*.ts'],
     rules: {
       'no-console': 'warn',
       '@typescript-eslint/naming-convention': [
@@ -82,5 +65,5 @@ export default antfu(
       'jsdoc/require-param': 'warn',
       'jsdoc/require-returns': 'warn',
     },
-  }
+  },
 )

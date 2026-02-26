@@ -1,6 +1,6 @@
 import type { Network, Signer } from 'bitcoinjs-lib'
 import type { ECPairInterface } from 'ecpair'
-import type { BISNetwork, BISWallet } from '../types/common'
+import type { BISNetwork, BISWallet, BISWalletPurpose } from '../types/common'
 import type { BISProvider, SignResponse } from './api'
 import { Buffer } from 'node:buffer'
 import { Signer as BIP322Signer } from 'bip322-js'
@@ -60,7 +60,7 @@ export async function saveWallet(
   network: BISNetwork,
   walletType: LocalWalletType = 'p2wpkh',
   sourceWallet: LocalWalletSource = 'unisat',
-): Promise<void> {
+): Promise<BISWallet> {
   if (walletType !== 'p2wpkh' && walletType !== 'p2tr') {
     throw new Error('Invalid wallet type. Supported types are p2wpkh and p2tr.')
   }
@@ -80,19 +80,20 @@ export async function saveWallet(
     throw new Error('Failed to save wallet.')
   }
 
+  const wallet = {
+    address: walletInfo.address,
+    pubkey: Buffer.from(walletInfo.keyPair.publicKey).toString('hex'),
+    purpose: 'all' as BISWalletPurpose,
+  }
+
   const session = {
     provider: 'local' as const,
-    wallets: [
-      {
-        address: walletInfo.address,
-        pubkey: Buffer.from(walletInfo.keyPair.publicKey).toString('hex'),
-        purpose: 'all' as const,
-      },
-    ],
+    wallets: [wallet],
     signature: null,
   }
 
   saveWalletInfo(session)
+  return wallet
 }
 
 interface LocalWalletInfo {

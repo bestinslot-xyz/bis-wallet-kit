@@ -19,7 +19,7 @@ export * as mint from './api/mint'
 export * as balances from './api/balances'
 
 // -------- Helpers API --------
-export * as helpers from './api/helpers'
+export * from './api/helpers'
 
 // -------- Common types -------
 export type { PaymentOpts } from './types/common'
@@ -29,7 +29,7 @@ export * as bitcoinjs from 'bitcoinjs-lib'
 export * as Buff from '@cmdcode/buff-utils'
 
 // Set up dev mode
-if (import.meta.env.DEV) {
+if (import.meta.env.DEV && typeof document !== 'undefined') {
   // Mount Vue
   Promise.all([
     import('vue'),

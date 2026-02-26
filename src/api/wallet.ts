@@ -2,10 +2,13 @@ import type { LocalWalletSource, LocalWalletType } from '../provider/local'
 import type { WalletInfo } from '../types/wallet'
 
 export {
+  connect,
+  disconnect,
   getAllBalanceDetails,
   getCardinalBalance,
   getOrdinalsWallet,
   getPaymentWallet,
+  getSession,
   sendBTC,
   sendInscription,
   setNetwork,

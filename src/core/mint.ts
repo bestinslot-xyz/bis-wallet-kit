@@ -508,6 +508,7 @@ async function mintMultipleAll(
     inscriptionAddress,
     [],
   )
+
   const commitTxId = signedCommitTx.txId
   const revealTx = await buildRevealTxMultiple(
     inscriptionWallet,
@@ -519,6 +520,7 @@ async function mintMultipleAll(
     paymentWallet,
     payment,
   )
+
   const isValid = await validateTxes([signedCommitTx.signedTxHex, revealTx.signed_reveal_tx_hex])
 
   for (const entry of isValid) {

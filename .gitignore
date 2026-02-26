@@ -12,7 +12,7 @@ dist
 dist-ssr
 *.local
 .npmrc
-.env
+.env*
 docs/
 
 # Editor directories and files

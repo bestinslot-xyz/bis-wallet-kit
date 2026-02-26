@@ -1,3 +1,4 @@
+<!-- eslint-disable no-console -->
 <script setup lang="ts">
 import type { BISSession, BISWallet } from '../types/common'
 import { Script } from '@cmdcode/tapscript'
@@ -33,20 +34,22 @@ onMounted(async () => {
   // Get locally stored wallet info
   const data = bis.wallet.getSession()
 
-  if (data) onWalletConnect(data)
+  if (data)
+    onWalletConnect(data)
 
   testCustomTapscript()
 })
 
 async function onConnectClick() {
-  const data = await bis.wallet.connect().catch(e => {
+  const data = await bis.wallet.connect().catch((e) => {
     console.error(e)
     return null
   })
 
   if (data) {
     onWalletConnect(data)
-  } else {
+  }
+  else {
     console.error('Connection failed')
   }
 }
@@ -85,7 +88,8 @@ function onDisconnectClick() {
 }
 
 async function getBalance() {
-  if (!session.value) return
+  if (!session.value)
+    return
 
   session.value.balance = await bis.wallet.getCardinalBalance(session.value.wallet.payment.address)
 }
@@ -104,7 +108,8 @@ function testCustomTapscript() {
 
   if (isOriginal) {
     console.log('❌ Tapscript: Still using original opcode logic (1 → OP_1)')
-  } else {
+  }
+  else {
     console.log('✅ Tapscript: Custom logic confirmed (1 encoded as literal value) ')
   }
 }
@@ -115,19 +120,25 @@ function testCustomTapscript() {
     <div class="mx-auto max-w-4xl border-x border-border border-dashed flex-1 w-full pb-24">
       <!-- DEV -->
       <div class="border-b border-border border-dashed p-2 flex items-center gap-x-4">
-        <img src="/src/assets/dev/chest-dark-bg.png" class="w-12 h-12" />
-        <h1 class="text-2xl font-bold">BiS Wallet Kit - DEV</h1>
+        <img src="/src/assets/dev/chest-dark-bg.png" class="w-12 h-12">
+        <h1 class="text-2xl font-bold">
+          BiS Wallet Kit - DEV
+        </h1>
       </div>
 
       <!-- Guest Functions -->
       <div class="border-b border-border border-dashed p-4 flex gap-x-2">
-        <Button @click="onConnectClick()"> Connect Wallet </Button>
+        <Button @click="onConnectClick()">
+          Connect Wallet
+        </Button>
         <Select v-model="network" :options="networkOpts" />
       </div>
 
       <!-- Session Actions -->
       <div v-if="isConnected" class="border-b border-border border-dashed p-4">
-        <Button @click="onDisconnectClick()"> Disconnect </Button>
+        <Button @click="onDisconnectClick()">
+          Disconnect
+        </Button>
       </div>
 
       <!-- BRC20 -->
