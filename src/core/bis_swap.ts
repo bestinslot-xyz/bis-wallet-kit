@@ -332,7 +332,7 @@ async function getSwapInfo(): Promise<SwapInfo> {
   return swapInfoCache
 }
 
-interface GetBRC20BalanceResponse {
+interface GetBRC20ProgBalanceResponse {
   success: boolean
   result: string
 }
@@ -357,7 +357,7 @@ export async function getBRC20ProgBalance(tokenAddress: string): Promise<bigint>
     token_address: tokenAddress,
   }
 
-  const result = await fetchWithErrors<GetBRC20BalanceResponse>(url, {
+  const result = await fetchWithErrors<GetBRC20ProgBalanceResponse>(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
