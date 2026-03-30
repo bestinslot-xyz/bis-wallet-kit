@@ -3,6 +3,7 @@ import { Verifier } from 'bip322-js'
 import * as bitcoinjs from 'bitcoinjs-lib'
 import * as varuint from 'varuint-bitcoin'
 import { getBitcoinNetwork } from '../lib/bitcoin'
+import { evmEncodeFunctionCall } from './brc20'
 import { getNetwork } from './store-network'
 
 export const txHexByIdCache: { [txid: string]: any } = {}
@@ -668,6 +669,62 @@ export async function fetchWithErrors<T>(url: string, options: RequestInit): Pro
     const errorMessage = error instanceof Error ? error.message : String(error)
     throw new Error(`API Request Failed: ${errorMessage}`)
   }
+}
+
+/**
+ * Retrieves the appropriate BRC2.0 public RPC URL based on the current network (signet or mainnet). The function checks the current network using the getNetwork function and returns the corresponding public RPC URL for that network. If the network is not supported, it throws an error indicating that the network is unsupported for the public RPC URL.
+ *
+ * @returns The public RPC URL corresponding to the current network (signet or mainnet).
+ */
+export function getPublicRpcUrl(): string {
+  const network = getNetwork()
+  if (network === 'signet') {
+    return 'https://signet-rpc.bestinslot.xyz'
+  }
+  else if (network === 'mainnet') {
+    return 'https://rpc.brc20.build'
+  }
+  else {
+    throw new Error('Unsupported network for public RPC URL')
+  }
+}
+
+/**
+ * Executes an eth_call on the appropriate public RPC URL based on the current network (signet or mainnet). The function constructs the JSON-RPC request payload with the provided data and sends it to the public RPC URL for execution. It returns a promise that resolves to the result of the eth_call, or throws an error if the request fails.
+ *
+ * @param to The address of the contract to call.
+ * @param abi The ABI of the contract to call.
+ * @param functionName The name of the function to call on the contract.
+ * @param params The parameters to pass to the function being called on the contract.
+ * @returns A promise that resolves to the result of the eth_call as a string, or throws an error if the request fails.
+ */
+export async function ethCallOnPublicRpc(
+  to: string,
+  abi: any,
+  functionName: string,
+  params: any,
+): Promise<string> {
+  const url = getPublicRpcUrl()
+  const data = evmEncodeFunctionCall(abi, functionName, params)
+
+  return fetchWithErrors<{ result: string }>(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: Math.random().toString(16).slice(2),
+      method: 'eth_call',
+      params: [
+        {
+          to,
+          data,
+        },
+        'latest',
+      ],
+    }),
+  }).then(response => response.result)
 }
 
 /**

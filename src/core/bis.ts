@@ -2,7 +2,11 @@ import type { BISSession, BISWalletPurpose } from '../types/common'
 import type { SendInscriptionResult } from '../types/inscription'
 import type { WalletInfo } from '../types/wallet'
 import { create, hide, showConnect } from '../core/modal'
-import { sendInscriptionAll, sendInscriptionInPaymentWalletToOpReturnAll, sendInscriptionToOpReturnAll } from './mint'
+import {
+  sendInscriptionAll,
+  sendInscriptionInPaymentWalletToOpReturnAll,
+  sendInscriptionToOpReturnAll,
+} from './mint'
 import { getSignFn } from './providers'
 import { clearWalletInfo, getWalletInfo } from './store'
 
@@ -85,10 +89,24 @@ export async function sendInscription(
 
   if (targetWallet.isOpReturn) {
     if (!walletType || walletType === 'ordinals') {
-      return await sendInscriptionToOpReturnAll(inscriptionId, targetWallet, postage, feeRate, dryRun, signFn)
+      return await sendInscriptionToOpReturnAll(
+        inscriptionId,
+        targetWallet,
+        postage,
+        feeRate,
+        dryRun,
+        signFn,
+      )
     }
     else if (walletType === 'payment') {
-      return await sendInscriptionInPaymentWalletToOpReturnAll(inscriptionId, targetWallet, postage, feeRate, dryRun, signFn)
+      return await sendInscriptionInPaymentWalletToOpReturnAll(
+        inscriptionId,
+        targetWallet,
+        postage,
+        feeRate,
+        dryRun,
+        signFn,
+      )
     }
   }
   if (!walletType || walletType === 'ordinals') {

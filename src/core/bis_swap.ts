@@ -492,6 +492,7 @@ export async function getSwapBalance(tokenAddress: string): Promise<bigint> {
   // 3. Convert the result to a BigInt
   return BigInt(result.result)
 }
+
 async function getSwapBalanceOf(pubkey: string, tokenAddress: string): Promise<bigint> {
   // 2. Prepare and execute the API call
   const url = getSwapBackendUrl('get_balance')

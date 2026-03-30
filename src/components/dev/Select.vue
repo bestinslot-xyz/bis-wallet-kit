@@ -20,7 +20,7 @@ interface Option {
     :class="
       cn(
         'inline-flex items-center bg-background px-2 border border-border rounded focus:outline-none focus:border-primary ring-0 h-10 text-foreground text-sm appearance-none cursor-pointer',
-        props.class
+        props.class,
       )
     "
   >

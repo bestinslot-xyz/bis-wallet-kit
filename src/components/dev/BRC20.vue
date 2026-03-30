@@ -1,3 +1,4 @@
+<!-- eslint-disable no-console -->
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import Button from './Button.vue'
@@ -8,9 +9,9 @@ import Select from './Select.vue'
 const parsedJson = ref<string>()
 const version = ref('v0.8.28+commit.7893614a')
 const versionOptions = ref([{ value: 'v0.8.28+commit.7893614a', label: 'v0.8.28+commit.7893614a' }])
-const compileOutput = ref<{ sources: any; contracts: any }>()
+const compileOutput = ref<{ sources: any, contracts: any }>()
 let CompilerWorker: Worker | null = null
-const contractList = ref<{ file: string; contract: string }[]>([])
+const contractList = ref<{ file: string, contract: string }[]>([])
 const contractSelectModel = ref<string>() // fName___ cName
 initWorker()
 
@@ -57,7 +58,8 @@ async function onCompile(output: any) {
 
 async function onJSONFileChange(event: Event) {
   const file = (event.target as HTMLInputElement).files?.[0]
-  if (!file) return
+  if (!file)
+    return
 
   if (file.type !== 'application/json') {
     console.error('Please upload a valid JSON file.')
@@ -70,7 +72,8 @@ async function onJSONFileChange(event: Event) {
     // console.log(jsonData.settings.compilationTarget['BRC20_Controller.sol'])
 
     parsedJson.value = jsonData
-  } catch (error) {
+  }
+  catch (error) {
     console.error('Error parsing JSON file:', error)
   }
 }
@@ -83,7 +86,8 @@ async function parseJSONFile(file: File): Promise<any> {
       try {
         const jsonData = JSON.parse(reader.result as string)
         resolve(jsonData)
-      } catch (error) {
+      }
+      catch (error) {
         reject(error)
       }
     }
@@ -107,13 +111,14 @@ function compile() {
 }
 
 function initWorker() {
-  if (CompilerWorker) return
+  if (CompilerWorker)
+    return
 
   CompilerWorker = new Worker(new URL('@@/lib/dev-worker.ts', import.meta.url), {
     type: 'module',
   })
 
-  CompilerWorker.onmessage = e => {
+  CompilerWorker.onmessage = (e) => {
     onCompile(e.data.output)
   }
 }
@@ -121,7 +126,9 @@ function initWorker() {
 
 <template>
   <div>
-    <h2 class="text-xl font-bold mb-4">BRC20</h2>
+    <h2 class="text-xl font-bold mb-4">
+      BRC20
+    </h2>
     <div class="grid grid-cols-2 gap-4">
       <div>
         <Label>JSON File:</Label>
@@ -132,7 +139,9 @@ function initWorker() {
         <Select v-model="version" :options="versionOptions" class="w-full" />
       </div>
       <div class="col-span-2">
-        <Button @click="compile"> Compile </Button>
+        <Button @click="compile">
+          Compile
+        </Button>
       </div>
       <template v-if="contractOptions.length > 0">
         <div>

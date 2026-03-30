@@ -89,7 +89,14 @@ export class InscriptionDetails {
  * @returns {InscriptionDetails} An instance of the InscriptionDetails class with the JSON data set for inscription.
  */
 export function jsonInscription(jsonData: any): InscriptionDetails {
-  return new InscriptionDetails(Buff.str('application/json'), null, null, null, null, Buff.str(JSON.stringify(jsonData)))
+  return new InscriptionDetails(
+    Buff.str('application/json'),
+    null,
+    null,
+    null,
+    null,
+    Buff.str(JSON.stringify(jsonData)),
+  )
 }
 
 /**

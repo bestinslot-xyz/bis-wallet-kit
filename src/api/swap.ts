@@ -29,7 +29,20 @@ export {
   getTokenDecimals,
   getUnwrapResult,
 } from '../core/bis_swap' // Export all swap-related functions from the core BIS swap module
-export type { GetActivityOfPairResponse, GetKlinesRequest, GetKlinesResponse, GetPairVolumeRequest, GetPairVolumeResponse, GetSwapStatusResponse, GetWalletActivitiesResponse, Kline, PairActivityEntry, PairReserves, SwapBalance, WalletActivityEntry } from '../core/bis_swap' // Export types related to wallet activities
+export type {
+  GetActivityOfPairResponse,
+  GetKlinesRequest,
+  GetKlinesResponse,
+  GetPairVolumeRequest,
+  GetPairVolumeResponse,
+  GetSwapStatusResponse,
+  GetWalletActivitiesResponse,
+  Kline,
+  PairActivityEntry,
+  PairReserves,
+  SwapBalance,
+  WalletActivityEntry,
+} from '../core/bis_swap' // Export types related to wallet activities
 export type { AllBalanceDetails } from '../core/helpers' // Export the AllBalanceDetails type from the core helpers module
 export type { BISSwapWalletInfo } from '../core/store' // Export the BISSwapWalletInfo type from the core store module
 export { calculatePairAddress as getPairAddress } from '../lib/uniswap_ops'
@@ -80,13 +93,15 @@ export async function addLiquidity(
   amount2Desired: bigint,
   slippageBPS: bigint,
 ) {
-  return (await prepareAndSendAddLiquidityOrder(
-    token1Address,
-    token2Address,
-    amount1Desired,
-    amount2Desired,
-    slippageBPS,
-  )).success
+  return (
+    await prepareAndSendAddLiquidityOrder(
+      token1Address,
+      token2Address,
+      amount1Desired,
+      amount2Desired,
+      slippageBPS,
+    )
+  ).success
 }
 
 /**
@@ -108,14 +123,16 @@ export async function removeLiquidity(
   amount2Min: bigint,
   slippageBPS: bigint,
 ) {
-  return (await prepareAndSendRemoveLiquidityOrder(
-    token1Address,
-    token2Address,
-    liquidity,
-    amount1Min,
-    amount2Min,
-    slippageBPS,
-  )).success
+  return (
+    await prepareAndSendRemoveLiquidityOrder(
+      token1Address,
+      token2Address,
+      liquidity,
+      amount1Min,
+      amount2Min,
+      slippageBPS,
+    )
+  ).success
 }
 
 /**
@@ -135,13 +152,15 @@ export async function swap(
   amountOutMin: bigint,
   slippageBPS: bigint,
 ) {
-  return (await prepareAndSendSwapOrder(
-    tokenInAddress,
-    tokenOutAddress,
-    amountIn,
-    amountOutMin,
-    slippageBPS,
-  )).success
+  return (
+    await prepareAndSendSwapOrder(
+      tokenInAddress,
+      tokenOutAddress,
+      amountIn,
+      amountOutMin,
+      slippageBPS,
+    )
+  ).success
 }
 
 /**
@@ -161,13 +180,15 @@ export async function swap2(
   amountOutMin: bigint,
   slippageBPS: bigint,
 ) {
-  return (await prepareAndSendSwap2Order(
-    tokenInAddress,
-    tokenOutAddress,
-    amountIn,
-    amountOutMin,
-    slippageBPS,
-  )).success
+  return (
+    await prepareAndSendSwap2Order(
+      tokenInAddress,
+      tokenOutAddress,
+      amountIn,
+      amountOutMin,
+      slippageBPS,
+    )
+  ).success
 }
 
 /**
@@ -176,14 +197,8 @@ export async function swap2(
  * @param amount - The amount of the wrapped token to unwrap.
  * @returns A promise that resolves to a boolean indicating the success of the unwrap operation.
  */
-export async function unwrap(
-  tokenAddress: string,
-  amount: bigint,
-) {
-  return (await prepareAndSendUnwrapOrder(
-    tokenAddress,
-    amount,
-  )).success
+export async function unwrap(tokenAddress: string, amount: bigint) {
+  return (await prepareAndSendUnwrapOrder(tokenAddress, amount)).success
 }
 
 /**
@@ -201,7 +216,12 @@ export async function deposit(
   feeRate: number,
   createAllowanceIfNeeded: boolean = true,
 ): Promise<string[]> {
-  return (await createAndBroadcastDepositOrder(tokenAddress, amount, feeRate, createAllowanceIfNeeded))
+  return await createAndBroadcastDepositOrder(
+    tokenAddress,
+    amount,
+    feeRate,
+    createAllowanceIfNeeded,
+  )
 }
 
 /**
@@ -218,7 +238,8 @@ export async function withdraw(
   targetAddress?: string,
 ): Promise<boolean> {
   if (targetAddress) {
-    return (await prepareAndSendWithdrawOrderToOrdinalWallet(tokenAddress, targetAddress, amount)).success
+    return (await prepareAndSendWithdrawOrderToOrdinalWallet(tokenAddress, targetAddress, amount))
+      .success
   }
   else {
     return (await prepareAndSendWithdrawOrderToSelfOrdinalWallet(tokenAddress, amount)).success

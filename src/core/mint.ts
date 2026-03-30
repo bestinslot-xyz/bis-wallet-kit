@@ -1,7 +1,12 @@
 import type { APIOrdinalUtxoInfo } from '../core/helpers'
 import type { SignFunction, SignResponse } from '../provider/api'
 import type { PaymentOpts } from '../types/common'
-import type { InscribeFees, InscribeMultipleResult, InscribeResult, SendInscriptionResult } from '../types/inscription'
+import type {
+  InscribeFees,
+  InscribeMultipleResult,
+  InscribeResult,
+  SendInscriptionResult,
+} from '../types/inscription'
 import { Buffer } from 'node:buffer'
 import { Buff } from '@cmdcode/buff-utils'
 import {

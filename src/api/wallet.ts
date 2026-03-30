@@ -16,9 +16,7 @@ export {
   signMessageLocalVerify,
   signMessageLocalVerifyDeterministic,
 } from '../core/bis' // Export all wallet-related functions from the core BIS module
-export {
-  saveWallet as connectLocalWallet,
-} from '../provider/local' // Export local wallet provider functions
+export { saveWallet as connectLocalWallet } from '../provider/local' // Export local wallet provider functions
 
 // Re-export wallet-related types
 export type { WalletInfo }

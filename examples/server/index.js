@@ -27,21 +27,23 @@ async function main() {
   try {
     const signature = await signMessageLocalVerify(message)
     console.log('Signature (bip322-simple):', Buffer.from(signature, 'hex').toString('base64'))
-  } catch (error) {
+  }
+  catch (error) {
     console.error('Error signing message with bip322-simple:', error)
     const signature = await signMessage(message)
     console.log(
       'Signature (bip322-simple, non-verified):',
-      Buffer.from(signature, 'hex').toString('base64')
+      Buffer.from(signature, 'hex').toString('base64'),
     )
   }
   try {
     const deterministicSignature = await signMessageLocalVerifyDeterministic(message)
     console.log(
       'Deterministic Signature (ecdsa):',
-      Buffer.from(deterministicSignature, 'hex').toString('base64')
+      Buffer.from(deterministicSignature, 'hex').toString('base64'),
     )
-  } catch (error) {
+  }
+  catch (error) {
     console.error('Error signing message with ecdsa:', error)
   }
 
@@ -52,16 +54,16 @@ async function main() {
       null,
       Buff.str('utf8'),
       null,
-      Buff.str('Hello, world!')
+      Buff.str('Hello, world!'),
     ),
     2,
     null,
     null,
     0,
-    false
+    false,
   )
 }
 
-main().catch(error => {
+main().catch((error) => {
   console.error('Error connecting to wallet:', error)
 })

@@ -16,7 +16,8 @@ function toCamelCase(name: string) {
   if (name.startsWith('_')) {
     const camel = name.slice(1).replace(/_([a-z0-9])/gi, (_, c) => c.toUpperCase())
     return `_${camel}`
-  } else {
+  }
+  else {
     return name.replace(/_([a-z0-9])/gi, (_, c) => c.toUpperCase())
   }
 }
@@ -42,22 +43,26 @@ function processFunction(fn: any) {
     // not all functions have names (e.g. arrow functions)
     const name = fn.getName()
     const camel = toCamelCase(name || '')
-    if (name && camel !== name) fn.rename(camel)
+    if (name && camel !== name)
+      fn.rename(camel)
   }
 
   // Function parameters
   fn.getParameters().forEach((param: any) => {
     const name = param.getName()
     const camel = toCamelCase(name)
-    if (camel !== name) param.rename(camel)
+    if (camel !== name)
+      param.rename(camel)
   })
 
   fn.getDescendantsOfKind(SyntaxKind.VariableDeclaration).forEach((v: any) => {
     const name = v.getName()
     const camel = toCamelCase(name)
     try {
-      if (camel !== name) v.rename(camel)
-    } catch {
+      if (camel !== name)
+        v.rename(camel)
+    }
+    catch {
       // ignore rename errors
     }
   })
@@ -71,12 +76,13 @@ function processFunction(fn: any) {
   })
 }
 
-project.getSourceFiles().forEach(file => {
-  if (file.getFilePath().includes('node_modules')) return
+project.getSourceFiles().forEach((file) => {
+  if (file.getFilePath().includes('node_modules'))
+    return
 
   // Expand shorthand in object literals to preserve original key (eslint will automatically fix this back to shorthand after camelCase conversion)
-  file.getDescendantsOfKind(SyntaxKind.ObjectLiteralExpression).forEach(obj => {
-    obj.getProperties().forEach(prop => {
+  file.getDescendantsOfKind(SyntaxKind.ObjectLiteralExpression).forEach((obj) => {
+    obj.getProperties().forEach((prop) => {
       if (prop.getKind() === SyntaxKind.ShorthandPropertyAssignment) {
         const name = prop.getName()
         prop.replaceWithText(`${name}: ${name}`)
@@ -85,19 +91,20 @@ project.getSourceFiles().forEach(file => {
   })
 
   // Variables (non-function, non-class)
-  file.getVariableDeclarations().forEach(v => {
+  file.getVariableDeclarations().forEach((v) => {
     const name = v.getName()
     const parent = v.getFirstAncestorByKind(SyntaxKind.VariableStatement)
-    if (!parent) return
+    if (!parent)
+      return
 
     const initializer = v.getInitializer()
-    const isTopLevelConst =
-      parent.getDeclarationList().getDeclarationKind() === VariableDeclarationKind.Const &&
-      parent.getParentOrThrow().getKind() === SyntaxKind.SourceFile
+    const isTopLevelConst
+      = parent.getDeclarationList().getDeclarationKind() === VariableDeclarationKind.Const
+        && parent.getParentOrThrow().getKind() === SyntaxKind.SourceFile
 
-    const isExported =
-      initializer?.getKind() === SyntaxKind.ObjectLiteralExpression ||
-      parent.getFirstAncestorByKind(SyntaxKind.ExportKeyword)
+    const isExported
+      = initializer?.getKind() === SyntaxKind.ObjectLiteralExpression
+        || parent.getFirstAncestorByKind(SyntaxKind.ExportKeyword)
 
     // skip top-level consts and top-level exported objects
     if (isTopLevelConst) {
@@ -105,54 +112,60 @@ project.getSourceFiles().forEach(file => {
         return
       }
       const upperSnake = toUpperSnakeCase(name)
-      if (upperSnake !== name) v.rename(upperSnake)
+      if (upperSnake !== name)
+        v.rename(upperSnake)
       return
     }
 
     // rename binding
     const camel = toCamelCase(name)
-    if (camel !== name) v.rename(camel)
+    if (camel !== name)
+      v.rename(camel)
   })
 
-  file.getInterfaces().forEach(intf => {
+  file.getInterfaces().forEach((intf) => {
     // Interface properties
     const name = intf.getName()
     const camel = toCamelCase(name)
-    if (camel !== name) intf.rename(camel)
+    if (camel !== name)
+      intf.rename(camel)
   })
 
   // Functions
-  file.getFunctions().forEach(fn => {
+  file.getFunctions().forEach((fn) => {
     processFunction(fn)
   })
 
   // Arrow functions
-  file.getDescendantsOfKind(SyntaxKind.ArrowFunction).forEach(fn => {
+  file.getDescendantsOfKind(SyntaxKind.ArrowFunction).forEach((fn) => {
     processFunction(fn)
   })
 
   // Class properties
-  file.getClasses().forEach(cls => {
+  file.getClasses().forEach((cls) => {
     const name = cls.getName()
     const camel = toPascalCase(name || '')
-    if (name && camel !== name) cls.rename(camel)
+    if (name && camel !== name)
+      cls.rename(camel)
 
-    cls.getProperties().forEach(prop => {
+    cls.getProperties().forEach((prop) => {
       const name = prop.getName()
       const camel = toCamelCase(name)
-      if (camel !== name) prop.rename(camel)
+      if (camel !== name)
+        prop.rename(camel)
     })
 
-    cls.getConstructors().forEach(ctor => {
-      ctor.getParameters().forEach(param => {
+    cls.getConstructors().forEach((ctor) => {
+      ctor.getParameters().forEach((param) => {
         const name = param.getName()
         const camel = toCamelCase(name)
-        if (camel !== name) param.rename(camel)
+        if (camel !== name)
+          param.rename(camel)
       })
     })
 
     // Class methods
-    cls.getMethods().forEach(method => {
+    cls.getMethods().forEach((method) => {
       processFunction(method)
     })
   })

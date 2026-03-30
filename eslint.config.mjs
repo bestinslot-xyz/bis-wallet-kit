@@ -3,11 +3,10 @@ import antfu from '@antfu/eslint-config'
 export default antfu(
   // Configures for antfu's config
   {
-    ignores: [
-      'dist',
-      'node_modules',
-    ],
-    rules: {},
+    ignores: ['dist', 'node_modules'],
+    rules: {
+      'no-console': 'off',
+    },
   },
   {
     files: ['**/*.ts'],

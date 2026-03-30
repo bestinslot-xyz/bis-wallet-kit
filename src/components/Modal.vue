@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import type { BISWalletProvider } from '../types/common'
-import type { ConnectCallbacks, ModalState, ModalTheme } from '../types/common'
+import type { BISWalletProvider, ConnectCallbacks, ModalState, ModalTheme } from '../types/common'
 import { computed, nextTick, ref } from 'vue'
 import errorImage from '../assets/img/error.png'
 import leatherLogo from '../assets/img/provider/leather.png'
@@ -18,7 +17,7 @@ const errorMessage = ref<string>()
 const provider = ref<BISWalletProvider>()
 const providerList = ref<HTMLElement>()
 
-const providers: Partial<Record<BISWalletProvider, { name: string; img: string }>> = {
+const providers: Partial<Record<BISWalletProvider, { name: string, img: string }>> = {
   okx: {
     name: 'OKX',
     img: okxLogo,
@@ -48,7 +47,8 @@ const links = {
 }
 
 const providerObj = computed(() => {
-  if (!provider.value) return undefined
+  if (!provider.value)
+    return undefined
 
   return providers[provider.value]
 })
@@ -110,14 +110,16 @@ async function onProviderSelect(providerName: BISWalletProvider) {
     // succcess
     const data = await getWallets(providerName)
 
-    if (!data) throw new Error(`Could not get wallets from the provider:${providerName}`)
+    if (!data)
+      throw new Error(`Could not get wallets from the provider:${providerName}`)
 
     // Resolve the promise with the data
     connectCallbacks?.onSelect(data)
 
     // Hide the modal
     visible.value = false
-  } catch (error: any) {
+  }
+  catch (error: any) {
     console.error('Error connecting to provider.')
     console.error(error)
 
@@ -144,7 +146,9 @@ defineExpose({ showConnect, showError, showConnectConfirmation, hide, setTheme }
       >
         <!-- Header -->
         <div class="relative flex justify-between items-center p-4 py-3 border-b border-border">
-          <div class="font-semibold text-lg">Connect Wallet</div>
+          <div class="font-semibold text-lg">
+            Connect Wallet
+          </div>
           <button
             class="top-2 right-3 absolute flex -m-2 p-2 text-muted-foreground hover:text-foreground text-2xl transition-colors cursor-pointer"
             @click="onCloseClick"
@@ -157,7 +161,9 @@ defineExpose({ showConnect, showError, showConnectConfirmation, hide, setTheme }
         <div class="overflow-y-auto px-4 sm:px-6 py-6 best-scrollbar">
           <!-- SCREEN: CONNECT -->
           <div v-if="state === 'connect'">
-            <div class="mb-6 font-medium text-xl text-center">Select your Bitcoin wallet</div>
+            <div class="mb-6 font-medium text-xl text-center">
+              Select your Bitcoin wallet
+            </div>
             <div ref="providerList" class="flex flex-col gap-y-3">
               <!-- Provider List -->
               <button
@@ -166,7 +172,7 @@ defineExpose({ showConnect, showError, showConnectConfirmation, hide, setTheme }
                 class="group flex items-center gap-x-4 p-2 border hover:border-primary border-border rounded-lg w-full text-left transition-colors cursor-pointer duration-300"
                 @click="onProviderSelect(key)"
               >
-                <img :src="item?.img" class="rounded-lg size-10" />
+                <img :src="item?.img" class="rounded-lg size-10">
                 <div class="font-semibold text-lg grow">
                   {{ item?.name }}
                 </div>
@@ -197,12 +203,12 @@ defineExpose({ showConnect, showError, showConnectConfirmation, hide, setTheme }
             <div class="mx-auto mb-4 max-w-50 text-muted-foreground text-center">
               Check your extension and confirm the connection...
             </div>
-            <img :src="wooGIF" class="mx-auto size-16" />
+            <img :src="wooGIF" class="mx-auto size-16">
           </div>
           <!-- SCREEN: ERROR -->
           <div v-else-if="state === 'error'">
             <div class="text-center">
-              <img :src="errorImage" class="mx-auto mb-8 w-9 h-9.75" />
+              <img :src="errorImage" class="mx-auto mb-8 w-9 h-9.75">
 
               <div class="mb-8 text-center">
                 {{ errorMessage }}
@@ -226,8 +232,7 @@ defineExpose({ showConnect, showError, showConnectConfirmation, hide, setTheme }
               class="font-medium text-foreground hover:underline underline-offset-4"
               :href="links.api"
               target="_blank"
-              >BiS API</a
-            >
+            >BiS API</a>
           </div>
           <div class="text-sm">
             By connecting your wallet, you agree to Best in Slot's
@@ -235,15 +240,13 @@ defineExpose({ showConnect, showError, showConnectConfirmation, hide, setTheme }
               class="text-foreground hover:underline underline-offset-4"
               :href="links.terms"
               target="_blank"
-              >Terms of Service</a
-            >
+            >Terms of Service</a>
             and
             <a
               class="text-foreground hover:underline underline-offset-4"
               :href="links.privacy"
               target="_blank"
-              >Privacy Policy</a
-            >.
+            >Privacy Policy</a>.
           </div>
         </div>
       </div>

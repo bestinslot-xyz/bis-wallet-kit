@@ -1,6 +1,15 @@
 import type { PaymentOpts } from '../types/common'
-import type { InscribeFees, InscribeMultipleResult, InscribeResult, InscriptionDetails } from '../types/inscription'
-import { getInscribeMultipleFee as getInscribeMultipleFeeCore, inscribeMultiple as inscribeMultipleCore, inscribeWithParent as inscribeWithParentCore } from '../core/mint'
+import type {
+  InscribeFees,
+  InscribeMultipleResult,
+  InscribeResult,
+  InscriptionDetails,
+} from '../types/inscription'
+import {
+  getInscribeMultipleFee as getInscribeMultipleFeeCore,
+  inscribeMultiple as inscribeMultipleCore,
+  inscribeWithParent as inscribeWithParentCore,
+} from '../core/mint'
 
 export type { InscribeFees, InscribeMultipleResult, InscribeResult, InscriptionDetails }
 
@@ -21,7 +30,13 @@ export async function inscribe(
   dryRun: boolean,
   paymentOpts?: PaymentOpts,
 ): Promise<InscribeResult> {
-  const result = await inscribeMultipleCore([inscriptionDetails], feeRate, postage, dryRun, paymentOpts)
+  const result = await inscribeMultipleCore(
+    [inscriptionDetails],
+    feeRate,
+    postage,
+    dryRun,
+    paymentOpts,
+  )
   return {
     commitTxId: result.commitTxId,
     signedCommitTxHex: result.signedCommitTxHex,
@@ -73,7 +88,14 @@ export async function inscribeWithParent(
   dryRun: boolean,
   paymentOpts?: PaymentOpts,
 ): Promise<InscribeResult> {
-  return await inscribeWithParentCore(inscriptionDetails, parentInscriptionId, feeRate, postage, dryRun, paymentOpts)
+  return await inscribeWithParentCore(
+    inscriptionDetails,
+    parentInscriptionId,
+    feeRate,
+    postage,
+    dryRun,
+    paymentOpts,
+  )
 }
 
 /**
