@@ -53,7 +53,7 @@ import { modal, wallet } from '@bestinslot/wallet-kit'
 try {
   const data = await modal.connect()
 
-  console.log('Connected to wallet: ', data)
+  console.warn('Connected to wallet: ', data)
 }
 catch (e) {
   console.error('Connection failed: ', e)

@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import { Project, SyntaxKind, VariableDeclarationKind } from 'ts-morph'
 
 // your tsconfig for ESLint/type info
@@ -83,8 +84,8 @@ project.getSourceFiles().forEach((file) => {
   // Expand shorthand in object literals to preserve original key (eslint will automatically fix this back to shorthand after camelCase conversion)
   file.getDescendantsOfKind(SyntaxKind.ObjectLiteralExpression).forEach((obj) => {
     obj.getProperties().forEach((prop) => {
-      if (prop.getKind() === SyntaxKind.ShorthandPropertyAssignment) {
-        const name = prop.getName()
+      if (prop.getKind() === SyntaxKind.ShorthandPropertyAssignment || prop.getKind() === SyntaxKind.PropertyAssignment) {
+        const name = (prop as any).getName()
         prop.replaceWithText(`${name}: ${name}`)
       }
     })
