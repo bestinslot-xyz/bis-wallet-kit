@@ -39,11 +39,13 @@ function requireProvider(provider: BISWalletProvider | undefined): BISProvider {
  */
 export async function getWallets(provider: BISWalletProvider): Promise<BISSession> {
   // Get wallets
-  const wallets = await PROVIDERS[provider]?.getWallets().catch((err: any) => {
-    console.error('Failed to get wallets.', err)
+  const wallets = await requireProvider(provider)
+    .getWallets()
+    .catch((err: any) => {
+      console.error('Failed to get wallets.', err)
 
-    throw new Error(err?.message || 'Failed to get wallets.')
-  })
+      throw new Error(err?.message || 'Failed to get wallets.')
+    })
 
   if (!wallets)
     throw new Error('Failed to get wallets.')
@@ -233,7 +235,7 @@ export async function signPSBT(
   psbtBase64: string,
   broadcast: boolean,
   inputsToSign: any[],
-  message: string,
+  message?: string,
 ) {
   const walletInfo = getWalletInfo()
 
