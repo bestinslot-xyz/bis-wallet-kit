@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer'
 import { assert, describe, it } from 'vitest'
 import { base64ToHex, createUnsecuredToken, hexToBase64 } from '../../src/core/helpers.ts'
 import { delegateInscription, jsonInscription, textInscription } from '../../src/main.ts'
@@ -33,8 +34,8 @@ describe('createUnsecuredToken', () => {
     const parts = token.split('.')
     assert.equal(parts.length, 3)
     assert.equal(parts[2], '') // unsecured: empty signature
-    // header decodes to the "none" alg
-    const header = JSON.parse(atob(parts[0]!.replace(/-/g, '+').replace(/_/g, '/')))
+    // header decodes to the "none" alg (base64url, decoded via Buffer to avoid atob padding/runtime issues)
+    const header = JSON.parse(Buffer.from(parts[0]!, 'base64url').toString())
     assert.equal(header.alg, 'none')
     assert.equal(header.typ, 'JWT')
   })

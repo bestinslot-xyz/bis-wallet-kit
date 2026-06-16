@@ -61,17 +61,12 @@ export function base64ToHex(str: string) {
  * @returns The base64-encoded representation of the input hexadecimal string.
  */
 export function hexToBase64(hexstring: string) {
+  // Validate first: Buffer's hex parser silently drops invalid/odd input, so the
+  // guard is what makes bad input throw rather than produce garbage.
   if (hexstring.length === 0 || hexstring.length % 2 !== 0 || !/^[0-9a-f]+$/i.test(hexstring)) {
     throw new Error('Invalid hex string')
   }
-  return btoa(
-    hexstring
-      .match(/.{2}/g)!
-      .map((a) => {
-        return String.fromCharCode(Number.parseInt(a, 16))
-      })
-      .join(''),
-  )
+  return Buffer.from(hexstring, 'hex').toString('base64')
 }
 
 /**
