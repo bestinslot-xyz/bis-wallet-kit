@@ -23,8 +23,10 @@
     "preview": "vite preview",
     "lint": "eslint",
     "lint:fix": "prettier --write . && eslint --fix",
+    "test": "vitest run",
     "test:signet": "vitest run tests/signet/ --config vitest.signet.config.ts",
-    "test:mainnet": "vitest run tests/mainnet/ --config vitest.mainnet.config.ts"
+    "test:mainnet": "vitest run tests/mainnet/ --config vitest.mainnet.config.ts",
+    "docs:api": "typedoc"
   },
   "peerDependencies": {
     "vue": "^3.5.13"

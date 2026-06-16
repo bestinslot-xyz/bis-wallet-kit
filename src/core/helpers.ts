@@ -61,12 +61,12 @@ export function base64ToHex(str: string) {
  * @returns The base64-encoded representation of the input hexadecimal string.
  */
 export function hexToBase64(hexstring: string) {
-  const matches = hexstring.match(/\w{2}/g)
-  if (!matches) {
+  if (hexstring.length === 0 || hexstring.length % 2 !== 0 || !/^[0-9a-f]+$/i.test(hexstring)) {
     throw new Error('Invalid hex string')
   }
   return btoa(
-    matches
+    hexstring
+      .match(/.{2}/g)!
       .map((a) => {
         return String.fromCharCode(Number.parseInt(a, 16))
       })

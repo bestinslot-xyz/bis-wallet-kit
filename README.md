@@ -13,6 +13,17 @@ Bitcoin-native dApps and web apps needing simple, multi-wallet support.
 - ✅ Leather
 - ✅ Magic Eden
 
+## 📚 Documentation
+
+Full guides and an API reference live in [`docs/`](./docs/README.md):
+
+- [Getting started](./docs/getting-started.md)
+- [Wallet connection](./docs/wallet-connection.md)
+- [Inscriptions](./docs/inscriptions.md) · [BRC-2.0](./docs/brc20.md) · [Swap](./docs/swap.md) · [Balances](./docs/balances.md)
+- [Testing](./docs/testing.md)
+
+Generate the API reference with `pnpm docs:api` (output in `docs/api/`).
+
 ## 🚀 Development & Build
 
 Built with Vite, Vue 3, TypeScript and Tailwind CSS 4.
@@ -67,13 +78,14 @@ const data = wallet.getSession()
 
 // Get Payment wallet
 const paymentWallet = wallet.getPaymentWallet()
+console.warn(paymentWallet?.address)
 
 // Get BTC network
-const network = paymentWallet.getNetwork()
+const network = wallet.getNetwork()
 
 // Set BTC network
 wallet.setNetwork('testnet') // defaults to mainnet
 
 // Theme - defaults to 'system'
-wallet.setTheme('dark') // system, dark, light
+modal.setTheme('dark') // system, dark, light
 ```

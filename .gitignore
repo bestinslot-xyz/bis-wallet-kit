@@ -13,7 +13,8 @@ dist-ssr
 *.local
 .npmrc
 .env*
-docs/
+# Generated API reference (run `pnpm docs:api`). Hand-written guides in docs/ are tracked.
+docs/api/
 
 # Editor directories and files
 .vscode/*
