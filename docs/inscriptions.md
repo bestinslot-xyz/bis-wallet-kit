@@ -13,6 +13,9 @@ const json = jsonInscription({ p: 'brc-20', op: 'deploy', tick: 'abcd', max: 100
 const delegate = delegateInscription('abc…i0')       // delegate to another inscription
 ```
 
+Use `jsonInscription` for BRC-20 operations — e.g. a mint is
+`jsonInscription({ p: 'brc-20', op: 'mint', tick: 'abcd', amt: '1000' })`.
+
 ## Inscribe
 
 ```ts

@@ -59,6 +59,7 @@ const NAMESPACE_FUNCTIONS: Record<string, string[]> = {
     'swapExactOutput',
     'unwrap',
     'deposit',
+    'wrapBtc',
     'withdraw',
     'tryGetSwapReferrerInfo',
   ],
