@@ -1,9 +1,8 @@
 import type { LocalWalletSource, LocalWalletType } from '../provider/local'
 import type { WalletInfo } from '../types/wallet'
 
+export { connect, disconnect } from '../core/connect-modal' // Modal-driven connect flow (browser-only)
 export {
-  connect,
-  disconnect,
   getAllBalanceDetails,
   getCardinalBalance,
   getOrdinalsWallet,
