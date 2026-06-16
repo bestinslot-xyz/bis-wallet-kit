@@ -50,6 +50,6 @@ function handleNetworkChange() {
   const provider = getWalletInfo()?.provider
 
   if (provider === 'unisat') {
-    PROVIDERS.unisat!.checkNetwork?.()
+    PROVIDERS.unisat?.checkNetwork?.()
   }
 }

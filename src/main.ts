@@ -1,5 +1,12 @@
 /* eslint-disable perfectionist/sort-exports */
 
+// -------- Provider registration (side effects) --------
+// The current single entry registers both browser extensions and the local
+// wallet to preserve today's behaviour. The browser/server split (#8) will move
+// these into the respective entry files.
+import './core/register-browser-providers'
+import './core/register-local-provider'
+
 // -------- Wallet API --------
 export * as wallet from './api/wallet'
 
