@@ -25,6 +25,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # pnpm version is taken from package.json "packageManager" (pnpm@10.28.2).
       - uses: pnpm/action-setup@v4
 
       - uses: actions/setup-node@v4
