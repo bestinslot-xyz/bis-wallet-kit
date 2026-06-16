@@ -3,7 +3,7 @@
 import type { BISSession, BISWallet } from '../types/common'
 import { Script } from '@cmdcode/tapscript'
 import { computed, onMounted, ref } from 'vue'
-import { useNetwork } from '../core/store-network'
+import { useNetwork } from '../core/use-network'
 import * as bis from '../main'
 import BRC20 from './dev/BRC20.vue'
 import Button from './dev/Button.vue'
