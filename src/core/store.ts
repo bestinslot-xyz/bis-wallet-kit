@@ -39,6 +39,21 @@ export function clearWalletInfo() {
 const DB_NAME = 'wallet-db'
 const DB_VERSION = 2
 const STORE_NAME = 'wallet'
+
+interface SwapWalletRecord {
+  ciphertext: ArrayBuffer
+  iv: Uint8Array<ArrayBuffer>
+  key: CryptoKey
+  swapPubkey: string
+  bitcoinAddress: string
+}
+
+// In-memory fallback for environments without IndexedDB (Node/Bun). WebCrypto
+// (`crypto.subtle`) is available there, so the swap wallet still encrypts; it
+// just isn't persisted across processes. Keyed by bitcoin address.
+const memorySwapWalletDb = new Map<string, SwapWalletRecord>()
+const hasIndexedDb = typeof indexedDB !== 'undefined'
+
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION)
@@ -69,6 +84,11 @@ async function saveWalletToDB(
   swapPubkey: string,
   bitcoinAddress: string,
 ): Promise<void> {
+  if (!hasIndexedDb) {
+    memorySwapWalletDb.set(bitcoinAddress, { ciphertext, iv, key, swapPubkey, bitcoinAddress })
+    return
+  }
+
   const db = await openDB()
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readwrite')
@@ -102,6 +122,10 @@ async function loadWalletFromDB(bitcoinAddressToRead: string): Promise<{
   swapPubkey: string
   bitcoinAddress: string
 } | null> {
+  if (!hasIndexedDb) {
+    return memorySwapWalletDb.get(bitcoinAddressToRead) ?? null
+  }
+
   const db = await openDB()
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readonly')
@@ -142,8 +166,9 @@ export interface BISSwapWalletInfo {
  * @param data The SwapWalletInfo object containing the swap public key, private key, and associated Bitcoin address. The function encrypts the private key using AES-GCM encryption with a randomly generated key and IV, and then stores the encrypted data along with the necessary information for decryption in IndexedDB. This allows for secure storage of sensitive wallet information while still enabling retrieval when needed.
  */
 export async function saveSwapWalletInfo(data: BISSwapWalletInfo) {
-  // SSR-SAFU
-  if (typeof window === 'undefined') {
+  // Requires WebCrypto; works in the browser and in Node/Bun (with the in-memory
+  // store fallback). Bails only where WebCrypto is unavailable.
+  if (typeof crypto === 'undefined' || !crypto.subtle) {
     return
   }
 
@@ -180,8 +205,9 @@ export async function saveSwapWalletInfo(data: BISSwapWalletInfo) {
 export async function readSwapWalletInfo(
   bitcoinAddressToRead: string,
 ): Promise<BISSwapWalletInfo | null> {
-  // SSR-SAFU
-  if (typeof window === 'undefined') {
+  // Requires WebCrypto; works in the browser and in Node/Bun (with the in-memory
+  // store fallback). Bails only where WebCrypto is unavailable.
+  if (typeof crypto === 'undefined' || !crypto.subtle) {
     return null
   }
 
@@ -214,8 +240,8 @@ export async function readSwapWalletInfo(
  * @param bitcoinAddress The Bitcoin address for which to delete the swap wallet information. The function looks up the record associated with this Bitcoin address in IndexedDB and deletes it, effectively removing the stored swap wallet information. This allows for proper cleanup of sensitive data when it is no longer needed or when a user wants to remove their wallet information from storage.
  */
 export async function deleteSwapWalletInfo(bitcoinAddress: string): Promise<void> {
-  // SSR-SAFU
-  if (typeof window === 'undefined') {
+  if (!hasIndexedDb) {
+    memorySwapWalletDb.delete(bitcoinAddress)
     return
   }
 

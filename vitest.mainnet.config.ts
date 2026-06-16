@@ -8,6 +8,6 @@ export default defineConfig({
   plugins: [vue()],
   test: {
     environment: 'node',
-    include: ['tests/mainnet/*.ts'],
+    include: ['tests/mainnet/**/*.test.ts'],
   },
 })

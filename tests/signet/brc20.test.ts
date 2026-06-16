@@ -1,9 +1,11 @@
 /* eslint-disable no-console */
 import process from 'node:process'
 import { assert, beforeAll, describe, it } from 'vitest'
-import { brc20, wallet } from '../../src/main.ts'
+import { brc20, getEvmAddressFromBitcoinAddress, wallet } from '../../src/main.ts'
 
-const KNOWN_TICKER = 'atat'
+// The deposit/withdraw dry-runs build real transactions against the wallet's
+// balance, so they need a ticker the wallet actually holds — skip unless set.
+const KNOWN_TICKER = process.env.SIGNET_KNOWN_TICKER
 
 describe('tests for BRC2.0 programmable module (signet)', () => {
   let walletAddress: string
@@ -24,7 +26,7 @@ describe('tests for BRC2.0 programmable module (signet)', () => {
 
   it.skipIf(!KNOWN_TICKER)('should dry-run deposit to BRC2.0 prog', async () => {
     const result = await brc20.depositToBrc20Prog(
-      KNOWN_TICKER,
+      KNOWN_TICKER!,
       '1',
       2,
       null,
@@ -40,7 +42,7 @@ describe('tests for BRC2.0 programmable module (signet)', () => {
 
   it.skipIf(!KNOWN_TICKER)('should dry-run withdraw from BRC2.0 prog', async () => {
     const result = await brc20.withdrawFromBrc20Prog(
-      KNOWN_TICKER,
+      KNOWN_TICKER!,
       '1',
       walletAddress,
       2,
@@ -54,4 +56,35 @@ describe('tests for BRC2.0 programmable module (signet)', () => {
     assert.ok(typeof result.transferTxId === 'string')
     console.log('Withdraw dry-run commitTxId:', result.commitTxId)
   })
+
+  // Needs a deployed contract address (SIGNET_CONTRACT_ADDRESS). Uses a generic
+  // ERC-20-style balanceOf(address) read so it works against any token contract.
+  it.skipIf(!process.env.SIGNET_CONTRACT_ADDRESS)(
+    'should dry-run a smart-contract call via ABI',
+    async () => {
+      const abi = [
+        {
+          name: 'balanceOf',
+          type: 'function',
+          stateMutability: 'view',
+          inputs: [{ name: 'account', type: 'address' }],
+          outputs: [{ name: '', type: 'uint256' }],
+        },
+      ]
+      const evmAddress = getEvmAddressFromBitcoinAddress(walletAddress)
+      const result = await brc20.callSmartContractAbi(
+        process.env.SIGNET_CONTRACT_ADDRESS!,
+        abi,
+        'balanceOf',
+        [evmAddress],
+        100000, // estimatedGas
+        2, // gasPerVbyte
+        2, // feeRate
+        null, // postage
+        true, // dryRun
+      )
+      assert.ok(typeof result.commitTxId === 'string')
+      assert.ok(typeof result.revealTxId === 'string')
+    },
+  )
 })
