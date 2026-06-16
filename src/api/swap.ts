@@ -144,7 +144,7 @@ export async function removeLiquidity(
  * @param tokenInAddress - The address of the token to swap from.
  * @param tokenOutAddress - The address of the token to swap to.
  * @param amountIn - The exact amount of the input token to spend.
- * @param amountOutMin - The minimum amount of the output token to receive (slippage is applied to this).
+ * @param amountOutMin - The expected (quoted) output amount. The enforced minimum is derived from this by applying `slippageBPS` — pass the quote, not an already slippage-adjusted value, to avoid double-applying slippage.
  * @param slippageBPS - The slippage tolerance in basis points.
  * @param referrerId - An optional referral ID. When valid, a share of the swap fee is credited to the referrer; an invalid referral is ignored and the swap proceeds normally.
  * @returns A promise that resolves to a boolean indicating the success of the swap operation.

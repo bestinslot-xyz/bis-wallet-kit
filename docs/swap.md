@@ -39,7 +39,7 @@ await swap.swapExactInput(
   tokenInAddress,
   tokenOutAddress,
   amountIn,      // bigint — exact amount spent
-  amountOutMin,  // bigint — minimum received (slippage applied to this)
+  amountOutMin,  // bigint — expected/quoted output; slippage is applied to derive the enforced minimum
   slippageBPS,   // bigint, basis points
 )
 
