@@ -424,7 +424,7 @@ export interface AllBalanceDetails {
  */
 export async function getAllBalanceDetails(addr: string): Promise<AllBalanceDetails> {
   const url = getBackendUrl(`all_balance_details/${addr}`)
-  return await fetchWithErrors<AllBalanceDetails>(url, { method: 'GET' })
+  return fetchWithErrors<AllBalanceDetails>(url, { method: 'GET' })
 }
 
 /**
@@ -476,7 +476,7 @@ export async function getOrdinalUtxos(addr: string): Promise<APIOrdinalUtxoInfo[
  * @param txid The transaction ID for which to fetch the raw transaction hex.
  * @returns A promise that resolves to the raw transaction hex string.
  */
-export async function getTxhex(txid: string) {
+export async function getTxhex(txid: string): Promise<string> {
   if (!txHexByIdCache[txid]) {
     const url = getBackendUrl(`gettxhex/${txid}`)
     txHexByIdCache[txid] = await fetchWithErrors<string>(url, { method: 'GET' })
