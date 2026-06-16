@@ -26,18 +26,57 @@ const fee = await swap.getMinerFee('swap')                   // bigint (per orde
 
 ## Trade
 
+There are two swap directions, mirroring Uniswap's two router modes:
+
+| Function | Mode | You fix | Bounded by |
+|----------|------|---------|------------|
+| `swapExactInput` | exact input | the amount you **spend** | minimum amount received |
+| `swapExactOutput` | exact output | the amount you **receive** | maximum amount spent |
+
 ```ts
-await swap.swap(
+// Exact input: spend exactly amountIn, receive at least amountOutMin.
+await swap.swapExactInput(
   tokenInAddress,
   tokenOutAddress,
-  amountIn,      // bigint
-  amountOutMin,  // bigint
+  amountIn,      // bigint — exact amount spent
+  amountOutMin,  // bigint — expected/quoted output; slippage is applied to derive the enforced minimum
   slippageBPS,   // bigint, basis points
+)
+
+// Exact output: receive exactly amountOut, spend at most the quoted input + slippage.
+await swap.swapExactOutput(
+  tokenInAddress,
+  tokenOutAddress,
+  amountIn,      // bigint — expected/quoted input (slippage applied to derive the max spent)
+  amountOut,     // bigint — exact amount received
+  slippageBPS,
 )
 ```
 
-`swap2` is the variant for the second routing path; use `getSwapResult` /
-`getSwap2Result` to quote before sending.
+Quote before sending with `getSwapExactInputResult` (for `swapExactInput`) and
+`getSwapExactOutputResult` (for `swapExactOutput`).
+
+## Referrals
+
+Both swap functions take an optional final `referrerId`. When a valid referral
+ID is supplied, a share of the swap fee is credited to the referrer's smart
+wallet (and, where the referrer has configured a return rate, part of that is
+rebated back to the swapper). An unknown or expired referral is ignored — the
+swap still goes through as a normal swap.
+
+```ts
+await swap.swapExactInput(tokenInAddress, tokenOutAddress, amountIn, amountOutMin, slippageBPS, referrerId)
+await swap.swapExactOutput(tokenInAddress, tokenOutAddress, amountIn, amountOut, slippageBPS, referrerId)
+```
+
+Resolve a referral ID to the referrer's swap pubkey and return-rate (bps)
+without sending a swap — useful for showing referral info or validating an ID up
+front:
+
+```ts
+const { referrerPubkey, refReturnBps } = await swap.tryGetSwapReferrerInfo(mySwapPubkey, referrerId)
+// referrerPubkey is undefined when the referral can't be resolved
+```
 
 ## Liquidity
 
