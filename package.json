@@ -42,6 +42,7 @@
     "lint": "eslint",
     "lint:fix": "prettier --write . && eslint --fix",
     "test": "vitest run",
+    "verify:bundles": "node scripts/verify-build-flavours.mjs",
     "test:signet": "vitest run tests/signet/ --config vitest.signet.config.ts",
     "test:mainnet": "vitest run tests/mainnet/ --config vitest.mainnet.config.ts",
     "docs:api": "typedoc"
