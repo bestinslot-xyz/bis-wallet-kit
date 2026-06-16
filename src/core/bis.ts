@@ -1,14 +1,13 @@
-import type { BISSession, BISWalletPurpose } from '../types/common'
+import type { BISWalletPurpose } from '../types/common'
 import type { SendInscriptionResult } from '../types/inscription'
 import type { WalletInfo } from '../types/wallet'
-import { create, hide, showConnect } from '../core/modal'
 import {
   sendInscriptionAll,
   sendInscriptionInPaymentWalletToOpReturnAll,
   sendInscriptionToOpReturnAll,
 } from './mint'
 import { getSignFn } from './providers'
-import { clearWalletInfo, getWalletInfo } from './store'
+import { getWalletInfo } from './store'
 
 export { getAllBalanceDetails, getCardinalBalance } from './helpers'
 export {
@@ -21,43 +20,6 @@ export {
 } from './providers'
 export { getWalletInfo as getSession } from './store'
 export { getNetwork, setNetwork } from './store-network'
-
-/**
- * Creates a modal instance without showing it.
- */
-export function init() {
-  // Create the modal instance
-  create()
-}
-
-/**
- * Shows the connect modal and returns a promise that resolves with the selected wallet session information.
- *
- * The promise will resolve when the user selects a wallet and successfully connects, or it will reject if
- * there is an error during the connection process.
- *
- * @returns {Promise<BISSession>} A promise that resolves with the wallet session information when a wallet is successfully connected.
- * @throws {Error} If there is an error during the connection process, the promise will reject with an error object.
- */
-export async function connect(): Promise<BISSession> {
-  return new Promise((resolve, reject) => {
-    showConnect({
-      onSelect: (session: BISSession) => resolve(session),
-      onError: (error: Error) => reject(error),
-    })
-  })
-}
-
-/**
- * Disconnects the currently connected wallet by hiding the modal and clearing the stored wallet information.
- */
-export function disconnect() {
-  // Close modal
-  hide()
-
-  // Clear local storage
-  clearWalletInfo()
-}
 
 /**
  * Sends an inscription to a target wallet with the specified postage, fee rate, and dry run option. The function determines the appropriate method for sending the inscription based on the target wallet's properties and the specified wallet type. It uses the provided signing function to sign the necessary transactions for sending the inscription.
