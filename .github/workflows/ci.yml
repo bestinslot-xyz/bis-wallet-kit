@@ -23,3 +23,22 @@ jobs:
       # Offline unit suite only — no network, no secrets.
       # The signet/mainnet integration suites need a funded key and a live backend.
       - run: pnpm test
+
+  # Builds both flavours and asserts the node build stays Vue/modal-free (#8).
+  bundles:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm build
+
+      - run: pnpm verify:bundles
