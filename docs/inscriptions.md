@@ -11,7 +11,7 @@ import { brc20MintInscription, delegateInscription, jsonInscription, textInscrip
 const text = textInscription('hello world')          // mime text/plain
 const json = jsonInscription({ p: 'brc-20', op: 'deploy', tick: 'abcd', max: 1000, lim: 10 })
 const delegate = delegateInscription('abc…i0')       // delegate to another inscription
-const mintIns = brc20MintInscription('abcd', 1000)   // {"p":"brc-20","op":"mint","tick":"abcd","amt":"1000"}
+const mintIns = brc20MintInscription('abcd', 1000n)   // {"p":"brc-20","op":"mint","tick":"abcd","amt":"1000"}
 ```
 
 `brc20MintInscription(ticker, amount)` is a convenience over `jsonInscription`

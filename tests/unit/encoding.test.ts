@@ -69,7 +69,7 @@ describe('inscription builders', () => {
   })
 
   it('brc20MintInscription builds the standard brc-20 mint JSON with a string amount', () => {
-    const ins = brc20MintInscription('abcd', 1000)
+    const ins = brc20MintInscription('abcd', 1000n)
     assert.equal(ins.mimeType?.str, 'application/json')
     assert.deepEqual(JSON.parse(ins.data!.str), {
       p: 'brc-20',

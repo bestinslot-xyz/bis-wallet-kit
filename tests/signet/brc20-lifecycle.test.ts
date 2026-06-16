@@ -29,7 +29,9 @@ const TOKEN = process.env.SIGNET_E2E_TOKEN
 const WBTC = process.env.SIGNET_WBTC_TOKEN
 const FEE_RATE = Number(process.env.SIGNET_E2E_FEE_RATE ?? '2')
 const MINT_AMOUNT = process.env.SIGNET_E2E_MINT_AMOUNT ?? '1000'
-const BTC_SATS = BigInt(process.env.SIGNET_E2E_BTC_SATS ?? '10000')
+// Parsed inside the test (not at import) so a malformed value can't throw during
+// collection and fail the whole signet suite when this test is meant to skip.
+const BTC_SATS_RAW = process.env.SIGNET_E2E_BTC_SATS ?? '10000'
 const SLIPPAGE_BPS = 100n
 
 const ENABLED = process.env.SIGNET_E2E === '1' && !!WIF && !!TICKER && !!TOKEN && !!WBTC
@@ -91,8 +93,9 @@ describe('lifecycle: BRC-20 → swap (signet, end-to-end)', () => {
       )
 
       // 5. Wrap a little BTC into the smart wallet as WBTC.
+      const btcSats = BigInt(BTC_SATS_RAW)
       const wbtcBefore = await swap.getSwapBalance(WBTC!)
-      await swap.wrap(BTC_SATS, FEE_RATE)
+      await swap.wrap(btcSats, FEE_RATE)
       const wbtcAfter = await pollUntil(
         () => swap.getSwapBalance(WBTC!),
         bal => bal > wbtcBefore,

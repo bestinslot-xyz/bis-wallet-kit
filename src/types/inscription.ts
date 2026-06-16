@@ -130,10 +130,10 @@ export function delegateInscription(inscriptionId: string): InscriptionDetails {
  * callers don't have to hand-assemble it. Pass the result to `mint.inscribe`.
  *
  * @param ticker - The BRC-20 ticker to mint.
- * @param amount - The amount to mint, in the ticker's own decimals. Accepts a number or string; serialised to a string in the inscription.
+ * @param amount - The amount to mint, in the ticker's own decimals. Accepts a bigint or string (not number, to avoid precision loss on large amounts); serialised to a string in the inscription.
  * @returns An InscriptionDetails instance for the BRC-20 mint inscription.
  */
-export function brc20MintInscription(ticker: string, amount: string | number): InscriptionDetails {
+export function brc20MintInscription(ticker: string, amount: string | bigint): InscriptionDetails {
   return jsonInscription({ p: 'brc-20', op: 'mint', tick: ticker, amt: String(amount) })
 }
 
