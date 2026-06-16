@@ -1,6 +1,6 @@
 import type { Ref } from 'vue'
 import type { BISNetwork } from '../types/common'
-import { ref, watch } from 'vue'
+import { onScopeDispose, ref, watch } from 'vue'
 import { getNetwork, setNetwork, subscribeToNetwork } from './store-network'
 
 /**
@@ -15,12 +15,14 @@ import { getNetwork, setNetwork, subscribeToNetwork } from './store-network'
 export function useNetwork(): Ref<BISNetwork> {
   const network = ref<BISNetwork>(getNetwork())
 
-  // Store -> ref (external setNetwork updates the component).
-  subscribeToNetwork((next) => {
+  // Store -> ref (external setNetwork updates the component). Tie the
+  // unsubscribe to the effect scope so the listener is removed on unmount.
+  const unsubscribe = subscribeToNetwork((next) => {
     if (network.value !== next) {
       network.value = next
     }
   })
+  onScopeDispose(unsubscribe, true)
 
   // Ref -> store (v-model writes propagate to the shared store).
   watch(network, (next) => {

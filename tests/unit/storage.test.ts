@@ -1,6 +1,6 @@
 import { assert, describe, it } from 'vitest'
 import { memoryStorage } from '../../src/core/storage.ts'
-import { getNetwork, setNetwork } from '../../src/core/store-network.ts'
+import { getNetwork, setNetwork, subscribeToNetwork } from '../../src/core/store-network.ts'
 import { deleteSwapWalletInfo, readSwapWalletInfo, saveSwapWalletInfo } from '../../src/core/store.ts'
 import { getBitcoinNetwork } from '../../src/lib/bitcoin.ts'
 
@@ -38,6 +38,20 @@ describe('network store', () => {
     assert.equal(getBitcoinNetwork().bech32, 'tb')
     setNetwork('testnet')
     assert.equal(getBitcoinNetwork().bech32, 'tb')
+  })
+
+  it('notifies subscribers on change, skips no-ops, and stops after unsubscribe', () => {
+    setNetwork('mainnet') // known baseline
+    const seen: string[] = []
+    const unsubscribe = subscribeToNetwork(n => seen.push(n))
+
+    setNetwork('signet') // change -> notified
+    setNetwork('signet') // same value -> no notification
+    assert.deepEqual(seen, ['signet'])
+
+    unsubscribe()
+    setNetwork('testnet') // unsubscribed -> no notification
+    assert.deepEqual(seen, ['signet'])
   })
 })
 
