@@ -22,7 +22,10 @@ Full guides and an API reference live in [`docs/`](./docs/README.md):
 - [Inscriptions](./docs/inscriptions.md) · [BRC-2.0](./docs/brc20.md) · [Swap](./docs/swap.md) · [Balances](./docs/balances.md)
 - [Testing](./docs/testing.md)
 
-Generate the API reference with `pnpm docs:api` (output in `docs/api/`).
+The full **API reference** is published at
+<https://bestinslot-xyz.github.io/bis-wallet-kit/> (regenerated from source on
+every push to `main`). To build it locally, run `pnpm docs:api` (output in
+`docs/api/`).
 
 ## 🚀 Development & Build
 
