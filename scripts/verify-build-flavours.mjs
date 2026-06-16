@@ -21,8 +21,13 @@ for (const f of ['node.js', 'browser.js']) {
   }
 }
 
-const VUE = /(?:from|import)\s*["']vue["']|require\(\s*["']vue["']\s*\)/
-const RELATIVE_IMPORT = /(?:from|import)\s*["'](\.\/[^"']+\.js)["']/g
+// Match every form that references the external `vue` specifier: static
+// `from "vue"` / side-effect `import "vue"`, dynamic `import("vue")`, and
+// `require("vue")`.
+const VUE = /(?:from|import|require)[\s(]*["']vue["']/
+// Follow both static and dynamic relative imports so dynamically code-split
+// chunks are included in the graph walk.
+const RELATIVE_IMPORT = /(?:from|import)[\s(]*["'](\.\/[^"']+\.js)["']/g
 
 // Collect every dist chunk reachable from an entry (following relative imports).
 function reachable(entry) {
