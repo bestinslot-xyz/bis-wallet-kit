@@ -59,8 +59,41 @@ Most assertions use `dryRun` so they assemble (but don't broadcast) transactions
    pnpm test:mainnet
    ```
 
-Tests that depend on a known token guard themselves with `it.skipIf(...)`, so
-they skip rather than fail when a fixture isn't configured.
+Tests that depend on a fixture guard themselves with `it.skipIf(...)`, so they
+skip rather than fail when it isn't configured.
+
+### Signet fixtures (optional)
+
+The signet suite covers more the more you configure. All of these are read from
+`.env.signet`; unset ones just skip the tests that need them.
+
+| Var | Enables |
+|-----|---------|
+| `PRIVATE_KEY_WIF` | everything (required) — the funded signet test wallet |
+| `SIGNET_SWAP_TOKEN` | token-specific reads (decimals, balance) |
+| `SIGNET_WBTC_TOKEN` | swap quotes (paired with `SIGNET_SWAP_TOKEN`) |
+| `SIGNET_SWAP_PAIR` | pair reads — reserves, klines, volume, activity |
+| `SIGNET_REFERRER_ID` | referral resolution + referral swap |
+| `SIGNET_BASE_BRC20_TOKEN` | base BRC-20 balance lookups |
+| `SIGNET_CONTRACT_ADDRESS` | BRC-2.0 smart-contract call (dry-run) |
+| `SIGNET_PARENT_INSCRIPTION_ID` | parent/child inscription (dry-run) |
+
+### Executing on signet (moving funds)
+
+Fund-moving swap tests (`swapExactInput`/`swapExactOutput`/`addLiquidity`) are
+**off by default**, even with fixtures set. To run them:
+
+```
+SIGNET_EXECUTE=1
+SIGNET_SWAP_TOKEN=0x…
+SIGNET_WBTC_TOKEN=0x…
+SIGNET_SWAP_AMOUNT=1000     # optional, input amount (base units)
+SIGNET_SLIPPAGE_BPS=100     # optional
+```
+
+These assume the sequencer settles synchronously — after a swap returns
+`success`, the smart-wallet balance reflects it without waiting for a block. The
+test wallet must hold enough deposited balance to cover the swaps.
 
 ## Adding tests
 

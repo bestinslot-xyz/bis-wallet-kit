@@ -60,4 +60,29 @@ describe('tests for BRC20', () => {
     assert.ok(result.inscriptionIds.length === 2)
     assert.ok(result.inscriptionIds.every(id => typeof id === 'string'))
   })
+
+  it('should return a fee estimate for multiple inscriptions', async () => {
+    const inscriptions = [textInscription('first'), textInscription('second')]
+    const fees = await mint.getInscribeMultipleFee(inscriptions, 2, null)
+    assert.ok(typeof fees.totalFee === 'number')
+    assert.ok(fees.totalFee > 0)
+    assert.ok(typeof fees.commitFee === 'number')
+    assert.ok(typeof fees.revealFee === 'number')
+  })
+
+  it.skipIf(!process.env.SIGNET_PARENT_INSCRIPTION_ID)(
+    'should dry-run an inscription with a parent',
+    async () => {
+      const inscription = textInscription('child')
+      const result = await mint.inscribeWithParent(
+        inscription,
+        process.env.SIGNET_PARENT_INSCRIPTION_ID!,
+        2,
+        null,
+        true,
+      )
+      assert.ok(typeof result.commitTxId === 'string')
+      assert.ok(typeof result.revealTxId === 'string')
+    },
+  )
 })

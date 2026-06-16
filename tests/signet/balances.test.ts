@@ -36,4 +36,18 @@ describe('tests for balances (signet)', () => {
     const balance = await balances.getBRC20ProgBalanceOfTicker(walletAddress, KNOWN_TOKEN_TICKER)
     assert.ok(typeof balance === 'bigint')
   })
+
+  it.skipIf(!KNOWN_TOKEN_TICKER)('should resolve a ticker to its prog token address', async () => {
+    const tokenAddress = await balances.getBRC20ProgTokenAddressOfTicker(KNOWN_TOKEN_TICKER)
+    assert.ok(typeof tokenAddress === 'string')
+    assert.ok(tokenAddress.startsWith('0x'))
+  })
+
+  it.skipIf(!KNOWN_TOKEN_ADDRESS)('should return the base BRC-20 balance by token address', async () => {
+    const result = await balances.getBaseBRC20BalanceOfAddress(walletAddress, KNOWN_TOKEN_ADDRESS)
+    assert.ok(typeof result.availableBalanceIn18Decimals === 'bigint')
+    assert.ok(typeof result.transferrableBalanceIn18Decimals === 'bigint')
+    assert.ok(typeof result.decimals === 'number')
+    assert.ok(typeof result.ticker === 'string')
+  })
 })
