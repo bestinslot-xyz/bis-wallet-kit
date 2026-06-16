@@ -21,10 +21,10 @@ export {
   getPairReserves,
   getPairVolumeOverDays,
   getRemoveLiquidityResult,
-  getSwap2Result,
   getSwapBalance,
   getSwapBalances,
-  getSwapResult,
+  getSwapResult as getSwapExactInputResult,
+  getSwap2Result as getSwapExactOutputResult,
   getSwapStatus,
   getTokenDecimals,
   getUnwrapResult,
@@ -137,17 +137,19 @@ export async function removeLiquidity(
 }
 
 /**
- * Executes a token swap between two specified tokens with the given parameters and slippage tolerance.
+ * Executes an exact-input token swap: spends an exact `amountIn` of the input
+ * token and receives at least `amountOutMin` of the output token (Uniswap-style
+ * `swapExactTokensForTokens`).
  *
  * @param tokenInAddress - The address of the token to swap from.
  * @param tokenOutAddress - The address of the token to swap to.
- * @param amountIn - The amount of the input token to swap.
- * @param amountOutMin - The minimum amount of the output token to receive from the swap.
+ * @param amountIn - The exact amount of the input token to spend.
+ * @param amountOutMin - The minimum amount of the output token to receive (slippage is applied to this).
  * @param slippageBPS - The slippage tolerance in basis points.
  * @param referrerId - An optional referral ID. When valid, a share of the swap fee is credited to the referrer; an invalid referral is ignored and the swap proceeds normally.
  * @returns A promise that resolves to a boolean indicating the success of the swap operation.
  */
-export async function swap(
+export async function swapExactInput(
   tokenInAddress: string,
   tokenOutAddress: string,
   amountIn: bigint,
@@ -168,21 +170,23 @@ export async function swap(
 }
 
 /**
- * Executes a token swap between two specified tokens with the given parameters and slippage tolerance, using the updated swap logic.
+ * Executes an exact-output token swap: receives an exact `amountOut` of the
+ * output token and spends at most the input amount (the `amountIn` reference
+ * expanded by `slippageBPS`) — Uniswap-style `swapTokensForExactTokens`.
  *
  * @param tokenInAddress - The address of the token to swap from.
  * @param tokenOutAddress - The address of the token to swap to.
- * @param amountIn - The amount of the input token to swap.
- * @param amountOutMin - The minimum amount of the output token to receive from the swap.
+ * @param amountIn - The expected (quoted) input amount; slippage is applied to this to derive the maximum input spent.
+ * @param amountOut - The exact amount of the output token to receive.
  * @param slippageBPS - The slippage tolerance in basis points.
  * @param referrerId - An optional referral ID. When valid, a share of the swap fee is credited to the referrer; an invalid referral is ignored and the swap proceeds normally.
  * @returns A promise that resolves to a boolean indicating the success of the swap operation.
  */
-export async function swap2(
+export async function swapExactOutput(
   tokenInAddress: string,
   tokenOutAddress: string,
   amountIn: bigint,
-  amountOutMin: bigint,
+  amountOut: bigint,
   slippageBPS: bigint,
   referrerId?: string,
 ) {
@@ -191,7 +195,7 @@ export async function swap2(
       tokenInAddress,
       tokenOutAddress,
       amountIn,
-      amountOutMin,
+      amountOut,
       slippageBPS,
       referrerId,
     )
