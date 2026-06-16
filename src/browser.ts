@@ -1,16 +1,15 @@
 /* eslint-disable perfectionist/sort-exports */
 
+// Browser build entry: the full library — extension wallets, the Vue connect
+// modal, and all the shared feature APIs.
+
 // -------- Provider registration (side effects) --------
-// The current single entry registers both browser extensions and the local
-// wallet to preserve today's behaviour. The browser/server split (#8) will move
-// these into the respective entry files.
 import './core/register-browser-providers'
-import './core/register-local-provider'
 
-// -------- Wallet API --------
-export * as wallet from './api/wallet'
+// -------- Wallet API (shared core + modal connect) --------
+export * as wallet from './api/wallet.browser'
 
-// -------- Modal API --------
+// -------- Modal API (browser-only) --------
 export * as modal from './api/modal'
 
 // -------- Swap API --------

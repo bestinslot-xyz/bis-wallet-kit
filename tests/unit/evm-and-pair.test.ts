@@ -1,6 +1,6 @@
 import { assert, beforeAll, describe, it } from 'vitest'
 import { saveInfo } from '../../src/lib/uniswap_ops.ts'
-import { getEvmAddressFromBitcoinAddress, getEvmAddressFromPkScript, swap, wallet } from '../../src/main.ts'
+import { getEvmAddressFromBitcoinAddress, getEvmAddressFromPkScript, swap, wallet } from '../../src/node.ts'
 
 // Golden vectors computed independently (raw bitcoinjs / web3 / ethers), so these
 // assert real behaviour rather than mirroring the implementation. See the docs

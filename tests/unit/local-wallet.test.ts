@@ -1,5 +1,5 @@
 import { assert, describe, expect, it } from 'vitest'
-import { wallet } from '../../src/main.ts'
+import { wallet } from '../../src/node.ts'
 
 // Fixed test vector (private key 0x1111...11, testnet). Addresses derived
 // independently with bitcoinjs. Never use this key for real funds.

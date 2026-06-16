@@ -7,13 +7,24 @@ pnpm add @bestinslot/wallet-kit
 # or: npm install @bestinslot/wallet-kit
 ```
 
-`vue` is a peer dependency (the connect modal is a Vue component):
+The package ships as ESM only, in two flavours resolved automatically by your
+environment:
+
+- **browser** — extension wallets (OKX, Unisat, Xverse, Leather, Magic Eden) +
+  the Vue connect modal, plus all the feature APIs.
+- **server** (Node/Bun) — the same feature APIs (swap, inscriptions, BRC-2.0,
+  balances) connected via a local WIF wallet (`wallet.connectLocalWallet`), with
+  no Vue or modal. Ideal for headless/automated use.
+
+Bundlers and Node pick the right one via conditional exports; you can also import
+explicitly with `@bestinslot/wallet-kit/browser` or `@bestinslot/wallet-kit/node`.
+
+`vue` is an **optional** peer dependency — only the browser flavour needs it (the
+connect modal is a Vue component):
 
 ```bash
 pnpm add vue
 ```
-
-The package ships as ESM only.
 
 ## Connect a wallet
 
@@ -36,6 +47,19 @@ catch (e) {
 
 `modal.connect()` resolves with a [`BISSession`](./wallet-connection.md#sessions)
 once the user picks and connects a wallet, and rejects if they cancel or it fails.
+
+### On a server (Node/Bun)
+
+There's no modal — connect with a WIF private key instead, then use the same
+feature APIs:
+
+```ts
+import { wallet } from '@bestinslot/wallet-kit' // resolves to the server build in Node
+
+await wallet.connectLocalWallet(process.env.PRIVATE_KEY_WIF!, 'signet', 'p2tr', 'unisat')
+```
+
+See [Wallet connection](./wallet-connection.md#the-local-wallet-node-only) for details.
 
 ## Read the session and a balance
 

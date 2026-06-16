@@ -1,6 +1,6 @@
 import process from 'node:process'
 import { assert, beforeAll, describe, it } from 'vitest'
-import { balances, wallet } from '../../src/main.ts'
+import { balances, wallet } from '../../src/node.ts'
 
 // Token address used for the wallet-agnostic prog-balance read (returns 0 for an
 // address that holds nothing, so a default is fine). Override via env if desired.

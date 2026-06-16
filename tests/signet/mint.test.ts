@@ -1,7 +1,7 @@
 /* eslint-disable no-console */
 import process from 'node:process'
 import { assert, beforeAll, describe, it } from 'vitest'
-import { jsonInscription, mint, textInscription, wallet } from '../../src/main.ts'
+import { jsonInscription, mint, textInscription, wallet } from '../../src/node.ts'
 
 describe('tests for BRC20', () => {
   beforeAll(async () => {

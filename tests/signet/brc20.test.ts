@@ -1,7 +1,7 @@
 /* eslint-disable no-console */
 import process from 'node:process'
 import { assert, beforeAll, describe, it } from 'vitest'
-import { brc20, getEvmAddressFromBitcoinAddress, wallet } from '../../src/main.ts'
+import { brc20, getEvmAddressFromBitcoinAddress, wallet } from '../../src/node.ts'
 
 // The deposit/withdraw dry-runs build real transactions against the wallet's
 // balance, so they need a ticker the wallet actually holds — skip unless set.

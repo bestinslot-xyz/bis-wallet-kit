@@ -7,12 +7,30 @@
   "description": "A lightweight JavaScript library for connecting Bitcoin wallets with a unified API.",
   "exports": {
     ".": {
-      "types": "./dist/types/main.d.ts",
-      "import": "./dist/bis-wallet-kit.js"
+      "node": {
+        "types": "./dist/types/node.d.ts",
+        "import": "./dist/node.js"
+      },
+      "browser": {
+        "types": "./dist/types/browser.d.ts",
+        "import": "./dist/browser.js"
+      },
+      "default": {
+        "types": "./dist/types/browser.d.ts",
+        "import": "./dist/browser.js"
+      }
+    },
+    "./node": {
+      "types": "./dist/types/node.d.ts",
+      "import": "./dist/node.js"
+    },
+    "./browser": {
+      "types": "./dist/types/browser.d.ts",
+      "import": "./dist/browser.js"
     }
   },
-  "module": "dist/bis-wallet-kit.js",
-  "types": "dist/types/main.d.ts",
+  "module": "dist/browser.js",
+  "types": "dist/types/browser.d.ts",
   "files": [
     "dist"
   ],
@@ -30,6 +48,11 @@
   },
   "peerDependencies": {
     "vue": "^3.5.13"
+  },
+  "peerDependenciesMeta": {
+    "vue": {
+      "optional": true
+    }
   },
   "dependencies": {
     "@bestinslot/nada": "^0.1.6",

@@ -34,10 +34,12 @@ export default defineConfig({
     cssCodeSplit: false, // bundle all CSS into one file
     assetsInlineLimit: 1024 * 50, // 50kb
     lib: {
-      entry: 'src/main.ts',
-      name: 'BIS_CW',
-      fileName: 'bis-wallet-kit',
-      formats: ['es'], // iife for browser, es for node
+      // Two flavours: browser (extensions + modal) and node/server (local wallet).
+      entry: {
+        browser: 'src/browser.ts',
+        node: 'src/node.ts',
+      },
+      formats: ['es'],
     },
     rollupOptions: {
       external: ['vue'],

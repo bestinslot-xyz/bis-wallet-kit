@@ -1,7 +1,7 @@
 import { Buffer } from 'node:buffer'
 import { assert, describe, it } from 'vitest'
 import { base64ToHex, createUnsecuredToken, hexToBase64 } from '../../src/core/helpers.ts'
-import { delegateInscription, jsonInscription, textInscription } from '../../src/main.ts'
+import { delegateInscription, jsonInscription, textInscription } from '../../src/node.ts'
 
 describe('hex <-> base64', () => {
   it('round-trips hex through base64', () => {
