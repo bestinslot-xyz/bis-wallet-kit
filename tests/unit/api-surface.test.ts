@@ -80,7 +80,6 @@ const TOP_LEVEL_FUNCTIONS = [
   'delegateInscription',
   'jsonInscription',
   'textInscription',
-  'brc20MintInscription',
   'addressWalletInfo',
   'opReturnWalletInfo',
 ]

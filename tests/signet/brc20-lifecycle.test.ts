@@ -1,6 +1,6 @@
 import process from 'node:process'
 import { assert, describe, it } from 'vitest'
-import { balances, brc20MintInscription, mint, swap, wallet } from '../../src/main.ts'
+import { balances, jsonInscription, mint, swap, wallet } from '../../src/main.ts'
 
 /**
  * Long-running end-to-end lifecycle against a live signet endpoint:
@@ -69,7 +69,8 @@ describe('lifecycle: BRC-20 → swap (signet, end-to-end)', () => {
       console.warn(`start base balance: ${startBase}`)
 
       // 2. Mint BRC-20 via a broadcast inscription.
-      const minted = await mint.inscribe(brc20MintInscription(TICKER!, MINT_AMOUNT), FEE_RATE, null, false)
+      const mintInscription = jsonInscription({ p: 'brc-20', op: 'mint', tick: TICKER!, amt: MINT_AMOUNT })
+      const minted = await mint.inscribe(mintInscription, FEE_RATE, null, false)
       assert.ok(typeof minted.revealTxId === 'string')
       console.warn(`mint reveal tx: ${minted.revealTxId}`)
 
