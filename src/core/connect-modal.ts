@@ -19,6 +19,16 @@ export function init() {
  * @returns A promise that resolves with the session when a wallet connects, or rejects on error.
  */
 export async function connect(): Promise<BISSession> {
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    throw new TypeError(
+      'Modal connect is only available in the browser. Use connectLocalWallet in a Node environment.',
+    )
+  }
+
+  // Ensure the modal exists (idempotent) so showConnect isn't a silent no-op
+  // that leaves the promise pending forever.
+  create()
+
   return new Promise((resolve, reject) => {
     showConnect({
       onSelect: (session: BISSession) => resolve(session),
