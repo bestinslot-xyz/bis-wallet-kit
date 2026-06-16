@@ -28,12 +28,13 @@ export interface BISWallet {
 
 /**
  * An optional extra payment output attached to a transaction (e.g. a service
- * fee). When supplied, the transaction includes an output sending
- * `paymentAmount` sats to `paymentAddress`, funded by the connected wallet —
- * this is a destination the funds go *to*, not an alternate funding source.
+ * fee). When `paymentAmount` is greater than 0, the transaction includes an
+ * output sending that many sats to `paymentAddress`, funded by the connected
+ * wallet — this is a destination the funds go *to*, not an alternate funding
+ * source. A non-positive amount adds no output.
  *
  * @property paymentAddress - The destination address that receives the payment output.
- * @property paymentAmount - The amount sent to `paymentAddress`, in sats.
+ * @property paymentAmount - The amount sent to `paymentAddress`, in sats. Must be greater than 0 to add the output.
  */
 export interface PaymentOpts {
   paymentAddress: string
