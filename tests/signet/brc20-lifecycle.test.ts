@@ -96,7 +96,7 @@ describe('lifecycle: BRC-20 → swap (signet, end-to-end)', () => {
       // 5. Wrap a little BTC into the smart wallet as WBTC.
       const btcSats = BigInt(BTC_SATS_RAW)
       const wbtcBefore = await swap.getSwapBalance(WBTC!)
-      await swap.wrap(btcSats, FEE_RATE)
+      await swap.wrapBtc(btcSats, FEE_RATE)
       const wbtcAfter = await pollUntil(
         () => swap.getSwapBalance(WBTC!),
         bal => bal > wbtcBefore,

@@ -95,8 +95,8 @@ Quote first with `getAddLiquidityResult` / `getRemoveLiquidityResult`.
 await swap.deposit(tokenAddress, amount, feeRate /*, createAllowanceIfNeeded = true */)
 await swap.withdraw(tokenAddress, amount /*, targetAddress? */) // omit target → self
 
-// BTC: wrap deposits BTC into the smart wallet as WBTC; unwrap is the reverse.
-await swap.wrap(btcSats, feeRate)
+// BTC: wrapBtc deposits BTC into the smart wallet as WBTC; unwrap is the reverse.
+await swap.wrapBtc(btcSats, feeRate)
 await swap.unwrap(tokenAddress, amount)
 ```
 

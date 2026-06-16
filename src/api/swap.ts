@@ -244,7 +244,7 @@ export async function deposit(
  * @param feeRate - The fee rate (sats/vByte) for the wrap transaction.
  * @returns A promise that resolves to an array of transaction IDs related to the wrap operation.
  */
-export async function wrap(btcAmount: bigint, feeRate: number): Promise<string[]> {
+export async function wrapBtc(btcAmount: bigint, feeRate: number): Promise<string[]> {
   return await createAndBroadcastWrapOrder(btcAmount, feeRate)
 }
 
