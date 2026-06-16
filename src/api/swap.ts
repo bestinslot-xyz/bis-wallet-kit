@@ -28,6 +28,7 @@ export {
   getSwapStatus,
   getTokenDecimals,
   getUnwrapResult,
+  tryGetSwapReferrerInfo,
 } from '../core/bis_swap' // Export all swap-related functions from the core BIS swap module
 export type {
   GetActivityOfPairResponse,
@@ -143,6 +144,7 @@ export async function removeLiquidity(
  * @param amountIn - The amount of the input token to swap.
  * @param amountOutMin - The minimum amount of the output token to receive from the swap.
  * @param slippageBPS - The slippage tolerance in basis points.
+ * @param referrerId - An optional referral ID. When valid, a share of the swap fee is credited to the referrer; an invalid referral is ignored and the swap proceeds normally.
  * @returns A promise that resolves to a boolean indicating the success of the swap operation.
  */
 export async function swap(
@@ -151,6 +153,7 @@ export async function swap(
   amountIn: bigint,
   amountOutMin: bigint,
   slippageBPS: bigint,
+  referrerId?: string,
 ) {
   return (
     await prepareAndSendSwapOrder(
@@ -159,6 +162,7 @@ export async function swap(
       amountIn,
       amountOutMin,
       slippageBPS,
+      referrerId,
     )
   ).success
 }
@@ -171,6 +175,7 @@ export async function swap(
  * @param amountIn - The amount of the input token to swap.
  * @param amountOutMin - The minimum amount of the output token to receive from the swap.
  * @param slippageBPS - The slippage tolerance in basis points.
+ * @param referrerId - An optional referral ID. When valid, a share of the swap fee is credited to the referrer; an invalid referral is ignored and the swap proceeds normally.
  * @returns A promise that resolves to a boolean indicating the success of the swap operation.
  */
 export async function swap2(
@@ -179,6 +184,7 @@ export async function swap2(
   amountIn: bigint,
   amountOutMin: bigint,
   slippageBPS: bigint,
+  referrerId?: string,
 ) {
   return (
     await prepareAndSendSwap2Order(
@@ -187,6 +193,7 @@ export async function swap2(
       amountIn,
       amountOutMin,
       slippageBPS,
+      referrerId,
     )
   ).success
 }

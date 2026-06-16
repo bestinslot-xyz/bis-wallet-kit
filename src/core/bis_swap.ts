@@ -62,6 +62,7 @@ const SWAP_ABI_MAINNET = SWAP_ABI_SIGNET
 
 const DUMMY_UTXO_VALUE = 1000
 const GAS_PER_BYTE = 12000
+const REFERRER_FEE_BPS = 2500n // 25% of the swap fee is paid out to the referrer.
 
 const SIGNATURE_REQUEST_TEXT_SIGNET = `Sign this message only on official BiS interfaces.
 This signature is required to generate your session-specific swap key.
@@ -577,6 +578,64 @@ async function getSwapWalletNonce(): Promise<bigint> {
 
   // 3. Convert the result to a BigInt
   return BigInt(result.result)
+}
+
+interface GetSwapReferrerInfoResponse {
+  success: boolean
+  result: { pubkey: string, ref_return_bps: string }
+}
+async function getSwapReferrerInfo(
+  currentPubkey: string,
+  refId: string,
+): Promise<{ referrerPubkey: string, refReturnBps: bigint }> {
+  const url = getSwapBackendUrl('get_swap_referrer_info')
+  const body = { ref_id: refId }
+
+  const result = await fetchWithErrors<GetSwapReferrerInfoResponse>(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  })
+
+  const sanitisedCurrentPubkey = currentPubkey.toLowerCase().startsWith('0x')
+    ? currentPubkey.toLowerCase()
+    : `0x${currentPubkey.toLowerCase()}`
+  const sanitisedResultPubkey = result.result.pubkey.toLowerCase().startsWith('0x')
+    ? result.result.pubkey.toLowerCase()
+    : `0x${result.result.pubkey.toLowerCase()}`
+  if (sanitisedResultPubkey === sanitisedCurrentPubkey) {
+    throw new Error('Referrer ID cannot be the same as the current user')
+  }
+
+  return {
+    referrerPubkey: result.result.pubkey,
+    refReturnBps: BigInt(result.result.ref_return_bps),
+  }
+}
+
+/**
+ * Resolves a referral ID to the referrer's swap pubkey and their return-rate
+ * (rebate) in basis points. Returns undefined fields if the referral cannot be
+ * resolved, so a bad or expired referral degrades to a normal swap rather than
+ * failing the order.
+ *
+ * @param currentPubkey The swap pubkey of the user performing the swap. Used to reject self-referrals.
+ * @param refId The referral identifier to resolve.
+ * @returns The referrer's swap pubkey and return-rate bps, or undefined fields when the referral is invalid.
+ */
+export async function tryGetSwapReferrerInfo(
+  currentPubkey: string,
+  refId: string,
+): Promise<{ referrerPubkey: string | undefined, refReturnBps: bigint | undefined }> {
+  try {
+    return await getSwapReferrerInfo(currentPubkey, refId)
+  }
+  catch (error) {
+    console.warn(`Failed to get referrer info for ref_id ${refId}:`, error)
+    return { referrerPubkey: undefined, refReturnBps: undefined }
+  }
 }
 
 interface RequestMinerFeeResponse {
@@ -2849,10 +2908,15 @@ interface SwapOrderSignatureRequest {
   token1FeeBps: string
   token2FeeBps: string
   btc_fee: string
+  referrer_pubkey?: string
+  ref_return_bps?: string
 }
 async function getSwapOrderSignature(orderParams: SwapOrderSignatureRequest): Promise<string> {
   orderParams.token1_addr = orderParams.token1_addr.toLowerCase()
   orderParams.token2_addr = orderParams.token2_addr.toLowerCase()
+  orderParams.referrer_pubkey = orderParams.referrer_pubkey?.startsWith('0x')
+    ? orderParams.referrer_pubkey.slice(2)
+    : orderParams.referrer_pubkey
 
   const signatureText = `Swap Order:
 Token 1 Address: ${orderParams.token1_addr}
@@ -2862,7 +2926,7 @@ Minimum Output Amount: ${orderParams.min_out_amt}
 Token 1 Fee Bps: ${orderParams.token1FeeBps}
 Token 2 Fee Bps: ${orderParams.token2FeeBps}
 BTC Fee: ${orderParams.btc_fee}
-
+${orderParams.referrer_pubkey ? `Referrer Pubkey: ${orderParams.referrer_pubkey}\n` : ''}${orderParams.ref_return_bps && BigInt(orderParams.ref_return_bps) > 0n ? `Referrer Return Bps: ${orderParams.ref_return_bps}\n` : ''}
 By signing this message, you authorize the creation of a swap order with the above parameters.`
 
   const signature = await signMessageLocalVerify(signatureText, 'ordinals')
@@ -2879,9 +2943,14 @@ interface SwapBLSSignatureRequest {
   token1FeeBps: bigint
   token2FeeBps: bigint
   btc_fee: bigint
+  referrer_pubkey?: string
+  ref_return_bps?: bigint
 }
 async function getSwapBLSSignature(params: SwapBLSSignatureRequest): Promise<string> {
   params.pubkey = params.pubkey.startsWith('0x') ? params.pubkey.slice(2) : params.pubkey
+  params.referrer_pubkey = params.referrer_pubkey?.startsWith('0x')
+    ? params.referrer_pubkey.slice(2)
+    : params.referrer_pubkey
 
   let msg = ethers.keccak256(Buffer.from(params.pubkey, 'hex')).slice(2)
   msg += params.nonce.toString(16).padStart(8, '0')
@@ -2893,6 +2962,13 @@ async function getSwapBLSSignature(params: SwapBLSSignatureRequest): Promise<str
   msg += params.token1FeeBps.toString(16).padStart(64, '0')
   msg += params.token2FeeBps.toString(16).padStart(64, '0')
   msg += params.btc_fee.toString(16).padStart(64, '0')
+  if (params.referrer_pubkey) {
+    msg += ethers.keccak256(Buffer.from(params.referrer_pubkey, 'hex')).slice(2)
+    msg += REFERRER_FEE_BPS.toString(16).padStart(8, '0')
+    if (params.ref_return_bps && params.ref_return_bps > 0n) {
+      msg += params.ref_return_bps.toString(16).padStart(8, '0')
+    }
+  }
 
   const msgBuf = Buffer.from(msg, 'hex')
   const P = bls12_381.G1.hashToCurve(msgBuf, {
@@ -2924,6 +3000,7 @@ interface SwapOrderRequest {
   token2FeeBps: string
   btc_fee: string
   bip322_signature: string
+  referrer_pubkey?: string
 }
 interface SwapOrderResponse {
   success: boolean
@@ -2948,6 +3025,7 @@ async function sendSwapOrder(toSend: SwapOrderRequest): Promise<SwapOrderRespons
  * @param amt1 The amount of the input token to be swapped, represented as a bigint.
  * @param amt2 The amount of the output token expected from the swap, represented as a bigint.
  * @param slippageBPS The slippage in basis points to be applied when calculating the minimum amounts for the liquidity order.
+ * @param referrerId An optional referral ID. When provided and valid, a share of the swap fee is credited to the referrer; an invalid referral is ignored and the swap proceeds normally.
  *
  * @returns A promise that resolves to an object indicating the success of the swap order request.
  */
@@ -2957,6 +3035,7 @@ export async function prepareAndSendSwapOrder(
   amt1: bigint,
   amt2: bigint,
   slippageBPS: bigint,
+  referrerId?: string,
 ): Promise<SwapOrderResponse> {
   const pubkey = (await getSwapWalletFromDB())?.swapPubkey
   if (!pubkey) {
@@ -2969,6 +3048,9 @@ export async function prepareAndSendSwapOrder(
 
   const btcFee = await requestMinerFee('swap')
   const { token1FeeBps, token2FeeBps } = await getSwapFeesBps(token1Addr, token2Addr)
+  const { referrerPubkey, refReturnBps } = referrerId
+    ? await tryGetSwapReferrerInfo(pubkey, referrerId)
+    : { referrerPubkey: undefined, refReturnBps: undefined }
   const bip322Signature = await getSwapOrderSignature({
     token1_addr: token1Addr,
     token2_addr: token2Addr,
@@ -2977,6 +3059,8 @@ export async function prepareAndSendSwapOrder(
     token1FeeBps: token1FeeBps.toString(),
     token2FeeBps: token2FeeBps.toString(),
     btc_fee: btcFee.toString(),
+    referrer_pubkey: referrerPubkey,
+    ref_return_bps: refReturnBps ? refReturnBps.toString() : undefined,
   })
 
   const blsSignature = await getSwapBLSSignature({
@@ -2989,6 +3073,8 @@ export async function prepareAndSendSwapOrder(
     token1FeeBps,
     token2FeeBps,
     btc_fee: btcFee,
+    referrer_pubkey: referrerPubkey,
+    ref_return_bps: refReturnBps,
   })
 
   return await sendSwapOrder({
@@ -3002,6 +3088,7 @@ export async function prepareAndSendSwapOrder(
     token2FeeBps: token2FeeBps.toString(),
     btc_fee: btcFee.toString(),
     bip322_signature: bip322Signature,
+    referrer_pubkey: referrerPubkey,
   })
 }
 
@@ -3085,10 +3172,15 @@ interface Swap2OrderSignatureRequest {
   token1FeeBps: string
   token2FeeBps: string
   btc_fee: string
+  referrer_pubkey?: string
+  ref_return_bps?: string
 }
 async function getSwap2OrderSignature(orderParams: Swap2OrderSignatureRequest): Promise<string> {
   orderParams.token1_addr = orderParams.token1_addr.toLowerCase()
   orderParams.token2_addr = orderParams.token2_addr.toLowerCase()
+  orderParams.referrer_pubkey = orderParams.referrer_pubkey?.startsWith('0x')
+    ? orderParams.referrer_pubkey.slice(2)
+    : orderParams.referrer_pubkey
 
   const signatureText = `Swap Order:
 Token 1 Address: ${orderParams.token1_addr}
@@ -3098,7 +3190,7 @@ Output Amount: ${orderParams.out_amt}
 Token 1 Fee Bps: ${orderParams.token1FeeBps}
 Token 2 Fee Bps: ${orderParams.token2FeeBps}
 BTC Fee: ${orderParams.btc_fee}
-
+${orderParams.referrer_pubkey ? `Referrer Pubkey: ${orderParams.referrer_pubkey}\n` : ''}${orderParams.ref_return_bps && BigInt(orderParams.ref_return_bps) > 0n ? `Referrer Return Bps: ${orderParams.ref_return_bps}\n` : ''}
 By signing this message, you authorize the creation of a swap order with the above parameters.`
 
   const signature = await signMessageLocalVerify(signatureText, 'ordinals')
@@ -3115,9 +3207,14 @@ interface Swap2BLSSignatureRequest {
   token1FeeBps: bigint
   token2FeeBps: bigint
   btc_fee: bigint
+  referrer_pubkey?: string
+  ref_return_bps?: bigint
 }
 async function getSwap2BLSSignature(params: Swap2BLSSignatureRequest): Promise<string> {
   params.pubkey = params.pubkey.startsWith('0x') ? params.pubkey.slice(2) : params.pubkey
+  params.referrer_pubkey = params.referrer_pubkey?.startsWith('0x')
+    ? params.referrer_pubkey.slice(2)
+    : params.referrer_pubkey
 
   let msg = ethers.keccak256(Buffer.from(params.pubkey, 'hex')).slice(2)
   msg += params.nonce.toString(16).padStart(8, '0')
@@ -3129,6 +3226,13 @@ async function getSwap2BLSSignature(params: Swap2BLSSignatureRequest): Promise<s
   msg += params.token1FeeBps.toString(16).padStart(64, '0')
   msg += params.token2FeeBps.toString(16).padStart(64, '0')
   msg += params.btc_fee.toString(16).padStart(64, '0')
+  if (params.referrer_pubkey) {
+    msg += ethers.keccak256(Buffer.from(params.referrer_pubkey, 'hex')).slice(2)
+    msg += REFERRER_FEE_BPS.toString(16).padStart(8, '0')
+    if (params.ref_return_bps && params.ref_return_bps > 0n) {
+      msg += params.ref_return_bps.toString(16).padStart(8, '0')
+    }
+  }
 
   const msgBuf = Buffer.from(msg, 'hex')
   const P = bls12_381.G1.hashToCurve(msgBuf, {
@@ -3160,6 +3264,7 @@ interface Swap2OrderRequest {
   token2FeeBps: string
   btc_fee: string
   bip322_signature: string
+  referrer_pubkey?: string
 }
 interface Swap2OrderResponse {
   success: boolean
@@ -3184,6 +3289,7 @@ async function sendSwap2Order(toSend: Swap2OrderRequest): Promise<Swap2OrderResp
  * @param amt1 The amount of the input token to be swapped, represented as a bigint.
  * @param amt2 The amount of the output token expected from the swap, represented as a bigint.
  * @param slippageBPS The slippage in basis points to be applied when calculating the maximum input amount for the swap order.
+ * @param referrerId An optional referral ID. When provided and valid, a share of the swap fee is credited to the referrer; an invalid referral is ignored and the swap proceeds normally.
  *
  * @returns A promise that resolves to an object indicating the success of the swap order request.
  */
@@ -3193,6 +3299,7 @@ export async function prepareAndSendSwap2Order(
   amt1: bigint,
   amt2: bigint,
   slippageBPS: bigint,
+  referrerId?: string,
 ): Promise<Swap2OrderResponse> {
   const pubkey = (await getSwapWalletFromDB())?.swapPubkey
   if (!pubkey) {
@@ -3205,6 +3312,9 @@ export async function prepareAndSendSwap2Order(
 
   const btcFee = await requestMinerFee('swap')
   const { token1FeeBps, token2FeeBps } = await getSwapFeesBps(token1Addr, token2Addr)
+  const { referrerPubkey, refReturnBps } = referrerId
+    ? await tryGetSwapReferrerInfo(pubkey, referrerId)
+    : { referrerPubkey: undefined, refReturnBps: undefined }
   const bip322Signature = await getSwap2OrderSignature({
     token1_addr: token1Addr,
     token2_addr: token2Addr,
@@ -3213,6 +3323,8 @@ export async function prepareAndSendSwap2Order(
     token1FeeBps: token1FeeBps.toString(),
     token2FeeBps: token2FeeBps.toString(),
     btc_fee: btcFee.toString(),
+    referrer_pubkey: referrerPubkey,
+    ref_return_bps: refReturnBps ? refReturnBps.toString() : undefined,
   })
 
   const blsSignature = await getSwap2BLSSignature({
@@ -3225,6 +3337,8 @@ export async function prepareAndSendSwap2Order(
     token1FeeBps,
     token2FeeBps,
     btc_fee: btcFee,
+    referrer_pubkey: referrerPubkey,
+    ref_return_bps: refReturnBps,
   })
 
   return await sendSwap2Order({
@@ -3238,6 +3352,7 @@ export async function prepareAndSendSwap2Order(
     token2FeeBps: token2FeeBps.toString(),
     btc_fee: btcFee.toString(),
     bip322_signature: bip322Signature,
+    referrer_pubkey: referrerPubkey,
   })
 }
 

@@ -60,6 +60,7 @@ const NAMESPACE_FUNCTIONS: Record<string, string[]> = {
     'unwrap',
     'deposit',
     'withdraw',
+    'tryGetSwapReferrerInfo',
   ],
   brc20: ['callSmartContract', 'callSmartContractAbi', 'depositToBrc20Prog', 'withdrawFromBrc20Prog'],
   mint: ['inscribe', 'inscribeMultiple', 'inscribeWithParent', 'getInscribeFee', 'getInscribeMultipleFee'],

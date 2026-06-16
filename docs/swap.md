@@ -39,6 +39,28 @@ await swap.swap(
 `swap2` is the variant for the second routing path; use `getSwapResult` /
 `getSwap2Result` to quote before sending.
 
+## Referrals
+
+Both `swap` and `swap2` take an optional final `referrerId`. When a valid
+referral ID is supplied, a share of the swap fee is credited to the referrer's
+smart wallet (and, where the referrer has configured a return rate, part of that
+is rebated back to the swapper). An unknown or expired referral is ignored — the
+swap still goes through as a normal swap.
+
+```ts
+await swap.swap(tokenInAddress, tokenOutAddress, amountIn, amountOutMin, slippageBPS, referrerId)
+await swap.swap2(tokenInAddress, tokenOutAddress, amountIn, amountOutMin, slippageBPS, referrerId)
+```
+
+Resolve a referral ID to the referrer's swap pubkey and return-rate (bps)
+without sending a swap — useful for showing referral info or validating an ID up
+front:
+
+```ts
+const { referrerPubkey, refReturnBps } = await swap.tryGetSwapReferrerInfo(mySwapPubkey, referrerId)
+// referrerPubkey is undefined when the referral can't be resolved
+```
+
 ## Liquidity
 
 ```ts
