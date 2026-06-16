@@ -388,8 +388,7 @@ export interface APIUtxoInfo {
  */
 export async function getCardinalUtxos(addr: string): Promise<APIUtxoInfo[]> {
   const url = getBackendUrl(`cardinal_utxos/${addr}`)
-  const response = await fetch(url)
-  const json = await response.json()
+  const json = await fetchWithErrors<{ data: APIUtxoInfo[] }>(url, { method: 'GET' })
   return fixCardinalUtxos(json.data, addr)
 }
 
@@ -403,12 +402,11 @@ export async function getCardinalUtxos(addr: string): Promise<APIUtxoInfo[]> {
  */
 export async function getCardinalBalance(address: string): Promise<number> {
   const url = getBackendUrl(`cardinal_utxos/${address}`)
-  const response = await fetch(url)
-  const json = await response.json()
-  json.data = fixCardinalUtxos(json.data, address)
+  const json = await fetchWithErrors<{ data: APIUtxoInfo[] }>(url, { method: 'GET' })
+  const utxos = fixCardinalUtxos(json.data, address)
   let totalBalance = 0
-  for (let i = 0; i < json.data.length; i++) {
-    totalBalance += json.data[i].value
+  for (const utxo of utxos) {
+    totalBalance += utxo.value
   }
   return totalBalance
 }
@@ -426,9 +424,7 @@ export interface AllBalanceDetails {
  */
 export async function getAllBalanceDetails(addr: string): Promise<AllBalanceDetails> {
   const url = getBackendUrl(`all_balance_details/${addr}`)
-  const response = await fetch(url)
-  const json = await response.json()
-  return json
+  return await fetchWithErrors<AllBalanceDetails>(url, { method: 'GET' })
 }
 
 /**
@@ -470,8 +466,7 @@ export interface APIOrdinalUtxoInfo {
  */
 export async function getOrdinalUtxos(addr: string): Promise<APIOrdinalUtxoInfo[]> {
   const url = getBackendUrl(`ordinal_utxos/${addr}`)
-  const response = await fetch(url)
-  const json = await response.json()
+  const json = await fetchWithErrors<{ data: APIOrdinalUtxoInfo[] }>(url, { method: 'GET' })
   return fixOrdinalUtxos(json.data, addr)
 }
 
@@ -484,7 +479,7 @@ export async function getOrdinalUtxos(addr: string): Promise<APIOrdinalUtxoInfo[
 export async function getTxhex(txid: string) {
   if (!txHexByIdCache[txid]) {
     const url = getBackendUrl(`gettxhex/${txid}`)
-    txHexByIdCache[txid] = await fetch(url).then(response => response.json())
+    txHexByIdCache[txid] = await fetchWithErrors<string>(url, { method: 'GET' })
   }
 
   return txHexByIdCache[txid]
