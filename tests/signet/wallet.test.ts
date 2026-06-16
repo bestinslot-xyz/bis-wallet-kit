@@ -1,5 +1,5 @@
 import { assert, beforeAll, describe, expect, it } from 'vitest'
-import { wallet } from '../../src/main.ts'
+import { wallet } from '../../src/node.ts'
 import { connectSignetWallet } from './_helpers.ts'
 
 describe('wallet (signet)', () => {

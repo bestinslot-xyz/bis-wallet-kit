@@ -1,5 +1,5 @@
 import { assert, beforeAll, describe, it } from 'vitest'
-import { swap } from '../../src/main.ts'
+import { swap } from '../../src/node.ts'
 import { connectSignetWallet, env, hasSwapTokens } from './_helpers.ts'
 
 describe('swap (signet)', () => {

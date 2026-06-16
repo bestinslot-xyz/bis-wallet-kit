@@ -1,5 +1,5 @@
 import process from 'node:process'
-import { wallet } from '../../src/main.ts'
+import { wallet } from '../../src/node.ts'
 
 /**
  * Shared setup + fixtures for the signet integration suite.

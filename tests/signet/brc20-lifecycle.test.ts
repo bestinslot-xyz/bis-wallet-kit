@@ -1,6 +1,6 @@
 import process from 'node:process'
 import { assert, describe, it } from 'vitest'
-import { balances, jsonInscription, mint, swap, wallet } from '../../src/main.ts'
+import { balances, jsonInscription, mint, swap, wallet } from '../../src/node.ts'
 
 /**
  * Long-running end-to-end lifecycle against a live signet endpoint:

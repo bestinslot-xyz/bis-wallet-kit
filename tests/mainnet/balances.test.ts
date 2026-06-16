@@ -1,5 +1,5 @@
 import { assert, beforeAll, describe, it } from 'vitest'
-import { balances, wallet } from '../../src/main.ts'
+import { balances, wallet } from '../../src/node.ts'
 
 const KNOWN_ADDRESS = 'bc1plnw9577kddxn4ry37xsul99d04tp7w3sf0cclt6k0zc7u3l8swmsfylw0g'
 const KNOWN_TOKEN_ADDRESS = '0x077fe0e97B1bAD5040D5053384fF8099AB816481'
