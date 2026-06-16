@@ -1,7 +1,7 @@
 import { Buffer } from 'node:buffer'
 import { assert, describe, it } from 'vitest'
 import { base64ToHex, createUnsecuredToken, hexToBase64 } from '../../src/core/helpers.ts'
-import { delegateInscription, jsonInscription, textInscription } from '../../src/main.ts'
+import { brc20MintInscription, delegateInscription, jsonInscription, textInscription } from '../../src/main.ts'
 
 describe('hex <-> base64', () => {
   it('round-trips hex through base64', () => {
@@ -66,5 +66,16 @@ describe('inscription builders', () => {
     assert.equal(ins.delegate?.str, id)
     assert.equal(ins.data, null)
     assert.equal(ins.mimeType, null)
+  })
+
+  it('brc20MintInscription builds the standard brc-20 mint JSON with a string amount', () => {
+    const ins = brc20MintInscription('abcd', 1000)
+    assert.equal(ins.mimeType?.str, 'application/json')
+    assert.deepEqual(JSON.parse(ins.data!.str), {
+      p: 'brc-20',
+      op: 'mint',
+      tick: 'abcd',
+      amt: '1000',
+    })
   })
 })

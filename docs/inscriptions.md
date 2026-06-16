@@ -6,12 +6,17 @@ top-level builders turn content into an `InscriptionDetails`.
 ## Build inscription content
 
 ```ts
-import { delegateInscription, jsonInscription, textInscription } from '@bestinslot/wallet-kit'
+import { brc20MintInscription, delegateInscription, jsonInscription, textInscription } from '@bestinslot/wallet-kit'
 
 const text = textInscription('hello world')          // mime text/plain
 const json = jsonInscription({ p: 'brc-20', op: 'deploy', tick: 'abcd', max: 1000, lim: 10 })
 const delegate = delegateInscription('abc…i0')       // delegate to another inscription
+const mintIns = brc20MintInscription('abcd', 1000)   // {"p":"brc-20","op":"mint","tick":"abcd","amt":"1000"}
 ```
+
+`brc20MintInscription(ticker, amount)` is a convenience over `jsonInscription`
+for the common BRC-20 mint; pass the result to `mint.inscribe`. The `amount` is
+in the ticker's own decimals and is serialised as a string.
 
 ## Inscribe
 

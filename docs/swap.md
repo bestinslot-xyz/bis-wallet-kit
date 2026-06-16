@@ -90,8 +90,13 @@ Quote first with `getAddLiquidityResult` / `getRemoveLiquidityResult`.
 ## Move funds in and out
 
 ```ts
+// Tokens: deposit pulls from your programmable balance, or auto-converts from
+// your base BRC-20 balance (and creates the allowance) when it's short.
 await swap.deposit(tokenAddress, amount, feeRate /*, createAllowanceIfNeeded = true */)
 await swap.withdraw(tokenAddress, amount /*, targetAddress? */) // omit target → self
+
+// BTC: wrap deposits BTC into the smart wallet as WBTC; unwrap is the reverse.
+await swap.wrap(btcSats, feeRate)
 await swap.unwrap(tokenAddress, amount)
 ```
 

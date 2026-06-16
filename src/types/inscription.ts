@@ -124,6 +124,20 @@ export function delegateInscription(inscriptionId: string): InscriptionDetails {
 }
 
 /**
+ * Helper function to create an InscriptionDetails instance for a BRC-20 mint. It
+ * builds the standard `{"p":"brc-20","op":"mint","tick":...,"amt":...}` JSON
+ * inscription (amount serialised as a string, in the ticker's own decimals) so
+ * callers don't have to hand-assemble it. Pass the result to `mint.inscribe`.
+ *
+ * @param ticker - The BRC-20 ticker to mint.
+ * @param amount - The amount to mint, in the ticker's own decimals. Accepts a number or string; serialised to a string in the inscription.
+ * @returns An InscriptionDetails instance for the BRC-20 mint inscription.
+ */
+export function brc20MintInscription(ticker: string, amount: string | number): InscriptionDetails {
+  return jsonInscription({ p: 'brc-20', op: 'mint', tick: ticker, amt: String(amount) })
+}
+
+/**
  * Inscribe fees for a single inscription, including total fee, commit fee, reveal fee, postage, and secret.
  *
  * @interface InscribeFees

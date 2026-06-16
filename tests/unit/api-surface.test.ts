@@ -59,6 +59,7 @@ const NAMESPACE_FUNCTIONS: Record<string, string[]> = {
     'swapExactOutput',
     'unwrap',
     'deposit',
+    'wrap',
     'withdraw',
     'tryGetSwapReferrerInfo',
   ],
@@ -79,6 +80,7 @@ const TOP_LEVEL_FUNCTIONS = [
   'delegateInscription',
   'jsonInscription',
   'textInscription',
+  'brc20MintInscription',
   'addressWalletInfo',
   'opReturnWalletInfo',
 ]

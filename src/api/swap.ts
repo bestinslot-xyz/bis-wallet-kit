@@ -1,5 +1,6 @@
 import {
   createAndBroadcastDepositOrder,
+  createAndBroadcastWrapOrder,
   getActivityOfPair as getActivityOfPairCore,
   getWalletActivities as getWalletActivitiesCore,
   prepareAndSendAddLiquidityOrder,
@@ -233,6 +234,18 @@ export async function deposit(
     feeRate,
     createAllowanceIfNeeded,
   )
+}
+
+/**
+ * Wraps BTC into the smart wallet as WBTC (the swap layer's BTC representation),
+ * the BTC equivalent of `deposit`.
+ *
+ * @param btcAmount - The amount of BTC to wrap, in sats, specified as a bigint.
+ * @param feeRate - The fee rate (sats/vByte) for the wrap transaction.
+ * @returns A promise that resolves to an array of transaction IDs related to the wrap operation.
+ */
+export async function wrap(btcAmount: bigint, feeRate: number): Promise<string[]> {
+  return await createAndBroadcastWrapOrder(btcAmount, feeRate)
 }
 
 /**

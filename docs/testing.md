@@ -62,6 +62,31 @@ Most assertions use `dryRun` so they assemble (but don't broadcast) transactions
 Tests that depend on a known token guard themselves with `it.skipIf(...)`, so
 they skip rather than fail when a fixture isn't configured.
 
+### End-to-end lifecycle (signet)
+
+`tests/signet/brc20-lifecycle.test.ts` is a single long-running test that walks
+the full path — mint BRC-20 → deposit into the smart wallet → wrap BTC → add
+liquidity → swap both ways → withdraw — waiting on the chain/indexer between
+steps. It moves real funds and can take tens of minutes (multiple signet
+blocks), so it's **off unless `SIGNET_E2E=1`** and is never part of CI.
+
+Add to `.env.signet`:
+
+```
+SIGNET_E2E=1
+PRIVATE_KEY_WIF=<funded signet WIF: BTC for fees + the BTC to wrap>
+SIGNET_E2E_TICKER=<a deployed BRC-20 ticker with mint limit >= the amount>
+SIGNET_E2E_TOKEN=0x…        # the programmable (EVM) token address for that ticker
+SIGNET_WBTC_TOKEN=0x…       # the WBTC token address
+# optional:
+SIGNET_E2E_MINT_AMOUNT=1000 # ticker units
+SIGNET_E2E_BTC_SATS=10000   # sats to wrap
+SIGNET_E2E_FEE_RATE=2       # sats/vByte
+```
+
+Then `pnpm test:signet`. Amounts and timeouts may need tuning for your ticker on
+the first run.
+
 ## Adding tests
 
 Prefer the unit suite. If logic can run without the network — encoding, address
