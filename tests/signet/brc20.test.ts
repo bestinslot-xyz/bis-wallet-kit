@@ -3,7 +3,9 @@ import process from 'node:process'
 import { assert, beforeAll, describe, it } from 'vitest'
 import { brc20, getEvmAddressFromBitcoinAddress, wallet } from '../../src/main.ts'
 
-const KNOWN_TICKER = 'atat'
+// The deposit/withdraw dry-runs build real transactions against the wallet's
+// balance, so they need a ticker the wallet actually holds — skip unless set.
+const KNOWN_TICKER = process.env.SIGNET_KNOWN_TICKER
 
 describe('tests for BRC2.0 programmable module (signet)', () => {
   let walletAddress: string
@@ -24,7 +26,7 @@ describe('tests for BRC2.0 programmable module (signet)', () => {
 
   it.skipIf(!KNOWN_TICKER)('should dry-run deposit to BRC2.0 prog', async () => {
     const result = await brc20.depositToBrc20Prog(
-      KNOWN_TICKER,
+      KNOWN_TICKER!,
       '1',
       2,
       null,
@@ -40,7 +42,7 @@ describe('tests for BRC2.0 programmable module (signet)', () => {
 
   it.skipIf(!KNOWN_TICKER)('should dry-run withdraw from BRC2.0 prog', async () => {
     const result = await brc20.withdrawFromBrc20Prog(
-      KNOWN_TICKER,
+      KNOWN_TICKER!,
       '1',
       walletAddress,
       2,

@@ -74,7 +74,9 @@ The signet suite covers more the more you configure. All of these are read from
 | `SIGNET_WBTC_TOKEN` | swap quotes (paired with `SIGNET_SWAP_TOKEN`) |
 | `SIGNET_SWAP_PAIR` | pair reads — reserves, klines, volume, activity |
 | `SIGNET_REFERRER_ID` | referral resolution + referral swap |
-| `SIGNET_BASE_BRC20_TOKEN` | base BRC-20 balance lookups |
+| `SIGNET_KNOWN_TICKER` | ticker→address + ticker balance + BRC-2.0 deposit/withdraw dry-runs (must exist on signet / be held by the wallet) |
+| `SIGNET_BASE_BRC20_TOKEN` | base BRC-20 balance lookup (must be a token the wallet holds) |
+| `SIGNET_PROG_TOKEN` | overrides the token address used for the wallet-agnostic prog-balance read (has a default) |
 | `SIGNET_CONTRACT_ADDRESS` | BRC-2.0 smart-contract call (dry-run) |
 | `SIGNET_PARENT_INSCRIPTION_ID` | parent/child inscription (dry-run) |
 
