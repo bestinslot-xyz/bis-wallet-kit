@@ -67,7 +67,7 @@ export interface InscribeAndSendToAddress {
  * @param feeRate The fee rate to use for the transaction, in satoshis per vbyte.
  * @param postage The amount of postage to include with the transaction, or null if no postage is needed.
  * @param dryRun A boolean indicating whether to perform a dry run of the transaction (i.e., simulate the transaction without actually sending it).
- * @param paymentOpts Optional payment options, including the payment address and payment amount, which may be required for certain wallet types.
+ * @param paymentOpts Optional extra payment output added to the transaction: sends `paymentOpts.paymentAmount` sats to `paymentOpts.paymentAddress` (funded by the connected wallet — e.g. a service fee). Omit for no extra payment.
  * @param walletType The type of wallet to use for the transaction, either 'payment' or 'ordinals'. If not specified, defaults to 'payment'.
  * @returns The result of the smart contract call, which may vary depending on the wallet type and the specifics of the transaction. The exact structure of the result will depend on the implementation of the callSmartContractFromOrdinalsWallet and callSmartContractFromPaymentWallet functions.
  * @throws An error if an unsupported wallet type is specified or if there is an issue with the smart contract call.
@@ -126,7 +126,7 @@ export async function callSmartContract(
  * @param feeRate The fee rate to use for the transaction, in satoshis per vbyte, which is used to calculate the total transaction fee based on the estimated gas and gas cost per vbyte.
  * @param postage The amount of postage to include with the transaction, or null if no postage is needed. Postage may be required for certain transactions to ensure that they are processed in a timely manner, especially during periods of high network congestion.
  * @param dryRun A boolean indicating whether to perform a dry run of the transaction (i.e., simulate the transaction without actually sending it). This can be useful for testing and debugging purposes to ensure that the function call is correctly encoded and that the transaction would succeed before actually sending it to the network.
- * @param paymentOpts Optional payment options, including the payment address and payment amount, which may be required for certain wallet types or transaction scenarios. These options allow for greater flexibility in how the transaction is executed and can be used to specify additional details for the transaction as needed.
+ * @param paymentOpts Optional extra payment output added to the transaction: sends `paymentOpts.paymentAmount` sats to `paymentOpts.paymentAddress` (funded by the connected wallet — e.g. a service fee). Omit for no extra payment.
  * @param walletType The type of wallet to use for the transaction, either 'payment' or 'ordinals'. This parameter allows the caller to specify which wallet implementation to use when executing the smart contract call, providing flexibility in how the transaction is processed based on the capabilities and requirements of the chosen wallet type.
  * @returns The result of the smart contract call, which may vary depending on the wallet type and the specifics of the transaction. The exact structure of the result will depend on the implementation of the callSmartContractFromOrdinalsWallet and callSmartContractFromPaymentWallet functions, as well as the nature of the smart contract being called and the function being invoked.
  * @throws An error if the ABI is not an object, if the function name is not a string, if the parameters are not an array, if an unsupported wallet type is specified, or if there is an issue with the smart contract call.
@@ -175,9 +175,7 @@ export async function callSmartContractAbi(
  * @param feeRate - The fee rate in sats/vbyte to be used for the transactions involved in the deposit process.
  * @param postage - An optional parameter representing the postage to be included in the minting transaction, specified in sats. If null, no postage will be included.
  * @param dryRun - A boolean flag indicating whether to perform a dry run. If true, the function will return the transaction hexes without broadcasting them to the network. If false, the transactions will be broadcasted after creation.
- * @param paymentOpts - An optional object containing payment options, including:
- *   - paymentAddress: A Bitcoin address to which payment should be sent for the minting transaction. If null, no payment will be made.
- *   - paymentAmount: The amount of payment to be sent for the minting transaction, specified in sats. If null or less than or equal to 0, no payment will be made.
+ * @param paymentOpts - Optional extra payment output added to the transaction: sends `paymentOpts.paymentAmount` sats to `paymentOpts.paymentAddress` (funded by the connected wallet — e.g. a service fee). Omit for no extra payment.
  *
  * @returns An object containing details of the deposit process, including transaction IDs, signed transaction hexes, inscription ID, postage, and secret used in the minting process. If dryRun is true, the transactions will not be broadcasted and the hexes will be returned for inspection.
  */
@@ -209,9 +207,7 @@ export async function depositToBrc20Prog(
  * @param feeRate - The fee rate in sats/vbyte to be used for the transactions involved in the withdrawal process.
  * @param postage - An optional parameter representing the postage to be included in the minting transaction, specified in sats. If null, no postage will be included.
  * @param dryRun - A boolean flag indicating whether to perform a dry run. If true, the function will return the transaction hexes without broadcasting them to the network. If false, the transactions will be broadcasted after creation.
- * @param paymentOpts - An optional object containing payment options, including:
- *   - paymentAddress: A Bitcoin address to which payment should be sent for the minting transaction. If null, no payment will be made.
- *   - paymentAmount: The amount of payment to be sent for the minting transaction, specified in sats. If null or less than or equal to 0, no payment will be made.
+ * @param paymentOpts - Optional extra payment output added to the transaction: sends `paymentOpts.paymentAmount` sats to `paymentOpts.paymentAddress` (funded by the connected wallet — e.g. a service fee). Omit for no extra payment.
  *
  * @returns An object containing details of the withdrawal process, including transaction IDs, signed transaction hexes, inscription ID, postage, and secret used in the minting process. If dryRun is true, the transactions will not be broadcasted and the hexes will be returned for inspection.
  */

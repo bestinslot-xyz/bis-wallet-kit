@@ -20,7 +20,7 @@ export type { InscribeFees, InscribeMultipleResult, InscribeResult, InscriptionD
  * @param feeRate - The fee rate in satoshis per virtual byte to be used for the inscription transactions.
  * @param postage - The postage amount in satoshis to be included in the inscription transactions, or null to use the default dust value.
  * @param dryRun - A boolean indicating whether to perform a dry run of the inscription, which will return the transaction details without broadcasting them to the network.
- * @param paymentOpts - An object containing the payment address and payment amount, or null if no payment is required for the inscriptions.
+ * @param paymentOpts - Optional extra payment output added to the transaction: sends `paymentOpts.paymentAmount` sats to `paymentOpts.paymentAddress` (funded by the connected wallet — e.g. a service fee). Omit for no extra payment.
  * @returns A promise that resolves to an object containing the transaction IDs and signed transaction hex for both the commit and reveal transactions, as well as the inscription IDs, postage, and secret used for the inscriptions.
  */
 export async function inscribe(
@@ -55,7 +55,7 @@ export async function inscribe(
  * @param feeRate - The fee rate in satoshis per virtual byte to be used for the inscription transactions.
  * @param postage - The postage amount in satoshis to be included in the inscription transactions, or null to use the default dust value.
  * @param dryRun - A boolean indicating whether to perform a dry run of the inscription, which will return the transaction details without broadcasting them to the network.
- * @param paymentOpts - An object containing the payment address and payment amount, or null if no payment is required for the inscriptions.
+ * @param paymentOpts - Optional extra payment output added to the transaction: sends `paymentOpts.paymentAmount` sats to `paymentOpts.paymentAddress` (funded by the connected wallet — e.g. a service fee). Omit for no extra payment.
  * @returns A promise that resolves to an object containing the transaction IDs and signed transaction hex for both the commit and reveal transactions, as well as the inscription IDs, postage, and secret used for the inscriptions.
  */
 export async function inscribeMultiple(
@@ -76,7 +76,7 @@ export async function inscribeMultiple(
  * @param feeRate - The fee rate in satoshis per virtual byte to be used for the inscription transactions.
  * @param postage - The postage amount in satoshis to be included in the inscription transactions, or null to use the default dust value.
  * @param dryRun - A boolean indicating whether to perform a dry run of the inscription, which will return the transaction details without broadcasting them to the network.
- * @param paymentOpts - An object containing the payment address and payment amount, or null if no payment is required for the inscriptions.
+ * @param paymentOpts - Optional extra payment output added to the transaction: sends `paymentOpts.paymentAmount` sats to `paymentOpts.paymentAddress` (funded by the connected wallet — e.g. a service fee). Omit for no extra payment.
  * @returns A promise that resolves to an object containing the transaction IDs and signed transaction hex for both the commit and reveal transactions, as well as the inscription ID, postage, and secret used for the inscription.
  * @throws Will throw an error if the inscription process fails for any reason, such as invalid input parameters, insufficient funds for fees, or issues with the parent inscription. The error message will provide details about the reason for the failure.
  */
@@ -103,7 +103,7 @@ export async function inscribeWithParent(
  * @param inscriptionDetails - An InscriptionDetails instance containing the details of the inscription to be minted.
  * @param feeRate - The fee rate in satoshis per virtual byte to be used for the inscription transactions.
  * @param postage - The postage amount in satoshis to be included in the inscription transactions, or null to use the default dust value.
- * @param paymentOpts - An object containing the payment address and payment amount, or null if no payment is required for the inscriptions.
+ * @param paymentOpts - Optional extra payment output added to the transaction: sends `paymentOpts.paymentAmount` sats to `paymentOpts.paymentAddress` (funded by the connected wallet — e.g. a service fee). Omit for no extra payment.
  * @returns A promise that resolves to an object containing the estimated fees for both the commit and reveal transactions, as well as the total fee for the inscription process.
  */
 export async function getInscribeFee(
@@ -121,7 +121,7 @@ export async function getInscribeFee(
  * @param inscriptionDetailsArray - An array of InscriptionDetails instances containing the details of each inscription to be minted.
  * @param feeRate - The fee rate in satoshis per virtual byte to be used for the inscription transactions.
  * @param postage - The postage amount in satoshis to be included in the inscription transactions, or null to use the default dust value.
- * @param paymentOpts - An object containing the payment address and payment amount, or null if no payment is required for the inscriptions.
+ * @param paymentOpts - Optional extra payment output added to the transaction: sends `paymentOpts.paymentAmount` sats to `paymentOpts.paymentAddress` (funded by the connected wallet — e.g. a service fee). Omit for no extra payment.
  * @returns A promise that resolves to an object containing the estimated fees for both the commit and reveal transactions, as well as the total fee for the inscription process for multiple inscriptions in a single batch.
  */
 export async function getInscribeMultipleFee(
