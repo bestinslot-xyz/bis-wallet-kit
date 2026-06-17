@@ -6,8 +6,10 @@
  * Classifies a swap as a buy or sell relative to WBTC (the quote asset): you
  * "buy" the other token when you spend WBTC, and "sell" it when you receive WBTC.
  *
- * Apply it to an activity entry's input/output token addresses, e.g.
- * `swapSide(entry.token_1, entry.token_2, wbtcAddress)`.
+ * For a swap activity entry (`type` 'swap1' | 'swap2'), `token_1` is the input
+ * and `token_2` the output, so `swapSide(entry.token_1, entry.token_2, wbtc)`
+ * gives its side. (Don't apply it to liquidity entries, where token_1/token_2 are
+ * the pair's two tokens, not a direction.)
  *
  * @param tokenInAddress The input token address (what's spent).
  * @param tokenOutAddress The output token address (what's received).
@@ -30,12 +32,17 @@ export function swapSide(
 }
 
 /**
- * Converts a sat amount to BTC.
+ * Converts a sat amount to BTC. Throws on values beyond JS safe-integer
+ * precision (~90,000 BTC) rather than silently rounding.
  *
  * @param sats The amount in satoshis.
  * @returns The amount in BTC.
  */
 export function satsToBtc(sats: bigint): number {
+  const max = BigInt(Number.MAX_SAFE_INTEGER)
+  if (sats > max || sats < -max) {
+    throw new RangeError('satsToBtc: amount exceeds safe-integer precision (~90,000 BTC).')
+  }
   return Number(sats) / 1e8
 }
 

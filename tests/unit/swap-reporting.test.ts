@@ -29,6 +29,10 @@ describe('sat conversions', () => {
     assert.equal(satsToBtc(250_000_000n), 2.5)
   })
 
+  it('satsToBtc throws beyond safe-integer precision', () => {
+    assert.throws(() => satsToBtc(BigInt(Number.MAX_SAFE_INTEGER) + 1n), /precision/)
+  })
+
   it('satsToUsd applies the caller-supplied rate', () => {
     assert.equal(satsToUsd(100_000_000n, 50_000), 50_000)
     assert.equal(satsToUsd(50_000_000n, 60_000), 30_000)

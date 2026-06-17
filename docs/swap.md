@@ -10,18 +10,18 @@ the token's base units.
 import { swap } from '@bestinslot/wallet-kit'
 
 const swapWallet = await swap.createSwapWallet() // generate + store the swap wallet
-const status = await swap.getSwapStatus()        // { reorg_handler_running, emergency_stop, … }
+const status = await swap.getSwapStatus() // { reorg_handler_running, emergency_stop, … }
 ```
 
 ## Balances and pricing
 
 ```ts
 const balances = await swap.getSwapBalances(ordinalsAddress) // SwapBalance[]
-const one = await swap.getSwapBalance(tokenAddress)          // bigint
-const decimals = await swap.getTokenDecimals(tokenAddress)   // number
-const reserves = await swap.getPairReserves(pairAddress)     // PairReserves
-const pair = swap.getPairAddress(tokenA, tokenB)             // deterministic, order-independent
-const fee = await swap.getMinerFee('swap')                   // bigint (per order type)
+const one = await swap.getSwapBalance(tokenAddress) // bigint
+const decimals = await swap.getTokenDecimals(tokenAddress) // number
+const reserves = await swap.getPairReserves(pairAddress) // PairReserves
+const pair = swap.getPairAddress(tokenA, tokenB) // deterministic, order-independent
+const fee = await swap.getMinerFee('swap') // bigint (per order type)
 ```
 
 ## Trade
@@ -38,17 +38,17 @@ There are two swap directions, mirroring Uniswap's two router modes:
 await swap.swapExactInput(
   tokenInAddress,
   tokenOutAddress,
-  amountIn,      // bigint — exact amount spent
-  amountOutMin,  // bigint — expected/quoted output; slippage is applied to derive the enforced minimum
-  slippageBPS,   // bigint, basis points
+  amountIn, // bigint — exact amount spent
+  amountOutMin, // bigint — expected/quoted output; slippage is applied to derive the enforced minimum
+  slippageBPS, // bigint, basis points
 )
 
 // Exact output: receive exactly amountOut, spend at most the quoted input + slippage.
 await swap.swapExactOutput(
   tokenInAddress,
   tokenOutAddress,
-  amountIn,      // bigint — expected/quoted input (slippage applied to derive the max spent)
-  amountOut,     // bigint — exact amount received
+  amountIn, // bigint — expected/quoted input (slippage applied to derive the max spent)
+  amountOut, // bigint — exact amount received
   slippageBPS,
 )
 ```
@@ -96,8 +96,8 @@ Quote first with `getAddLiquidityResult` / `getRemoveLiquidityResult`.
 ```ts
 // Tokens: deposit pulls from your programmable balance, or auto-converts from
 // your base BRC-20 balance (and creates the allowance) when it's short.
-await swap.deposit(tokenAddress, amount, feeRate /*, createAllowanceIfNeeded = true */)
-await swap.withdraw(tokenAddress, amount /*, targetAddress? */) // omit target → self
+await swap.deposit(tokenAddress, amount, feeRate /* , createAllowanceIfNeeded = true */)
+await swap.withdraw(tokenAddress, amount /* , targetAddress? */) // omit target → self
 
 // BTC: wrapBtc deposits BTC into the smart wallet as WBTC; unwrap is the reverse.
 await swap.wrapBtc(btcSats, feeRate)
@@ -124,13 +124,16 @@ Everything is denominated in sats / WBTC. These pure helpers cover the common
 reporting derivations so each consumer doesn't reimplement them.
 
 ```ts
-// Buy/sell side of a swap, relative to WBTC (you "buy" the token when you spend
-// WBTC, "sell" it when you receive WBTC). Returns null for token-to-token swaps.
-const side = swap.swapSide(entry.token_1, entry.token_2, wbtcAddress) // 'buy' | 'sell' | null
+// Buy/sell side relative to WBTC (you "buy" the token when you spend WBTC, "sell"
+// it when you receive WBTC). Returns null for token-to-token swaps.
+// For a *swap* activity entry, token_1 is the input and token_2 the output:
+if (entry.type === 'swap1' || entry.type === 'swap2') {
+  const side = swap.swapSide(entry.token_1, entry.token_2, wbtcAddress) // 'buy' | 'sell' | null
+}
 
 // Value conversion — the library stays oracle-free; you supply the BTC/USD rate.
-const btc = swap.satsToBtc(amountSats)            // sats → BTC
-const usd = swap.satsToUsd(amountSats, btcUsd)    // sats → USD
+const btc = swap.satsToBtc(amountSats) // sats → BTC (throws above ~90k BTC)
+const usd = swap.satsToUsd(amountSats, btcUsd) // sats → USD
 ```
 
 For **TVL of a WBTC pair**: it's `2 ×` the WBTC-side reserve (the other side is
