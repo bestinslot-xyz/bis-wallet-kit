@@ -12,6 +12,7 @@ import * as ethers from 'ethers'
 import { getBitcoinNetwork } from '../lib/bitcoin'
 import {
   addLiquidityRequest,
+  calculatePairAddress,
   removeLiquidityRequest,
   saveInfo,
   swap2Request,
@@ -331,6 +332,24 @@ async function getSwapInfo(): Promise<SwapInfo> {
     wbtc_handler_address: result.result.wbtc_handler_address,
   }
   return swapInfoCache
+}
+
+/**
+ * Throws a clear, upfront error when no swap pool with liquidity exists for the
+ * given token pair (e.g. an unsupported token-to-token pair), so callers fail
+ * fast instead of hitting a confusing error deeper in the swap math.
+ *
+ * @param token1Addr One side of the pair.
+ * @param token2Addr The other side of the pair.
+ */
+async function assertPoolExists(token1Addr: string, token2Addr: string): Promise<void> {
+  const swapInfo = await getSwapInfo()
+  saveInfo(swapInfo.wbtc_address, swapInfo.factory_address)
+  const pairAddress = calculatePairAddress(token1Addr, token2Addr)
+  const reserves = await getPairReserves(pairAddress)
+  if (reserves.reserveA === 0n || reserves.reserveB === 0n) {
+    throw new Error(`No swap pool with liquidity for ${token1Addr} / ${token2Addr}.`)
+  }
 }
 
 interface GetBRC20ProgBalanceResponse {
@@ -2845,6 +2864,7 @@ export async function getSwapResult(
 ): Promise<{ amount_out: bigint, quoted_price: number, price_impact_bps: bigint }> {
   const swapInfo = await getSwapInfo()
   saveInfo(swapInfo.wbtc_address, swapInfo.factory_address)
+  await assertPoolExists(tokenInAddr, tokenOutAddr)
 
   const pubkey = (await getSwapWalletFromDB())?.swapPubkey
   if (!pubkey) {
@@ -3042,6 +3062,8 @@ export async function prepareAndSendSwapOrder(
     throw new Error('Smart wallet not found. Please generate a smart wallet first.')
   }
 
+  await assertPoolExists(token1Addr, token2Addr)
+
   const minOutAmt = (amt2 * (10000n - slippageBPS)) / 10000n
 
   const nonce = await getSwapWalletNonce()
@@ -3108,6 +3130,7 @@ export async function getSwap2Result(
 ): Promise<{ amount_in: bigint, quoted_price: number, price_impact_bps: bigint }> {
   const swapInfo = await getSwapInfo()
   saveInfo(swapInfo.wbtc_address, swapInfo.factory_address)
+  await assertPoolExists(tokenInAddr, tokenOutAddr)
 
   const pubkey = (await getSwapWalletFromDB())?.swapPubkey
   if (!pubkey) {
@@ -3305,6 +3328,8 @@ export async function prepareAndSendSwap2Order(
   if (!pubkey) {
     throw new Error('Smart wallet not found. Please generate a smart wallet first.')
   }
+
+  await assertPoolExists(token1Addr, token2Addr)
 
   const maxInAmt = (amt1 * (10000n + slippageBPS)) / 10000n
 
