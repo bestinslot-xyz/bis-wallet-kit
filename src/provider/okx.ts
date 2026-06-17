@@ -79,7 +79,7 @@ async function signMessageDeterministic(
   }
 }
 
-async function sendBTC(amountSats: string, toAddress: string): Promise<string> {
+async function sendBTC(amountSats: number, toAddress: string): Promise<string> {
   if (!window.okxwallet)
     throw new Error('OKX extension not found.')
 
@@ -87,13 +87,13 @@ async function sendBTC(amountSats: string, toAddress: string): Promise<string> {
   let txId
 
   if (network === 'mainnet') {
-    txId = await window.okxwallet.bitcoin.sendBitcoin(toAddress, Number.parseInt(amountSats))
+    txId = await window.okxwallet.bitcoin.sendBitcoin(toAddress, amountSats)
   }
   else if (network === 'testnet') {
-    txId = await window.okxwallet.bitcoinTestnet.sendBitcoin(toAddress, Number.parseInt(amountSats))
+    txId = await window.okxwallet.bitcoinTestnet.sendBitcoin(toAddress, amountSats)
   }
   else if (network === 'signet') {
-    txId = await window.okxwallet.bitcoinSignet.sendBitcoin(toAddress, Number.parseInt(amountSats))
+    txId = await window.okxwallet.bitcoinSignet.sendBitcoin(toAddress, amountSats)
   }
   else {
     throw new Error('Unsupported network for OKX.')

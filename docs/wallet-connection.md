@@ -8,10 +8,10 @@ switching networks, signing, and sending.
 ```ts
 import { modal } from '@bestinslot/wallet-kit'
 
-modal.init()                 // create + mount the modal (call once)
-const session = await modal.connect()  // show picker, resolve on connect
-modal.disconnect()           // hide modal and clear the stored session
-modal.setTheme('dark')       // 'light' | 'dark' | 'system' (default 'system')
+modal.init() // create + mount the modal (call once)
+const session = await modal.connect() // show picker, resolve on connect
+modal.disconnect() // hide modal and clear the stored session
+modal.setTheme('dark') // 'light' | 'dark' | 'system' (default 'system')
 ```
 
 Lower-level modal controls are also exported: `modal.create`, `modal.showConnect`,
@@ -43,7 +43,7 @@ Read it back at any time:
 ```ts
 const session = wallet.getSession()
 const ordinals = wallet.getOrdinalsWallet() // BISWallet | undefined
-const payment = wallet.getPaymentWallet()   // BISWallet | undefined
+const payment = wallet.getPaymentWallet() // BISWallet | undefined
 ```
 
 Single-address wallets (OKX, Unisat, local) expose one wallet with
@@ -77,14 +77,14 @@ const sigDet = await wallet.signMessageLocalVerifyDeterministic('hello')
 ## Sending
 
 ```ts
-const txid = await wallet.sendBTC('10000', 'bc1q…') // amount in sats (string)
+const txid = await wallet.sendBTC(10000, 'bc1q…') // amount in sats (number)
 
 const result = await wallet.sendInscription(
   inscriptionId,
   targetWallet, // WalletInfo — build with addressWalletInfo / opReturnWalletInfo
-  feeRate,      // sats/vByte
-  postage,      // sats or null for the default dust value
-  dryRun,       // true returns tx details without broadcasting
+  feeRate, // sats/vByte
+  postage, // sats or null for the default dust value
+  dryRun, // true returns tx details without broadcasting
 )
 ```
 
@@ -108,9 +108,9 @@ import { wallet } from '@bestinslot/wallet-kit'
 
 const w = await wallet.connectLocalWallet(
   process.env.PRIVATE_KEY_WIF!,
-  'signet',   // BISNetwork
-  'p2tr',     // 'p2wpkh' | 'p2tr' (default 'p2wpkh')
-  'unisat',   // source wallet: 'unisat' | 'okx' (default 'unisat')
+  'signet', // BISNetwork
+  'p2tr', // 'p2wpkh' | 'p2tr' (default 'p2wpkh')
+  'unisat', // source wallet: 'unisat' | 'okx' (default 'unisat')
 )
 console.log(w.address)
 ```

@@ -88,7 +88,7 @@ export interface BISProvider {
    * @param toAddress The address to which the Bitcoin should be sent. This value will be sent to the provider along with the amount to initiate the transaction.
    * @returns A promise that resolves to the transaction ID (txid) of the sent transaction as a string. This allows developers to track the transaction on the blockchain. If there is an error in sending the Bitcoin, the promise will be rejected with a descriptive error message.
    */
-  sendBTC: (amountSats: string, toAddress: string) => Promise<string>
+  sendBTC: (amountSats: number, toAddress: string) => Promise<string>
   /**
    * Signs a PSBT (Partially Signed Bitcoin Transaction) with specific handling for inscriptions using the provider. The signPSBT method takes an unsigned PSBT in hexadecimal format, a boolean indicating whether to broadcast the transaction after signing, and an array of input objects that specify which inputs in the PSBT should be signed along with any specific options for signing those inputs. It returns a promise that resolves to the signed PSBT as a hexadecimal string if broadcast is false, or the transaction ID (txid) of the broadcasted transaction if broadcast is true. This method allows developers to sign PSBTs with various input configurations and optionally broadcast them to the network. If there is an error in signing the PSBT or broadcasting it, the promise will be rejected with an appropriate error message.
    *

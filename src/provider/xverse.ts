@@ -115,7 +115,7 @@ async function signMessageDeterministic(
   }
 }
 
-async function sendBTC(amountSats: string, toAddress: string): Promise<string> {
+async function sendBTC(amountSats: number, toAddress: string): Promise<string> {
   if (!window.XverseProviders?.BitcoinProvider)
     throw new Error('Xverse extension not found.')
 
@@ -123,7 +123,7 @@ async function sendBTC(amountSats: string, toAddress: string): Promise<string> {
     recipients: [
       {
         address: toAddress,
-        amount: Number.parseInt(amountSats),
+        amount: amountSats,
       },
     ],
   })
