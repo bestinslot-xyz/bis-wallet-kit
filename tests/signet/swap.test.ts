@@ -1,4 +1,4 @@
-import { assert, beforeAll, describe, it } from 'vitest'
+import { assert, beforeAll, describe, expect, it } from 'vitest'
 import { swap } from '../../src/node.ts'
 import { connectSignetWallet, env, hasSwapTokens } from './_helpers.ts'
 
@@ -66,6 +66,17 @@ describe('swap (signet)', () => {
     assert.ok(typeof reserves.reserveA === 'bigint')
     assert.ok(typeof reserves.reserveB === 'bigint')
     assert.ok(typeof reserves.total_supply === 'bigint')
+  })
+
+  // ---- Pool precondition ----
+
+  it('fails fast with a clear error when the pair has no pool', async () => {
+    // Two arbitrary addresses that aren't a pool → the precondition should reject
+    // before reaching the swap math. (Assumes the backend reports zero reserves
+    // for an unknown pair.)
+    const a = '0x000000000000000000000000000000000000dead'
+    const b = '0x000000000000000000000000000000000000beef'
+    await expect(swap.getSwapExactInputResult(a, b, 1000n)).rejects.toThrow(/No swap pool/)
   })
 
   // ---- Quotes ----

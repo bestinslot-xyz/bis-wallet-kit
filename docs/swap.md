@@ -56,6 +56,10 @@ await swap.swapExactOutput(
 Quote before sending with `getSwapExactInputResult` (for `swapExactInput`) and
 `getSwapExactOutputResult` (for `swapExactOutput`).
 
+Swaps and quotes fail fast with a clear `No swap pool with liquidity for …`
+error when the token pair has no pool (e.g. an unsupported token-to-token pair),
+rather than failing deeper in the swap math.
+
 ## Referrals
 
 Both swap functions take an optional final `referrerId`. When a valid referral
