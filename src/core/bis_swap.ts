@@ -2863,7 +2863,7 @@ export async function getSwapResult(
   amtIn: bigint,
 ): Promise<{ amount_out: bigint, quoted_price: number, price_impact_bps: bigint }> {
   const swapInfo = await getSwapInfo()
-  saveInfo(swapInfo.wbtc_address, swapInfo.factory_address)
+  // saveInfo is handled by assertPoolExists below (single source of truth).
   await assertPoolExists(tokenInAddr, tokenOutAddr)
 
   const pubkey = (await getSwapWalletFromDB())?.swapPubkey
@@ -3129,7 +3129,7 @@ export async function getSwap2Result(
   amtOut: bigint,
 ): Promise<{ amount_in: bigint, quoted_price: number, price_impact_bps: bigint }> {
   const swapInfo = await getSwapInfo()
-  saveInfo(swapInfo.wbtc_address, swapInfo.factory_address)
+  // saveInfo is handled by assertPoolExists below (single source of truth).
   await assertPoolExists(tokenInAddr, tokenOutAddr)
 
   const pubkey = (await getSwapWalletFromDB())?.swapPubkey
