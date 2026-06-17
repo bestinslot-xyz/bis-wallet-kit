@@ -104,9 +104,9 @@ async function sendBTC(amountSats: number, toAddress: string): Promise<string> {
   }
   catch (e) {
     // Log
-    console.error('Failed to sign message', e)
+    console.error('Failed to send BTC', e)
 
-    throw new Error('Failed to sign message.')
+    throw new Error('Failed to send BTC.')
   }
 }
 
