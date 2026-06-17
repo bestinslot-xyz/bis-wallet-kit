@@ -78,16 +78,19 @@ export function hexToBase64(hexstring: string) {
  * @param noSignIdxes Input indexes to skip (intentionally left unfinalized).
  */
 export function finalizePsbtInputs(psbt: bitcoinjs.Psbt, noSignIdxes?: number[]): void {
+  const skip = new Set(noSignIdxes)
   for (let i = 0; i < psbt.inputCount; i++) {
-    if (noSignIdxes?.includes(i)) {
+    if (skip.has(i)) {
       continue
     }
     try {
       psbt.finalizeInput(i)
     }
     catch (e) {
-      console.error(`Cannot finalize PSBT input ${i}`, e)
-      throw new Error(`Failed to finalize PSBT input ${i}.`)
+      // Preserve the underlying reason in the message (Error `cause` needs a
+      // newer TS lib target than this project uses).
+      const reason = e instanceof Error ? e.message : String(e)
+      throw new Error(`Failed to finalize PSBT input ${i}: ${reason}`)
     }
   }
 }
