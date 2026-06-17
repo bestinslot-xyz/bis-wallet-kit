@@ -81,7 +81,7 @@ async function signMessageDeterministic(
   }
 }
 
-async function sendBTC(amountSats: string, toAddress: string): Promise<string> {
+async function sendBTC(amountSats: number, toAddress: string): Promise<string> {
   // Check if Leather is available
   if (!window.LeatherProvider)
     throw new Error('Leather extension not found.')
@@ -91,7 +91,7 @@ async function sendBTC(amountSats: string, toAddress: string): Promise<string> {
       recipients: [
         {
           address: toAddress,
-          amount: amountSats,
+          amount: amountSats.toString(),
         },
       ],
       network: getNetwork(),

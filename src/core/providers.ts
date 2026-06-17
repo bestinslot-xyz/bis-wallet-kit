@@ -211,7 +211,11 @@ export async function signMessageLocalVerifyDeterministic(message: string): Prom
  * @param toAddress The destination address.
  * @returns The transaction ID of the sent transaction.
  */
-export async function sendBTC(amountSats: string, toAddress: string): Promise<string> {
+export async function sendBTC(amountSats: number, toAddress: string): Promise<string> {
+  if (!Number.isInteger(amountSats) || amountSats <= 0) {
+    throw new Error('amountSats must be a positive integer (satoshis).')
+  }
+
   const provider = requireProvider(getWalletInfo()?.provider)
   const txid = await provider.sendBTC(amountSats, toAddress)
 

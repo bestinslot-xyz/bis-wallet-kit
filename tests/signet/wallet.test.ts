@@ -47,6 +47,6 @@ describe('wallet (signet)', () => {
   })
 
   it('does not support sendBTC on the local wallet', async () => {
-    await expect(wallet.sendBTC('1000', address)).rejects.toThrow(/not supported/i)
+    await expect(wallet.sendBTC(1000, address)).rejects.toThrow(/not supported/i)
   })
 })

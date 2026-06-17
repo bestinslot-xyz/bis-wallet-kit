@@ -366,12 +366,12 @@ async function sign(
 /**
  * Sends Bitcoin (BTC) from the locally stored wallet to a specified address. The sendBTC function is currently not supported in this local provider implementation, and it throws an error indicating that sending BTC is not supported. This function is intended to allow users to send BTC directly from their locally stored wallet to another address, but due to the limitations of the local provider, this functionality is not available at this time. If there is a need for sending BTC in the future, this function can be implemented with the necessary logic to create and broadcast a transaction using the locally stored wallet information.
  *
- * @param _amountSats The amount of Bitcoin to be sent, specified in satoshis as a string. This parameter represents the quantity of BTC that the user intends to send from their locally stored wallet to the specified address. The amount should be provided in satoshis, which is the smallest unit of Bitcoin, where 1 BTC is equal to 100 million satoshis.
+ * @param _amountSats The amount of Bitcoin to be sent, specified in satoshis as a number. This parameter represents the quantity of BTC that the user intends to send from their locally stored wallet to the specified address. The amount should be provided in satoshis, which is the smallest unit of Bitcoin, where 1 BTC is equal to 100 million satoshis.
  * @param _toAddress The destination address to which the Bitcoin should be sent. This is the address of the recipient who will receive the BTC from the sender's locally stored wallet. The address should be a valid Bitcoin address that can receive funds on the appropriate network (mainnet, testnet, etc.) based on the wallet's network settings.
  *
  * @throws An error indicating that sending BTC is not supported in the local provider implementation. This is a placeholder function that can be implemented in the future if there is a need for sending BTC directly from the locally stored wallet, but currently it does not provide any functionality for creating or broadcasting transactions.
  */
-function sendBTC(_amountSats: string, _toAddress: string): Promise<string> {
+function sendBTC(_amountSats: number, _toAddress: string): Promise<string> {
   throw new Error('Send BTC not supported.')
 }
 

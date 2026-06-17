@@ -93,20 +93,20 @@ async function signMessageDeterministic(
   }
 }
 
-async function sendBTC(amountSats: string, toAddress: string): Promise<string> {
+async function sendBTC(amountSats: number, toAddress: string): Promise<string> {
   // Check extension and network
   await checkNetwork()
 
   try {
-    const response = await window.unisat!.sendBitcoin(toAddress, Number.parseInt(amountSats))
+    const response = await window.unisat!.sendBitcoin(toAddress, amountSats)
 
     return response
   }
   catch (e) {
     // Log
-    console.error('Failed to sign message', e)
+    console.error('Failed to send BTC', e)
 
-    throw new Error('Failed to sign message.')
+    throw new Error('Failed to send BTC.')
   }
 }
 

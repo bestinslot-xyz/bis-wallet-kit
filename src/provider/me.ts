@@ -92,7 +92,7 @@ async function signMessageDeterministic(
   }
 }
 
-async function sendBTC(amountSats: string, toAddress: string): Promise<string> {
+async function sendBTC(amountSats: number, toAddress: string): Promise<string> {
   if (!window.magicEden)
     throw new Error('Magic Eden extension not found.')
 
@@ -108,7 +108,7 @@ async function sendBTC(amountSats: string, toAddress: string): Promise<string> {
     recipients: [
       {
         address: toAddress,
-        amountSats: Number.parseInt(amountSats),
+        amountSats,
       },
     ],
     senderAddress: paymentAddress,
