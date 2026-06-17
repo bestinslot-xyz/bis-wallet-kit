@@ -8,7 +8,7 @@ import * as bitcoinjs from 'bitcoinjs-lib'
 import * as bitcoinMessage from 'bitcoinjs-message'
 import { ECPairFactory } from 'ecpair'
 import * as tinysecp from 'tiny-secp256k1'
-import { broadcastTxes, hexToBase64 } from '../core/helpers'
+import { broadcastTxes, finalizePsbtInputs, hexToBase64 } from '../core/helpers'
 import { memoryStorage } from '../core/storage'
 import { saveWalletInfo } from '../core/store'
 import { getNetwork, setNetwork } from '../core/store-network'
@@ -352,17 +352,7 @@ async function sign(
   }
 
   const signedPsbt = bitcoinjs.Psbt.fromHex(signed)
-  try {
-    for (let i = 0; i < signedPsbt.inputCount; i++) {
-      if (noSignIdxes && noSignIdxes.includes(i))
-        continue
-      signedPsbt.finalizeInput(i)
-    }
-  }
-  catch (e) {
-    console.error('Cannot finalize inputs')
-    console.error(e)
-  }
+  finalizePsbtInputs(signedPsbt, noSignIdxes)
 
   const signedTx = signedPsbt.extractTransaction()
   const signedTxHex = signedTx.toHex()
