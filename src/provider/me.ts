@@ -3,7 +3,7 @@ import type { BISProvider, SignResponse } from './api'
 import { Buffer } from 'node:buffer'
 import * as bitcoinjs from 'bitcoinjs-lib'
 import { getNetwork } from '../core/bis'
-import { createUnsecuredToken, hexToBase64 } from '../core/helpers'
+import { createUnsecuredToken, finalizePsbtInputs, hexToBase64 } from '../core/helpers'
 import { getPaymentWallet } from '../core/providers'
 
 function getNetworkType() {
@@ -179,17 +179,7 @@ async function sign(
   )
 
   const signedPsbt = bitcoinjs.Psbt.fromBase64(signed.psbtBase64)
-  try {
-    for (let i = 0; i < signedPsbt.inputCount; i++) {
-      if (noSignIdxes && noSignIdxes.includes(i))
-        continue
-      signedPsbt.finalizeInput(i)
-    }
-  }
-  catch (e) {
-    console.error('Cannot finalize inputs')
-    console.error(e)
-  }
+  finalizePsbtInputs(signedPsbt, noSignIdxes)
 
   const signedTx = signedPsbt.extractTransaction()
   const signedTxHex = signedTx.toHex()

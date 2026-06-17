@@ -70,6 +70,29 @@ export function hexToBase64(hexstring: string) {
 }
 
 /**
+ * Finalizes every input of a signed PSBT, skipping the given indexes. Throws if
+ * an input cannot be finalized, so an incompletely-finalized (invalid) PSBT is
+ * never extracted and broadcast.
+ *
+ * @param psbt The signed PSBT to finalize in place.
+ * @param noSignIdxes Input indexes to skip (intentionally left unfinalized).
+ */
+export function finalizePsbtInputs(psbt: bitcoinjs.Psbt, noSignIdxes?: number[]): void {
+  for (let i = 0; i < psbt.inputCount; i++) {
+    if (noSignIdxes?.includes(i)) {
+      continue
+    }
+    try {
+      psbt.finalizeInput(i)
+    }
+    catch (e) {
+      console.error(`Cannot finalize PSBT input ${i}`, e)
+      throw new Error(`Failed to finalize PSBT input ${i}.`)
+    }
+  }
+}
+
+/**
  * Saves extra UTXOs that are currently being used in transactions but not yet confirmed on the blockchain.
  *
  * @param txHexes An array of transaction hex strings representing the transactions that are currently being processed.

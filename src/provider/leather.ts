@@ -3,7 +3,7 @@ import type { BISProvider, SignResponse } from './api'
 import { Buffer } from 'node:buffer'
 import * as bitcoinjs from 'bitcoinjs-lib'
 import { getNetwork } from '../core/bis'
-import { base64ToHex, hexToBase64 } from '../core/helpers'
+import { base64ToHex, finalizePsbtInputs, hexToBase64 } from '../core/helpers'
 
 // @ts-expect-error not in use
 // eslint-disable-next-line unused-imports/no-unused-vars
@@ -156,17 +156,7 @@ async function sign(
   ])
 
   const signedPsbt = bitcoinjs.Psbt.fromHex(signed)
-  try {
-    for (let i = 0; i < signedPsbt.inputCount; i++) {
-      if (noSignIdxes && noSignIdxes.includes(i))
-        continue
-      signedPsbt.finalizeInput(i)
-    }
-  }
-  catch (e) {
-    console.error('Cannot finalize inputs')
-    console.error(e)
-  }
+  finalizePsbtInputs(signedPsbt, noSignIdxes)
 
   const signedTx = signedPsbt.extractTransaction()
   const signedTxHex = signedTx.toHex()
