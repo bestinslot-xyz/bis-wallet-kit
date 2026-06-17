@@ -117,3 +117,22 @@ The `Get…Request` / `Get…Response`, `Kline`, `PairReserves`, `SwapBalance`,
 `PairActivityEntry`, and `WalletActivityEntry` types are exported from the same
 namespace — see the [generated API reference](./README.md#api-reference) for exact
 shapes.
+
+## Reporting helpers
+
+Everything is denominated in sats / WBTC. These pure helpers cover the common
+reporting derivations so each consumer doesn't reimplement them.
+
+```ts
+// Buy/sell side of a swap, relative to WBTC (you "buy" the token when you spend
+// WBTC, "sell" it when you receive WBTC). Returns null for token-to-token swaps.
+const side = swap.swapSide(entry.token_1, entry.token_2, wbtcAddress) // 'buy' | 'sell' | null
+
+// Value conversion — the library stays oracle-free; you supply the BTC/USD rate.
+const btc = swap.satsToBtc(amountSats)            // sats → BTC
+const usd = swap.satsToUsd(amountSats, btcUsd)    // sats → USD
+```
+
+For **TVL of a WBTC pair**: it's `2 ×` the WBTC-side reserve (the other side is
+worth the same in BTC terms), then convert with `satsToBtc` / `satsToUsd` — e.g.
+`swap.satsToUsd(wbtcReserve * 2n, btcUsd)`.
