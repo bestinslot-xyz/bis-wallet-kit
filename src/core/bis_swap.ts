@@ -346,7 +346,7 @@ async function assertPoolExists(token1Addr: string, token2Addr: string): Promise
   const swapInfo = await getSwapInfo()
   saveInfo(swapInfo.wbtc_address, swapInfo.factory_address)
   const pairAddress = calculatePairAddress(token1Addr, token2Addr)
-  let reserves
+  let reserves: PairReserves
   try {
     reserves = await getPairReserves(pairAddress)
   } catch (error) {
