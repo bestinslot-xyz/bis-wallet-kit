@@ -346,7 +346,17 @@ async function assertPoolExists(token1Addr: string, token2Addr: string): Promise
   const swapInfo = await getSwapInfo()
   saveInfo(swapInfo.wbtc_address, swapInfo.factory_address)
   const pairAddress = calculatePairAddress(token1Addr, token2Addr)
-  const reserves = await getPairReserves(pairAddress)
+  let reserves
+  try {
+    reserves = await getPairReserves(pairAddress)
+  } catch (error) {
+    // A pair that was never created returns "Pair not found" from the backend
+    // rather than zero reserves, so treat that as "no pool" too.
+    if (error instanceof Error && /pair not found/i.test(error.message)) {
+      throw new Error(`No swap pool with liquidity for ${token1Addr} / ${token2Addr}.`)
+    }
+    throw error
+  }
   if (reserves.reserveA === 0n || reserves.reserveB === 0n) {
     throw new Error(`No swap pool with liquidity for ${token1Addr} / ${token2Addr}.`)
   }
