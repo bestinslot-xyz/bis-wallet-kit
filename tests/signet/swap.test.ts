@@ -4,12 +4,21 @@ import { connectSignetWallet, env, hasSwapTokens } from './_helpers.ts'
 
 describe('swap (signet)', () => {
   let ordinalsAddress: string
+  // Token-denominated input amount for the quote tests. SIGNET_SWAP_AMOUNT is a
+  // flat base-unit count that suits the BTC-sat wrap test, but as an input to a
+  // (commonly 18-decimal) swap token it's dust that rounds the quote to zero.
+  // Scale it to the token's decimals (~0.0001 token) so the quotes are non-trivial.
+  let swapTokenAmount = env.swapAmount
 
   beforeAll(async () => {
     const w = await connectSignetWallet()
     ordinalsAddress = w.address
     // A swap (smart) wallet is required for balance reads and quotes.
     await swap.createSwapWallet()
+    if (env.swapToken) {
+      const decimals = await swap.getTokenDecimals(env.swapToken)
+      swapTokenAmount = 10n ** BigInt(Math.max(decimals - 4, 1))
+    }
   })
 
   // ---- Status & fees (no fixtures needed) ----
@@ -82,7 +91,7 @@ describe('swap (signet)', () => {
   // ---- Quotes ----
 
   it.skipIf(!hasSwapTokens)('quotes an exact-input swap', async () => {
-    const quote = await swap.getSwapExactInputResult(env.swapToken!, env.wbtcToken!, env.swapAmount)
+    const quote = await swap.getSwapExactInputResult(env.swapToken!, env.wbtcToken!, swapTokenAmount)
     assert.ok(typeof quote.amount_out === 'bigint')
     assert.ok(typeof quote.price_impact_bps === 'bigint')
   })
@@ -97,8 +106,8 @@ describe('swap (signet)', () => {
     const result = await swap.getAddLiquidityResult(
       env.swapToken!,
       env.wbtcToken!,
-      env.swapAmount,
-      env.swapAmount,
+      swapTokenAmount,
+      swapTokenAmount,
     )
     assert.ok(typeof result.amountA === 'bigint')
     assert.ok(typeof result.amountB === 'bigint')
