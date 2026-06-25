@@ -3031,6 +3031,7 @@ interface SwapOrderRequest {
   btc_fee: string
   bip322_signature: string
   referrer_pubkey?: string
+  referrer_id?: string
 }
 interface SwapOrderResponse {
   success: boolean
@@ -3121,6 +3122,7 @@ export async function prepareAndSendSwapOrder(
     btc_fee: btcFee.toString(),
     bip322_signature: bip322Signature,
     referrer_pubkey: referrerPubkey,
+    referrer_id: referrerPubkey ? referrerId : undefined,
   })
 }
 
@@ -3298,6 +3300,7 @@ interface Swap2OrderRequest {
   btc_fee: string
   bip322_signature: string
   referrer_pubkey?: string
+  referrer_id?: string
 }
 interface Swap2OrderResponse {
   success: boolean
@@ -3388,6 +3391,7 @@ export async function prepareAndSendSwap2Order(
     btc_fee: btcFee.toString(),
     bip322_signature: bip322Signature,
     referrer_pubkey: referrerPubkey,
+    referrer_id: referrerPubkey ? referrerId : undefined,
   })
 }
 
