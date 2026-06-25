@@ -151,12 +151,15 @@ describe('swap (signet)', () => {
   describe('execution', () => {
     const canExecute = env.execute && hasSwapTokens
 
+    // exact-input spends the swap token, so its amount is token-denominated
+    // (scaled like the quote tests). exact-output and the WBTC side of
+    // add-liquidity are WBTC-sat-denominated, so they keep SIGNET_SWAP_AMOUNT.
     it.skipIf(!canExecute)('executes an exact-input swap', async () => {
-      const quote = await swap.getSwapExactInputResult(env.swapToken!, env.wbtcToken!, env.swapAmount)
+      const quote = await swap.getSwapExactInputResult(env.swapToken!, env.wbtcToken!, swapTokenAmount)
       const ok = await swap.swapExactInput(
         env.swapToken!,
         env.wbtcToken!,
-        env.swapAmount,
+        swapTokenAmount,
         quote.amount_out,
         env.slippageBps,
       )
@@ -169,12 +172,12 @@ describe('swap (signet)', () => {
         const quote = await swap.getSwapExactInputResult(
           env.swapToken!,
           env.wbtcToken!,
-          env.swapAmount,
+          swapTokenAmount,
         )
         const ok = await swap.swapExactInput(
           env.swapToken!,
           env.wbtcToken!,
-          env.swapAmount,
+          swapTokenAmount,
           quote.amount_out,
           env.slippageBps,
           env.referrerId!,
@@ -196,11 +199,21 @@ describe('swap (signet)', () => {
     })
 
     it.skipIf(!canExecute)('adds liquidity', async () => {
+      // Add-liquidity rejects dust/lopsided amounts, so derive a balanced pair
+      // from a quote: a non-trivial swap-token amount, paired with whatever WBTC
+      // the pool ratio requires (the second arg is just an upper bound).
+      const liquidityTokenAmount = swapTokenAmount * 100n
+      const quote = await swap.getAddLiquidityResult(
+        env.swapToken!,
+        env.wbtcToken!,
+        liquidityTokenAmount,
+        liquidityTokenAmount,
+      )
       const added = await swap.addLiquidity(
         env.swapToken!,
         env.wbtcToken!,
-        env.swapAmount,
-        env.swapAmount,
+        quote.amountA,
+        quote.amountB,
         env.slippageBps,
       )
       assert.equal(added, true)
