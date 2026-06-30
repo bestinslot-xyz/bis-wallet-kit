@@ -122,7 +122,8 @@ export class BisModalView {
   private screenMarkup(): string {
     if (this.state === 'connect') {
       const items = Object.entries(PROVIDERS)
-        .map(([key, item]) => `
+        .map(
+          ([key, item]) => `
           <button
             data-provider="${key}"
             class="group flex items-center gap-x-4 p-2 border hover:border-primary border-border rounded-lg w-full text-left transition-colors cursor-pointer duration-300"
@@ -130,7 +131,8 @@ export class BisModalView {
             <img src="${item.img}" class="rounded-lg size-10" alt="${item.name}">
             <div class="font-semibold text-lg grow">${item.name}</div>
             <svg class="w-auto h-6 text-muted-foreground group-hover:text-foreground transition-colors duration-300" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m9 18l6-6l-6-6"/></svg>
-          </button>`)
+          </button>`,
+        )
         .join('')
 
       return `
@@ -139,7 +141,7 @@ export class BisModalView {
     }
 
     if (this.state === 'confirm_connection') {
-      const name = this.provider ? PROVIDERS[this.provider]?.name ?? '' : ''
+      const name = this.provider ? (PROVIDERS[this.provider]?.name ?? '') : ''
       return `
         <div class="mb-6 font-medium text-xl text-center">Confirm connection on ${name}</div>
         <div class="mx-auto mb-4 max-w-50 text-muted-foreground text-center">Check your extension and confirm the connection...</div>
@@ -181,10 +183,14 @@ export class BisModalView {
       const box = this.root.querySelector<HTMLElement>('[data-error-message]')
       if (box)
         box.textContent = this.errorMessage
-      this.root.querySelector<HTMLButtonElement>('[data-retry]')?.addEventListener('click', this.onRetry)
+      this.root
+        .querySelector<HTMLButtonElement>('[data-retry]')
+        ?.addEventListener('click', this.onRetry)
     }
 
-    this.root.querySelector<HTMLButtonElement>('[data-close]')?.addEventListener('click', this.onClose)
+    this.root
+      .querySelector<HTMLButtonElement>('[data-close]')
+      ?.addEventListener('click', this.onClose)
 
     if (this.state === 'connect') {
       this.root.querySelectorAll<HTMLButtonElement>('[data-provider]').forEach((btn) => {

@@ -7,20 +7,19 @@ pnpm add @bestinslot/wallet-kit
 # or: npm install @bestinslot/wallet-kit
 ```
 
-The package ships as ESM only, in two flavours resolved automatically by your
-environment:
+The package ships as ESM only, in two flavours resolved automatically by your environment:
 
-- **browser** — extension wallets (OKX, Unisat, Xverse, Leather, Magic Eden) +
-  the Vue connect modal, plus all the feature APIs.
-- **server** (Node/Bun) — the same feature APIs (swap, inscriptions, BRC-2.0,
-  balances) connected via a local WIF wallet (`wallet.connectLocalWallet`), with
-  no Vue or modal. Ideal for headless/automated use.
+- **browser** — extension wallets (OKX, Unisat, Xverse, Leather, Magic Eden) + the Vue connect
+  modal, plus all the feature APIs.
+- **server** (Node/Bun) — the same feature APIs (swap, inscriptions, BRC-2.0, balances) connected
+  via a local WIF wallet (`wallet.connectLocalWallet`), with no Vue or modal. Ideal for
+  headless/automated use.
 
-Bundlers and Node pick the right one via conditional exports; you can also import
-explicitly with `@bestinslot/wallet-kit/browser` or `@bestinslot/wallet-kit/node`.
+Bundlers and Node pick the right one via conditional exports; you can also import explicitly with
+`@bestinslot/wallet-kit/browser` or `@bestinslot/wallet-kit/node`.
 
-`vue` is an **optional** peer dependency — only the browser flavour needs it (the
-connect modal is a Vue component):
+`vue` is an **optional** peer dependency — only the browser flavour needs it (the connect modal is a
+Vue component):
 
 ```bash
 pnpm add vue
@@ -28,8 +27,8 @@ pnpm add vue
 
 ## Connect a wallet
 
-In a browser, open the modal and let the user pick a wallet
-(OKX, Unisat, Xverse, Leather, or Magic Eden):
+In a browser, open the modal and let the user pick a wallet (OKX, Unisat, Xverse, Leather, or Magic
+Eden):
 
 ```ts
 import { modal, wallet } from '@bestinslot/wallet-kit'
@@ -45,13 +44,12 @@ catch (e) {
 }
 ```
 
-`modal.connect()` resolves with a [`BISSession`](./wallet-connection.md#sessions)
-once the user picks and connects a wallet, and rejects if they cancel or it fails.
+`modal.connect()` resolves with a [`BISSession`](./wallet-connection.md#sessions) once the user
+picks and connects a wallet, and rejects if they cancel or it fails.
 
 ### On a server (Node/Bun)
 
-There's no modal — connect with a WIF private key instead, then use the same
-feature APIs:
+There's no modal — connect with a WIF private key instead, then use the same feature APIs:
 
 ```ts
 import { wallet } from '@bestinslot/wallet-kit' // resolves to the server build in Node
@@ -85,5 +83,7 @@ wallet.setNetwork('signet') // 'mainnet' | 'testnet' | 'signet'
 
 ## Next steps
 
-- [Wallet connection](./wallet-connection.md) — sessions, signing, theme, the Node-only local wallet.
-- [Inscriptions](./inscriptions.md), [BRC-2.0](./brc20.md), [Swap](./swap.md), [Balances](./balances.md).
+- [Wallet connection](./wallet-connection.md) — sessions, signing, theme, the Node-only local
+  wallet.
+- [Inscriptions](./inscriptions.md), [BRC-2.0](./brc20.md), [Swap](./swap.md),
+  [Balances](./balances.md).

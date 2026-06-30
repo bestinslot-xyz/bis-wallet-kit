@@ -14,7 +14,7 @@ function ok(msg) {
   console.log(`✓ ${msg}`)
 }
 
-for (const f of ['node.js', 'browser.js']) {
+for (const f of ['node.js', 'browser.js', 'core.js', 'react.js']) {
   if (!existsSync(`${DIST}/${f}`)) {
     console.error(`Missing ${DIST}/${f} — run \`pnpm build\` first.`)
     process.exit(1)
@@ -64,15 +64,20 @@ if (!failed) {
   ok(`node build is Vue/modal-free (${nodeGraph.size} chunk(s) checked)`)
 }
 
-// The browser build must ALSO be Vue-free now that the modal is framework-free.
-const browserGraph = reachable('browser.js')
-for (const file of browserGraph) {
-  if (VUE.test(readFileSync(`${DIST}/${file}`, 'utf8'))) {
-    fail(`browser build imports Vue via dist/${file} (modal should be framework-free)`)
+// The browser, core, and react builds must ALSO be Vue-free.
+for (const entry of ['browser.js', 'core.js', 'react.js']) {
+  const graph = reachable(entry)
+  const label = entry.replace('.js', '')
+  let entryFailed = false
+  for (const file of graph) {
+    if (VUE.test(readFileSync(`${DIST}/${file}`, 'utf8'))) {
+      fail(`${label} build imports Vue via dist/${file} (should be Vue-free)`)
+      entryFailed = true
+    }
   }
-}
-if (!failed) {
-  ok(`browser build is Vue-free (${browserGraph.size} chunk(s) checked)`)
+  if (!entryFailed) {
+    ok(`${label} build is Vue-free (${graph.size} chunk(s) checked)`)
+  }
 }
 
 // Sanity: the dedicated Vue adapter entry DOES reference Vue, so the Vue-free

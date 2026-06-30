@@ -23,8 +23,12 @@ export function App() {
   return (
     <main>
       <h1>BiS Wallet Kit — React</h1>
-      <button type="button" onClick={connect}>Connect</button>
-      <button type="button" onClick={disconnect}>Disconnect</button>
+      <button type="button" onClick={connect}>
+        Connect
+      </button>
+      <button type="button" onClick={disconnect}>
+        Disconnect
+      </button>
       <select value={network} onChange={e => setNetwork(e.target.value as BISNetwork)}>
         <option value="mainnet">mainnet</option>
         <option value="testnet">testnet</option>

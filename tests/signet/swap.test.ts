@@ -91,13 +91,21 @@ describe('swap (signet)', () => {
   // ---- Quotes ----
 
   it.skipIf(!hasSwapTokens)('quotes an exact-input swap', async () => {
-    const quote = await swap.getSwapExactInputResult(env.swapToken!, env.wbtcToken!, swapTokenAmount)
+    const quote = await swap.getSwapExactInputResult(
+      env.swapToken!,
+      env.wbtcToken!,
+      swapTokenAmount,
+    )
     assert.ok(typeof quote.amount_out === 'bigint')
     assert.ok(typeof quote.price_impact_bps === 'bigint')
   })
 
   it.skipIf(!hasSwapTokens)('quotes an exact-output swap', async () => {
-    const quote = await swap.getSwapExactOutputResult(env.swapToken!, env.wbtcToken!, env.swapAmount)
+    const quote = await swap.getSwapExactOutputResult(
+      env.swapToken!,
+      env.wbtcToken!,
+      env.swapAmount,
+    )
     assert.ok(typeof quote.amount_in === 'bigint')
     assert.ok(typeof quote.price_impact_bps === 'bigint')
   })
@@ -155,7 +163,11 @@ describe('swap (signet)', () => {
     // (scaled like the quote tests). exact-output and the WBTC side of
     // add-liquidity are WBTC-sat-denominated, so they keep SIGNET_SWAP_AMOUNT.
     it.skipIf(!canExecute)('executes an exact-input swap', async () => {
-      const quote = await swap.getSwapExactInputResult(env.swapToken!, env.wbtcToken!, swapTokenAmount)
+      const quote = await swap.getSwapExactInputResult(
+        env.swapToken!,
+        env.wbtcToken!,
+        swapTokenAmount,
+      )
       const ok = await swap.swapExactInput(
         env.swapToken!,
         env.wbtcToken!,
@@ -187,7 +199,11 @@ describe('swap (signet)', () => {
     )
 
     it.skipIf(!canExecute)('executes an exact-output swap', async () => {
-      const quote = await swap.getSwapExactOutputResult(env.swapToken!, env.wbtcToken!, env.swapAmount)
+      const quote = await swap.getSwapExactOutputResult(
+        env.swapToken!,
+        env.wbtcToken!,
+        env.swapAmount,
+      )
       const ok = await swap.swapExactOutput(
         env.swapToken!,
         env.wbtcToken!,

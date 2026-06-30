@@ -19,24 +19,25 @@ Full guides and an API reference live in [`docs/`](./docs/README.md):
 
 - [Getting started](./docs/getting-started.md)
 - [Wallet connection](./docs/wallet-connection.md)
-- [Inscriptions](./docs/inscriptions.md) · [BRC-2.0](./docs/brc20.md) · [Swap](./docs/swap.md) · [Balances](./docs/balances.md)
+- [Inscriptions](./docs/inscriptions.md) · [BRC-2.0](./docs/brc20.md) · [Swap](./docs/swap.md) ·
+  [Balances](./docs/balances.md)
 - [Testing](./docs/testing.md)
 
 Generate the API reference with `pnpm docs:api` (output in `docs/api/`).
 
 ## 📦 Entry points
 
-| Import | Use it for |
-| --- | --- |
-| `@bestinslot/wallet-kit` | Full browser build: extension wallets + connect modal (framework-free) |
-| `@bestinslot/wallet-kit/browser` | Explicit alias of the default entry — the full browser build |
-| `@bestinslot/wallet-kit/core` | Browser features without the modal — bring your own connect UI |
-| `@bestinslot/wallet-kit/node` | Server build: local (WIF) wallet, no modal, no Vue |
-| `@bestinslot/wallet-kit/react` | React hooks: `useNetwork`, `useWallet` |
-| `@bestinslot/wallet-kit/vue` | Vue composable: `useNetwork` |
+| Import                           | Use it for                                                             |
+| -------------------------------- | ---------------------------------------------------------------------- |
+| `@bestinslot/wallet-kit`         | Full browser build: extension wallets + connect modal (framework-free) |
+| `@bestinslot/wallet-kit/browser` | Explicit alias of the default entry — the full browser build           |
+| `@bestinslot/wallet-kit/core`    | Browser features without the modal — bring your own connect UI         |
+| `@bestinslot/wallet-kit/node`    | Server build: local (WIF) wallet, no modal, no Vue                     |
+| `@bestinslot/wallet-kit/react`   | React hooks: `useNetwork`, `useWallet`                                 |
+| `@bestinslot/wallet-kit/vue`     | Vue composable: `useNetwork`                                           |
 
-The connect modal no longer depends on Vue, so React and vanilla apps can call
-`modal.connect()` without installing Vue.
+The connect modal no longer depends on Vue, so React and vanilla apps can call `modal.connect()`
+without installing Vue.
 
 ## 🚀 Development & Build
 

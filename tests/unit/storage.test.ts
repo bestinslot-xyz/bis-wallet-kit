@@ -1,7 +1,11 @@
 import { assert, describe, it } from 'vitest'
 import { memoryStorage } from '../../src/core/storage.ts'
 import { getNetwork, setNetwork, subscribeToNetwork } from '../../src/core/store-network.ts'
-import { deleteSwapWalletInfo, readSwapWalletInfo, saveSwapWalletInfo } from '../../src/core/store.ts'
+import {
+  deleteSwapWalletInfo,
+  readSwapWalletInfo,
+  saveSwapWalletInfo,
+} from '../../src/core/store.ts'
 import { getBitcoinNetwork } from '../../src/lib/bitcoin.ts'
 
 describe('memoryStorage', () => {
@@ -59,7 +63,11 @@ describe('swap wallet store (node / no-IndexedDB fallback)', () => {
   const addr = 'tb1pswapstoretest'
 
   it('encrypts, persists, and reads back a swap wallet in node', async () => {
-    await saveSwapWalletInfo({ bitcoinAddress: addr, swapPubkey: '0xabc', swapPrivkey: '0x1122334455' })
+    await saveSwapWalletInfo({
+      bitcoinAddress: addr,
+      swapPubkey: '0xabc',
+      swapPrivkey: '0x1122334455',
+    })
     const back = await readSwapWalletInfo(addr)
     assert.equal(back?.bitcoinAddress, addr)
     assert.equal(back?.swapPubkey, '0xabc')

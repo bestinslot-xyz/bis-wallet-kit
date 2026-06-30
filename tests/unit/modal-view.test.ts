@@ -3,7 +3,7 @@ import type { ConnectCallbacks } from '../../src/types/common'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { BisModalView } from '../../src/components/connect-modal-view'
 
-describe('BisModalView', () => {
+describe('bisModalView', () => {
   let root: HTMLElement
 
   beforeEach(() => {

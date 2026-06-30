@@ -1,7 +1,11 @@
 import type { BISNetwork, BISSession } from '../../types/common'
 import { useCallback, useState, useSyncExternalStore } from 'react'
 import { getSession } from '../../core/bis'
-import { getNetwork, setNetwork as storeSetNetwork, subscribeToNetwork } from '../../core/store-network'
+import {
+  getNetwork,
+  setNetwork as storeSetNetwork,
+  subscribeToNetwork,
+} from '../../core/store-network'
 
 /**
  * React adapter: convenience hook bundling the connected session and the

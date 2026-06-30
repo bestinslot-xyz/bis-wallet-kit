@@ -69,7 +69,12 @@ describe('lifecycle: BRC-20 → swap (signet, end-to-end)', () => {
       console.warn(`start base balance: ${startBase}`)
 
       // 2. Mint BRC-20 via a broadcast inscription.
-      const mintInscription = jsonInscription({ p: 'brc-20', op: 'mint', tick: TICKER!, amt: MINT_AMOUNT })
+      const mintInscription = jsonInscription({
+        p: 'brc-20',
+        op: 'mint',
+        tick: TICKER!,
+        amt: MINT_AMOUNT,
+      })
       const minted = await mint.inscribe(mintInscription, FEE_RATE, null, false)
       assert.ok(typeof minted.revealTxId === 'string')
       console.warn(`mint reveal tx: ${minted.revealTxId}`)
@@ -105,17 +110,29 @@ describe('lifecycle: BRC-20 → swap (signet, end-to-end)', () => {
       const wrappedWbtc = wbtcAfter - wbtcBefore
 
       // 6. Add liquidity with a portion of each side.
-      const added = await swap.addLiquidity(TOKEN!, WBTC!, depositAmt / 2n, wrappedWbtc / 2n, SLIPPAGE_BPS)
+      const added = await swap.addLiquidity(
+        TOKEN!,
+        WBTC!,
+        depositAmt / 2n,
+        wrappedWbtc / 2n,
+        SLIPPAGE_BPS,
+      )
       assert.equal(added, true)
 
       // 7. Small swaps in both directions.
       const tokenIn = depositAmt / 10n
       const q1 = await swap.getSwapExactInputResult(TOKEN!, WBTC!, tokenIn)
-      assert.equal(await swap.swapExactInput(TOKEN!, WBTC!, tokenIn, q1.amount_out, SLIPPAGE_BPS), true)
+      assert.equal(
+        await swap.swapExactInput(TOKEN!, WBTC!, tokenIn, q1.amount_out, SLIPPAGE_BPS),
+        true,
+      )
 
       const wbtcIn = wrappedWbtc / 10n
       const q2 = await swap.getSwapExactInputResult(WBTC!, TOKEN!, wbtcIn)
-      assert.equal(await swap.swapExactInput(WBTC!, TOKEN!, wbtcIn, q2.amount_out, SLIPPAGE_BPS), true)
+      assert.equal(
+        await swap.swapExactInput(WBTC!, TOKEN!, wbtcIn, q2.amount_out, SLIPPAGE_BPS),
+        true,
+      )
 
       // 8. Withdraw the remaining token balance back to the ordinals wallet.
       const remaining = await swap.getSwapBalance(TOKEN!)
