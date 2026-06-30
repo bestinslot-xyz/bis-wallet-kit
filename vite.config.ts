@@ -39,11 +39,12 @@ export default defineConfig({
         browser: 'src/browser.ts',
         node: 'src/node.ts',
         core: 'src/core.ts',
+        react: 'src/react.ts',
       },
       formats: ['es'],
     },
     rollupOptions: {
-      external: ['vue'],
+      external: ['vue', 'react', 'react-dom'],
     },
   },
 })
