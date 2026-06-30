@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
+import { nextTick } from 'vue'
 import { useNetwork } from '../../src/adapters/react/use-network'
 import { getNetwork, setNetwork } from '../../src/core/store-network'
 
@@ -33,6 +34,7 @@ describe('vue useNetwork', () => {
     const net = useVueNetwork()
     expect(net.value).toBe('mainnet')
     net.value = 'signet'
+    await nextTick()
     expect(getNetwork()).toBe('signet')
   })
 })

@@ -25,14 +25,11 @@ export function useNetwork(): Ref<BISNetwork> {
   onScopeDispose(unsubscribe, true)
 
   // Ref -> store (v-model writes propagate to the shared store).
-  // flush: 'sync' so that a plain assignment (e.g. net.value = 'signet') is
-  // immediately reflected in the framework-agnostic store without waiting for
-  // Vue's async scheduler tick.
   watch(network, (next) => {
     if (next !== getNetwork()) {
       setNetwork(next)
     }
-  }, { flush: 'sync' })
+  })
 
   return network
 }
