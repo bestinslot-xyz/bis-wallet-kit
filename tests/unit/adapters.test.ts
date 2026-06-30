@@ -2,7 +2,7 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { useNetwork } from '../../src/adapters/react/use-network'
-import { setNetwork } from '../../src/core/store-network'
+import { getNetwork, setNetwork } from '../../src/core/store-network'
 
 afterEach(() => {
   setNetwork('mainnet')
@@ -24,5 +24,15 @@ describe('react useNetwork', () => {
     const { result } = renderHook(() => useNetwork())
     act(() => result.current[1]('testnet'))
     expect(result.current[0]).toBe('testnet')
+  })
+})
+
+describe('vue useNetwork', () => {
+  it('reads and writes the shared store', async () => {
+    const { useNetwork: useVueNetwork } = await import('../../src/adapters/vue/use-network')
+    const net = useVueNetwork()
+    expect(net.value).toBe('mainnet')
+    net.value = 'signet'
+    expect(getNetwork()).toBe('signet')
   })
 })

@@ -35,6 +35,10 @@
     "./react": {
       "types": "./dist/types/react.d.ts",
       "import": "./dist/react.js"
+    },
+    "./vue": {
+      "types": "./dist/types/vue.d.ts",
+      "import": "./dist/vue.js"
     }
   },
   "module": "dist/browser.js",

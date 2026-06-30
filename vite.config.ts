@@ -40,6 +40,7 @@ export default defineConfig({
         node: 'src/node.ts',
         core: 'src/core.ts',
         react: 'src/react.ts',
+        vue: 'src/vue.ts',
       },
       formats: ['es'],
     },
