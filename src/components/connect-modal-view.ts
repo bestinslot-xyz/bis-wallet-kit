@@ -125,6 +125,7 @@ export class BisModalView {
         .map(
           ([key, item]) => `
           <button
+            type="button"
             data-provider="${key}"
             class="group flex items-center gap-x-4 p-2 border hover:border-primary border-border rounded-lg w-full text-left transition-colors cursor-pointer duration-300"
           >
@@ -153,7 +154,7 @@ export class BisModalView {
       <div class="text-center">
         <img src="${errorImage}" class="mx-auto mb-8 w-9 h-9.75" alt="">
         <div data-error-message class="mb-8 text-center"></div>
-        <button data-retry class="hover:bg-primary border border-border rounded-lg w-24 h-10 font-semibold text-foreground text-lg text-center transition-colors cursor-pointer">Retry</button>
+        <button type="button" data-retry class="hover:bg-primary border border-border rounded-lg w-24 h-10 font-semibold text-foreground text-lg text-center transition-colors cursor-pointer">Retry</button>
       </div>`
   }
 
@@ -168,7 +169,7 @@ export class BisModalView {
         <div class="flex flex-col max-h-[90vh] bg-background shadow-lg border border-border rounded-lg w-[92%] max-w-sm text-foreground">
           <div class="relative flex justify-between items-center p-4 py-3 border-b border-border">
             <div class="font-semibold text-lg">Connect Wallet</div>
-            <button data-close class="top-2 right-3 absolute flex -m-2 p-2 text-muted-foreground hover:text-foreground text-2xl transition-colors cursor-pointer">&times;</button>
+            <button type="button" data-close aria-label="Close" class="top-2 right-3 absolute flex -m-2 p-2 text-muted-foreground hover:text-foreground text-2xl transition-colors cursor-pointer">&times;</button>
           </div>
           <div class="overflow-y-auto px-4 sm:px-6 py-6 best-scrollbar">${this.screenMarkup()}</div>
           <div class="p-4 border-t border-border text-muted-foreground text-center">

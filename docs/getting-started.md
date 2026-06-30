@@ -9,20 +9,24 @@ pnpm add @bestinslot/wallet-kit
 
 The package ships as ESM only, in two flavours resolved automatically by your environment:
 
-- **browser** — extension wallets (OKX, Unisat, Xverse, Leather, Magic Eden) + the Vue connect
-  modal, plus all the feature APIs.
+- **browser** — extension wallets (OKX, Unisat, Xverse, Leather, Magic Eden) + the framework-free
+  connect modal, plus all the feature APIs.
 - **server** (Node/Bun) — the same feature APIs (swap, inscriptions, BRC-2.0, balances) connected
   via a local WIF wallet (`wallet.connectLocalWallet`), with no Vue or modal. Ideal for
   headless/automated use.
 
 Bundlers and Node pick the right one via conditional exports; you can also import explicitly with
-`@bestinslot/wallet-kit/browser` or `@bestinslot/wallet-kit/node`.
+`@bestinslot/wallet-kit/browser` or `@bestinslot/wallet-kit/node`. For framework apps there are also
+`@bestinslot/wallet-kit/react` and `@bestinslot/wallet-kit/vue` adapter entries, and a modal-free
+`@bestinslot/wallet-kit/core`.
 
-`vue` is an **optional** peer dependency — only the browser flavour needs it (the connect modal is a
-Vue component):
+The connect modal is framework-free, so the default browser entry needs **no** UI framework. `vue`
+and `react` are **optional** peer dependencies — install one only when you import its adapter
+(`@bestinslot/wallet-kit/vue` or `@bestinslot/wallet-kit/react`):
 
 ```bash
-pnpm add vue
+pnpm add vue   # only if you use the /vue adapter
+pnpm add react # only if you use the /react adapter
 ```
 
 ## Connect a wallet
