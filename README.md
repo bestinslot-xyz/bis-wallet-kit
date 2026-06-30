@@ -29,6 +29,7 @@ Generate the API reference with `pnpm docs:api` (output in `docs/api/`).
 | Import | Use it for |
 | --- | --- |
 | `@bestinslot/wallet-kit` | Full browser build: extension wallets + connect modal (framework-free) |
+| `@bestinslot/wallet-kit/browser` | Explicit alias of the default entry — the full browser build |
 | `@bestinslot/wallet-kit/core` | Browser features without the modal — bring your own connect UI |
 | `@bestinslot/wallet-kit/node` | Server build: local (WIF) wallet, no modal, no Vue |
 | `@bestinslot/wallet-kit/react` | React hooks: `useNetwork`, `useWallet` |
