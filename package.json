@@ -57,7 +57,12 @@
     "verify:bundles": "node scripts/verify-build-flavours.mjs",
     "test:signet": "vitest run tests/signet/ --config vitest.signet.config.ts",
     "test:mainnet": "vitest run tests/mainnet/ --config vitest.mainnet.config.ts",
-    "docs:api": "typedoc"
+    "docs:api": "typedoc",
+    "examples:install": "pnpm install",
+    "examples:build": "pnpm build && pnpm -r --filter \"./examples/*\" build",
+    "example:react": "pnpm build && pnpm --filter example-react dev",
+    "example:vue": "pnpm build && pnpm --filter example-vue dev",
+    "example:vanilla": "pnpm build && pnpm --filter example-vanillajs dev"
   },
   "peerDependencies": {
     "vue": "^3.5.13",
