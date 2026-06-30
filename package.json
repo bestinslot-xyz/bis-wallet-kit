@@ -130,16 +130,5 @@
   },
   "publishConfig": {
     "registry": "https://npm.pkg.github.com/"
-  },
-  "pnpm": {
-    "patchedDependencies": {
-      "@cmdcode/tapscript@1.5.3": "patches/@cmdcode__tapscript@1.5.3.patch"
-    },
-    "onlyBuiltDependencies": [
-      "@tailwindcss/oxide",
-      "esbuild",
-      "secp256k1",
-      "unrs-resolver"
-    ]
   }
 }

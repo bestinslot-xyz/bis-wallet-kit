@@ -1,4 +1,16 @@
+shellEmulator: true
+trustPolicy: no-downgrade
+
 packages:
   - examples/react
   - examples/vue
   - examples/vanillajs
+
+patchedDependencies:
+  '@cmdcode/tapscript@1.5.3': patches/@cmdcode__tapscript@1.5.3.patch
+
+onlyBuiltDependencies:
+  - '@tailwindcss/oxide'
+  - esbuild
+  - secp256k1
+  - unrs-resolver
