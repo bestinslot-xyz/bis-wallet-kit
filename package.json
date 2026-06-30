@@ -87,6 +87,7 @@
     "dotenv": "^17.3.1",
     "eslint": "^9.39.2",
     "eslint-plugin-jsdoc": "^62.6.1",
+    "jsdom": "^29.1.1",
     "prettier": "^3.8.1",
     "solc": "^0.8.33",
     "tailwind-merge": "^3.4.0",
