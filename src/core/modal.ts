@@ -1,11 +1,8 @@
 import type { BISWalletProvider, ConnectCallbacks, ModalTheme } from '../types/common'
-import { createApp } from 'vue'
 import css from '../assets/style/main.css?inline' // https://vite.dev/guide/features#import-inlining-and-rebasing
-import Modal from '../components/Modal.vue'
+import { BisModalView } from '../components/connect-modal-view'
 
-type ModalInstance = InstanceType<typeof Modal>
-
-let modalInstance: ModalInstance | null = null
+let modalInstance: BisModalView | null = null
 
 /**
  * NOTE: The modal instance is created once and reused for subsequent calls to showConnect or showError. This ensures that only one modal is present in the DOM at any given time, and it can be easily shown or hidden as needed without creating multiple instances.
@@ -44,8 +41,7 @@ export function create() {
   style.textContent = css
   shadowRoot.appendChild(style)
 
-  const app = createApp(Modal)
-  modalInstance = app.mount(appRoot) as ModalInstance
+  modalInstance = new BisModalView(appRoot)
 
   document.body.appendChild(container)
 }
