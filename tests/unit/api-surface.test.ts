@@ -136,3 +136,15 @@ describe('browser flavour specifics', () => {
     it(`modal.${fn}()`, () => assertFn(browser.modal, fn, `browser.modal.${fn}`))
   }
 })
+
+describe('core entry', () => {
+  it('exposes feature namespaces and the network store, but no modal', async () => {
+    const core = await import('../../src/core.ts')
+    assert.equal(typeof (core as any).swap?.swapExactInput, 'function')
+    assert.equal(typeof (core as any).getNetwork, 'function')
+    assert.equal(typeof (core as any).setNetwork, 'function')
+    assert.equal(typeof (core as any).subscribeToNetwork, 'function')
+    assert.equal((core as any).modal, undefined)
+    assert.equal((core as any).wallet?.connect, undefined)
+  })
+})

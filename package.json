@@ -27,6 +27,10 @@
     "./browser": {
       "types": "./dist/types/browser.d.ts",
       "import": "./dist/browser.js"
+    },
+    "./core": {
+      "types": "./dist/types/core.d.ts",
+      "import": "./dist/core.js"
     }
   },
   "module": "dist/browser.js",

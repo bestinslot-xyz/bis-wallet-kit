@@ -38,6 +38,7 @@ export default defineConfig({
       entry: {
         browser: 'src/browser.ts',
         node: 'src/node.ts',
+        core: 'src/core.ts',
       },
       formats: ['es'],
     },
