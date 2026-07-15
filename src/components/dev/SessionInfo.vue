@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { DevUserSession } from '../Dev.vue'
 import { computed } from 'vue'
-import { useNetwork } from '../../core/use-network'
+import { useNetwork } from '../../adapters/vue/use-network'
 
 const props = defineProps<{
   session: DevUserSession | undefined

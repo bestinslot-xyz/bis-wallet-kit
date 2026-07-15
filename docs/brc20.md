@@ -1,10 +1,10 @@
 # BRC-2.0 programmable
 
-The `brc20` namespace covers the BRC-2.0 programmable module: moving base BRC-20
-balances in and out of the programmable layer, and calling smart contracts.
+The `brc20` namespace covers the BRC-2.0 programmable module: moving base BRC-20 balances in and out
+of the programmable layer, and calling smart contracts.
 
-The top-level helpers map a Bitcoin identity to its EVM-style address used by the
-programmable layer:
+The top-level helpers map a Bitcoin identity to its EVM-style address used by the programmable
+layer:
 
 ```ts
 import { getEvmAddressFromBitcoinAddress, getEvmAddressFromPkScript } from '@bestinslot/wallet-kit'
@@ -13,8 +13,8 @@ const evm = getEvmAddressFromBitcoinAddress('bc1p…') // 0x… (last 20 bytes o
 const evm2 = getEvmAddressFromPkScript('5120…')
 ```
 
-> These derive from the **current network** (`wallet.setNetwork(...)`), since the
-> address → pkscript step is network-specific.
+> These derive from the **current network** (`wallet.setNetwork(...)`), since the address → pkscript
+> step is network-specific.
 
 ## Deposit base BRC-20 into the programmable layer
 
@@ -22,11 +22,11 @@ const evm2 = getEvmAddressFromPkScript('5120…')
 import { brc20 } from '@bestinslot/wallet-kit'
 
 const result = await brc20.depositToBrc20Prog(
-  'atat',  // ticker
-  '1',     // amount (string)
-  2,       // feeRate, sats/vByte
-  null,    // postage or null
-  true,    // dryRun
+  'atat', // ticker
+  '1', // amount (string)
+  2, // feeRate, sats/vByte
+  null, // postage or null
+  true // dryRun
 )
 // result includes commitTxId, revealTxId, signed hexes, and sendToOpReturnTxId
 ```
@@ -38,9 +38,9 @@ const result = await brc20.withdrawFromBrc20Prog(
   'atat',
   '1',
   targetBitcoinAddress,
-  2,       // feeRate
-  null,    // postage
-  true,    // dryRun
+  2, // feeRate
+  null, // postage
+  true // dryRun
 )
 ```
 
@@ -55,10 +55,10 @@ await brc20.callSmartContract(
   estimatedGas,
   gasPerVbyte,
   feeRate,
-  postage,   // or null
+  postage, // or null
   dryRun,
   paymentOpts, // optional
-  walletType,  // optional 'ordinals' | 'payment' | 'all'
+  walletType // optional 'ordinals' | 'payment' | 'all'
 )
 ```
 
@@ -74,11 +74,10 @@ await brc20.callSmartContractAbi(
   gasPerVbyte,
   feeRate,
   postage,
-  dryRun,
+  dryRun
 )
 ```
 
-Every function takes a final optional `paymentOpts`
-(`{ paymentAddress, paymentAmount }`); the contract-call functions also take an
-optional `walletType`. Use `dryRun: true` to assemble transactions without
-broadcasting.
+Every function takes a final optional `paymentOpts` (`{ paymentAddress, paymentAmount }`); the
+contract-call functions also take an optional `walletType`. Use `dryRun: true` to assemble
+transactions without broadcasting.

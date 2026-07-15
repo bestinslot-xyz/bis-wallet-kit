@@ -1,6 +1,6 @@
 @import 'tailwindcss' source(none);
 
-@source "../../components/Modal.vue";
+@source "../../components/connect-modal-view.ts";
 
 @import './common.css';
 

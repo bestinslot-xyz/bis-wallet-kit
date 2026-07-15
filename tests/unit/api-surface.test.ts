@@ -57,8 +57,19 @@ const SHARED_NAMESPACES: Record<string, string[]> = {
     'satsToBtc',
     'satsToUsd',
   ],
-  brc20: ['callSmartContract', 'callSmartContractAbi', 'depositToBrc20Prog', 'withdrawFromBrc20Prog'],
-  mint: ['inscribe', 'inscribeMultiple', 'inscribeWithParent', 'getInscribeFee', 'getInscribeMultipleFee'],
+  brc20: [
+    'callSmartContract',
+    'callSmartContractAbi',
+    'depositToBrc20Prog',
+    'withdrawFromBrc20Prog',
+  ],
+  mint: [
+    'inscribe',
+    'inscribeMultiple',
+    'inscribeWithParent',
+    'getInscribeFee',
+    'getInscribeMultipleFee',
+  ],
   balances: [
     'getBaseBRC20BalanceOfAddress',
     'getBRC20ProgBalanceOfAddress',
@@ -93,7 +104,10 @@ function assertFn(obj: any, name: string, path: string) {
   assert.equal(typeof obj?.[name], 'function', `${path} is not a function`)
 }
 
-for (const { name, kit } of [{ name: 'node', kit: node }, { name: 'browser', kit: browser }] as const) {
+for (const { name, kit } of [
+  { name: 'node', kit: node },
+  { name: 'browser', kit: browser },
+] as const) {
   describe(`shared surface (${name})`, () => {
     for (const fn of SHARED_WALLET_FNS) {
       it(`wallet.${fn}()`, () => assertFn((kit as any).wallet, fn, `${name}.wallet.${fn}`))
@@ -114,7 +128,8 @@ for (const { name, kit } of [{ name: 'node', kit: node }, { name: 'browser', kit
 }
 
 describe('node flavour specifics', () => {
-  it('wallet exposes connectLocalWallet', () => assertFn(node.wallet, 'connectLocalWallet', 'node.wallet.connectLocalWallet'))
+  it('wallet exposes connectLocalWallet', () =>
+    assertFn(node.wallet, 'connectLocalWallet', 'node.wallet.connectLocalWallet'))
   it('wallet has no modal connect/disconnect', () => {
     assert.equal((node.wallet as any).connect, undefined)
     assert.equal((node.wallet as any).disconnect, undefined)
@@ -135,4 +150,16 @@ describe('browser flavour specifics', () => {
   for (const fn of MODAL_FNS) {
     it(`modal.${fn}()`, () => assertFn(browser.modal, fn, `browser.modal.${fn}`))
   }
+})
+
+describe('core entry', () => {
+  it('exposes feature namespaces and the network store, but no modal', async () => {
+    const core = await import('../../src/core.ts')
+    assert.equal(typeof (core as any).swap?.swapExactInput, 'function')
+    assert.equal(typeof (core as any).getNetwork, 'function')
+    assert.equal(typeof (core as any).setNetwork, 'function')
+    assert.equal(typeof (core as any).subscribeToNetwork, 'function')
+    assert.equal((core as any).modal, undefined)
+    assert.equal((core as any).wallet?.connect, undefined)
+  })
 })

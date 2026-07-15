@@ -1,7 +1,7 @@
 import type { Ref } from 'vue'
-import type { BISNetwork } from '../types/common'
+import type { BISNetwork } from '../../types/common'
 import { onScopeDispose, ref, watch } from 'vue'
-import { getNetwork, setNetwork, subscribeToNetwork } from './store-network'
+import { getNetwork, setNetwork, subscribeToNetwork } from '../../core/store-network'
 
 /**
  * Browser/Vue-only adapter: a reactive ref two-way synced to the framework-agnostic

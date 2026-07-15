@@ -1,7 +1,7 @@
 # Wallet connection
 
-The `modal` and `wallet` namespaces cover connecting, reading the session,
-switching networks, signing, and sending.
+The `modal` and `wallet` namespaces cover connecting, reading the session, switching networks,
+signing, and sending.
 
 ## The modal
 
@@ -17,8 +17,8 @@ modal.setTheme('dark') // 'light' | 'dark' | 'system' (default 'system')
 Lower-level modal controls are also exported: `modal.create`, `modal.showConnect`,
 `modal.showConnectConfirmation`, `modal.showError`, `modal.hide`.
 
-Supported providers: `okx`, `unisat`, `xverse`, `leather`, `me` (Magic Eden),
-and `local` (Node only — see below).
+Supported providers: `okx`, `unisat`, `xverse`, `leather`, `me` (Magic Eden), and `local` (Node only
+— see below).
 
 ## Sessions
 
@@ -46,8 +46,8 @@ const ordinals = wallet.getOrdinalsWallet() // BISWallet | undefined
 const payment = wallet.getPaymentWallet() // BISWallet | undefined
 ```
 
-Single-address wallets (OKX, Unisat, local) expose one wallet with
-`purpose: 'all'`; both `getOrdinalsWallet()` and `getPaymentWallet()` return it.
+Single-address wallets (OKX, Unisat, local) expose one wallet with `purpose: 'all'`; both
+`getOrdinalsWallet()` and `getPaymentWallet()` return it.
 
 ## Networks
 
@@ -56,8 +56,8 @@ wallet.setNetwork('mainnet') // 'mainnet' | 'testnet' | 'signet', default 'mainn
 const current = wallet.getNetwork() // the currently selected network
 ```
 
-Bitcoin-level params follow the network: `mainnet` → bitcoin, `testnet`/`signet`
-→ testnet parameters.
+Bitcoin-level params follow the network: `mainnet` → bitcoin, `testnet`/`signet` → testnet
+parameters.
 
 ## Signing
 
@@ -84,7 +84,7 @@ const result = await wallet.sendInscription(
   targetWallet, // WalletInfo — build with addressWalletInfo / opReturnWalletInfo
   feeRate, // sats/vByte
   postage, // sats or null for the default dust value
-  dryRun, // true returns tx details without broadcasting
+  dryRun // true returns tx details without broadcasting
 )
 ```
 
@@ -99,9 +99,9 @@ const toOpReturn = opReturnWalletInfo(outputScriptBuffer)
 
 ## The local wallet (Node only)
 
-For tests, scripts, and backends, connect a wallet from a WIF private key. This
-path is **only available outside the browser** and signs in-process — never use a
-real-funds key where it could leak.
+For tests, scripts, and backends, connect a wallet from a WIF private key. This path is **only
+available outside the browser** and signs in-process — never use a real-funds key where it could
+leak.
 
 ```ts
 import { wallet } from '@bestinslot/wallet-kit'
@@ -110,11 +110,11 @@ const w = await wallet.connectLocalWallet(
   process.env.PRIVATE_KEY_WIF!,
   'signet', // BISNetwork
   'p2tr', // 'p2wpkh' | 'p2tr' (default 'p2wpkh')
-  'unisat', // source wallet: 'unisat' | 'okx' (default 'unisat')
+  'unisat' // source wallet: 'unisat' | 'okx' (default 'unisat')
 )
 console.log(w.address)
 ```
 
-After this, the whole `wallet` / `mint` / `brc20` / `swap` API works against the
-local key exactly as it would against an extension wallet. `sendBTC` is the one
-operation the local provider does not implement.
+After this, the whole `wallet` / `mint` / `brc20` / `swap` API works against the local key exactly
+as it would against an extension wallet. `sendBTC` is the one operation the local provider does not
+implement.

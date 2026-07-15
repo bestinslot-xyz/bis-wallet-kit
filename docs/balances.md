@@ -1,8 +1,7 @@
 # Balances
 
-The `balances` namespace queries token balances. It is read-only and does not
-require a connected wallet — pass the address you care about. Set the network
-first with `wallet.setNetwork(...)`.
+The `balances` namespace queries token balances. It is read-only and does not require a connected
+wallet — pass the address you care about. Set the network first with `wallet.setNetwork(...)`.
 
 ## Base BRC-20
 
@@ -31,5 +30,5 @@ const bal2 = await balances.getBRC20ProgBalanceOfTicker(bitcoinAddress, 'atat') 
 const tokenAddress = await balances.getBRC20ProgTokenAddressOfTicker('atat') // 0x…
 ```
 
-Programmable balances are returned as raw `bigint` in 18 decimals. For example a
-balance of `10000000000000000000000n` is `10000` tokens at 18 decimals.
+Programmable balances are returned as raw `bigint` in 18 decimals. For example a balance of
+`10000000000000000000000n` is `10000` tokens at 18 decimals.

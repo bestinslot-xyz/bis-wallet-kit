@@ -349,7 +349,8 @@ async function assertPoolExists(token1Addr: string, token2Addr: string): Promise
   let reserves: PairReserves
   try {
     reserves = await getPairReserves(pairAddress)
-  } catch (error) {
+  }
+  catch (error) {
     // A pair that was never created returns "Pair not found" from the backend
     // rather than zero reserves, so treat that as "no pool" too.
     if (error instanceof Error && /pair not found/i.test(error.message)) {

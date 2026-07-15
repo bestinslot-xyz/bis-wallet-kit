@@ -4,7 +4,7 @@ import { getWalletInfo } from './store'
 
 // Plain (framework-agnostic) network state so the core can run outside the
 // browser without pulling in Vue. The reactive `useNetwork()` composable lives
-// in the browser-only `./use-network` adapter, which syncs to this store.
+// in the browser-only `src/adapters/vue/use-network.ts` adapter, which syncs to this store.
 let currentNetwork: BISNetwork = 'mainnet'
 const listeners = new Set<(network: BISNetwork) => void>()
 
