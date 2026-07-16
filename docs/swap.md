@@ -6,7 +6,7 @@ withdrawals, quotes, and market data. Amounts are `bigint` in the token's base u
 ## Swap wallet and status
 
 ```ts
-import { swap } from '@bestinslot/wallet-kit'
+import { bitcoinjs, swap, wallet } from '@bestinslot/wallet-kit'
 
 const swapWallet = await swap.createSwapWallet() // generate + store the swap wallet
 const status = await swap.getSwapStatus() // { reorg_handler_running, emergency_stop, … }
@@ -95,12 +95,18 @@ const { referrerPubkey, refReturnBps } = await swap.tryGetSwapReferrerInfo(mySwa
 
 ## Liquidity
 
+One of the two tokens must be WBTC.
+
 ```ts
 await swap.addLiquidity(token1, token2, amount1Desired, amount2Desired, slippageBPS)
-await swap.removeLiquidity(/* … */)
+
+const { amountA, amountB } = await swap.getRemoveLiquidityResult(token1, token2, liquidity)
+await swap.removeLiquidity(token1, token2, liquidity, amountA, amountB, slippageBPS)
 ```
 
-Quote first with `getAddLiquidityResult` / `getRemoveLiquidityResult`.
+Quote first with `getAddLiquidityResult` / `getRemoveLiquidityResult`. The amounts you pass are the
+**expected** ones from the quote — `slippageBPS` derives the enforced on-chain minimums from them, so
+passing an already slippage-adjusted floor applies slippage twice and silently weakens your protection.
 
 ## Move funds in and out
 
@@ -110,9 +116,19 @@ Quote first with `getAddLiquidityResult` / `getRemoveLiquidityResult`.
 await swap.deposit(tokenAddress, amount, feeRate /* , createAllowanceIfNeeded = true */)
 await swap.withdraw(tokenAddress, amount /* , targetAddress? */) // omit target → self
 
-// BTC: wrapBtc deposits BTC into the smart wallet as WBTC; unwrap is the reverse.
+// BTC: wrapBtc deposits BTC into the smart wallet as WBTC; unwrapBtc is the reverse and
+// pays the BTC out on L1, so it takes the destination output script — not an address
+// and not a token address. Quote first with getUnwrapBtcResult(pkscript, amount).
 await swap.wrapBtc(btcSats, feeRate)
-await swap.unwrap(tokenAddress, amount)
+
+// The network must match btcAddress, or you derive a valid-looking script that pays
+// somewhere else. Deriving it from the kit's selected network keeps the two in step.
+// (Signet uses bitcoinjs' testnet params.)
+const network
+  = wallet.getNetwork() === 'mainnet' ? bitcoinjs.networks.bitcoin : bitcoinjs.networks.testnet
+
+const pkscript = bitcoinjs.address.toOutputScript(btcAddress, network).toString('hex')
+await swap.unwrapBtc(pkscript, amountSats)
 ```
 
 ## Market data
