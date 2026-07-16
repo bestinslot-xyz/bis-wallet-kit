@@ -1,4 +1,5 @@
 import type { UniswapInfoProxy } from '../lib/uniswap_ops'
+import type { BISNetwork } from '../types/common'
 import type { BISSwapWalletInfo } from './store'
 import { Buffer } from 'node:buffer'
 import { Buff } from '@cmdcode/buff-utils'
@@ -301,19 +302,30 @@ export async function getSwapAllowance(tokenAddress: string): Promise<bigint> {
   return BigInt(result.result)
 }
 
-interface SwapInfo {
-  factory_address: string
-  wbtc_address: string
+export interface SwapInfo {
+  factory_address: string // lowercased
+  wbtc_address: string // lowercased
   wbtc_handler_address: string
 }
 interface SwapInfoResponse {
   success: boolean
   result: SwapInfo
 }
-let swapInfoCache: SwapInfo | null = null
-async function getSwapInfo(): Promise<SwapInfo> {
-  if (swapInfoCache) {
-    return swapInfoCache
+// Keyed by network: each network has its own swap backend and therefore its own
+// contract addresses, so one entry per network rather than a single slot.
+const swapInfoCache = new Map<BISNetwork, SwapInfo>()
+/**
+ * Fetches the swap's deployment info — the factory, WBTC and WBTC handler addresses — for the current network, by making an API call to the swap backend. The result is fetched once per network and cached.
+ *
+ * This does not require a connected wallet or a smart wallet.
+ *
+ * @returns {Promise<SwapInfo>} A promise that resolves to a SwapInfo object containing the factory address, the WBTC token address, and the WBTC handler address.
+ */
+export async function getSwapInfo(): Promise<SwapInfo> {
+  const network = getNetwork()
+  const cached = swapInfoCache.get(network)
+  if (cached) {
+    return cached
   }
 
   // Prepare and execute the API call
@@ -326,12 +338,13 @@ async function getSwapInfo(): Promise<SwapInfo> {
   })
 
   // Convert the result to SwapInfo
-  swapInfoCache = {
+  const swapInfo = {
     factory_address: result.result.factory_address.toLowerCase(),
     wbtc_address: result.result.wbtc_address.toLowerCase(),
     wbtc_handler_address: result.result.wbtc_handler_address,
   }
-  return swapInfoCache
+  swapInfoCache.set(network, swapInfo)
+  return swapInfo
 }
 
 /**

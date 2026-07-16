@@ -26,6 +26,7 @@ export {
   getSwapBalances,
   getSwapResult as getSwapExactInputResult,
   getSwap2Result as getSwapExactOutputResult,
+  getSwapInfo,
   getSwapStatus,
   getTokenDecimals,
   getUnwrapResult,
@@ -49,6 +50,7 @@ export type {
   PairInfo,
   PairReserves,
   SwapBalance,
+  SwapInfo,
   TokenInfo,
   WalletActivityEntry,
 } from '../core/bis_swap' // Export types related to wallet activities
