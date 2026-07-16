@@ -91,10 +91,12 @@ export async function getActivityOfPair(pairAddress: string, limit?: number, off
 /**
  * Adds liquidity to a specified token pair with the desired amounts and slippage tolerance.
  *
+ * One of the two tokens must be WBTC; the order is rejected otherwise.
+ *
  * @param token1Address - The address of the first token in the pair.
  * @param token2Address - The address of the second token in the pair.
- * @param amount1Desired - The desired amount of the first token to add.
- * @param amount2Desired - The desired amount of the second token to add.
+ * @param amount1Desired - The desired amount of the first token to add. The enforced minimum is derived from this by applying `slippageBPS`.
+ * @param amount2Desired - The desired amount of the second token to add. The enforced minimum is derived from this by applying `slippageBPS`.
  * @param slippageBPS - The slippage tolerance in basis points.
  * @returns A promise that resolves to a boolean indicating the success of the operation.
  */
@@ -117,13 +119,16 @@ export async function addLiquidity(
 }
 
 /**
- * Removes liquidity from a specified token pair with the given parameters and slippage tolerance.
+ * Removes liquidity from a specified token pair, burning `liquidity` LP tokens and
+ * returning both underlying tokens.
+ *
+ * One of the two tokens must be WBTC; the order is rejected otherwise.
  *
  * @param token1Address - The address of the first token in the pair.
  * @param token2Address - The address of the second token in the pair.
  * @param liquidity - The amount of liquidity to remove.
- * @param amount1Min - The minimum amount of the first token to receive.
- * @param amount2Min - The minimum amount of the second token to receive.
+ * @param amount1 - The expected (quoted) amount of the first token to receive, as returned by `getRemoveLiquidityResult`. The enforced minimum is derived from this by applying `slippageBPS` — pass the quote, not an already slippage-adjusted value, to avoid double-applying slippage.
+ * @param amount2 - The expected (quoted) amount of the second token to receive, as returned by `getRemoveLiquidityResult`. The enforced minimum is derived from this by applying `slippageBPS` — pass the quote, not an already slippage-adjusted value, to avoid double-applying slippage.
  * @param slippageBPS - The slippage tolerance in basis points.
  * @returns A promise that resolves to a boolean indicating the success of the operation.
  */
@@ -131,8 +136,8 @@ export async function removeLiquidity(
   token1Address: string,
   token2Address: string,
   liquidity: bigint,
-  amount1Min: bigint,
-  amount2Min: bigint,
+  amount1: bigint,
+  amount2: bigint,
   slippageBPS: bigint,
 ) {
   return (
@@ -140,8 +145,8 @@ export async function removeLiquidity(
       token1Address,
       token2Address,
       liquidity,
-      amount1Min,
-      amount2Min,
+      amount1,
+      amount2,
       slippageBPS,
     )
   ).success
