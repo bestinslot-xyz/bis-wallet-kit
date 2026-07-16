@@ -172,12 +172,20 @@ describe('lifecycle: BRC-20 → swap (signet, end-to-end)', () => {
         const lpNow = await swap.getSwapBalance(pair)
         if (lpNow > 0n) {
           await swap.removeLiquidity(TOKEN!, WBTC!, lpNow, 0n, 0n, SLIPPAGE_BPS)
-          await pollUntil(() => swap.getSwapBalance(pair), bal => bal < lpNow, { label: 'remove-liquidity to settle' })
+          await pollUntil(
+            () => swap.getSwapBalance(pair),
+            bal => bal < lpNow,
+            { label: 'remove-liquidity to settle' },
+          )
         }
         const tokenNow = await swap.getSwapBalance(TOKEN!)
         if (tokenNow > startToken) {
           await swap.withdraw(TOKEN!, tokenNow - startToken)
-          await pollUntil(() => swap.getSwapBalance(TOKEN!), bal => bal < tokenNow, { label: 'cleanup withdraw to settle' })
+          await pollUntil(
+            () => swap.getSwapBalance(TOKEN!),
+            bal => bal < tokenNow,
+            { label: 'cleanup withdraw to settle' },
+          )
         }
         const wbtcNow = await swap.getSwapBalance(WBTC!)
         if (wbtcNow > startWbtc) {
@@ -188,7 +196,11 @@ describe('lifecycle: BRC-20 → swap (signet, end-to-end)', () => {
             .toOutputScript(address, bitcoinjs.networks.testnet)
             .toString('hex')
           await swap.unwrapBtc(pkscript, wbtcNow - startWbtc)
-          await pollUntil(() => swap.getSwapBalance(WBTC!), bal => bal < wbtcNow, { label: 'unwrap to settle' })
+          await pollUntil(
+            () => swap.getSwapBalance(WBTC!),
+            bal => bal < wbtcNow,
+            { label: 'unwrap to settle' },
+          )
         }
       }
       catch (e) {
