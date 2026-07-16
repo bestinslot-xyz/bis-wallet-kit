@@ -699,6 +699,126 @@ export async function requestMinerFee(
   return BigInt(result.result)
 }
 
+export interface TokenInfo {
+  token_address: string // compare case-insensitively; the backend does not normalise case
+  symbol: string
+  decimals: number
+}
+interface GetTokensResponse {
+  tokens: TokenInfo[]
+}
+/**
+ * Fetches every token tradable on the swap, ordered by symbol, by making an API call to the swap backend. LP tokens are excluded by the backend.
+ *
+ * This does not require a connected wallet or a smart wallet, so it can be used to populate a token picker before the user connects.
+ *
+ * @returns {Promise<TokenInfo[]>} A promise that resolves to an array of TokenInfo objects, each containing the token address, symbol, and decimals.
+ */
+export async function listTokens(): Promise<TokenInfo[]> {
+  // 2. Prepare and execute the API call
+  const url = getSwapBackendUrl('get_tokens')
+  const result = await fetchWithErrors<GetTokensResponse>(url, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  })
+
+  return result.tokens
+}
+
+export type ListPairsOrderBy
+  = | 'price_asc'
+    | 'price_desc'
+    | 'price_change_24h_asc'
+    | 'price_change_24h_desc'
+    | 'price_change_7d_asc'
+    | 'price_change_7d_desc'
+    | 'volume_24h_asc'
+    | 'volume_24h_desc'
+    | 'volume_7d_asc'
+    | 'volume_7d_desc'
+    | 'tvl_asc'
+    | 'tvl_desc'
+    | 'apr_asc'
+    | 'apr_desc'
+export interface ListPairsRequest {
+  order_by?: ListPairsOrderBy
+  page?: number
+  count?: number // max 100
+}
+export interface PairInfo {
+  pair_address: string
+  pair_name: string
+  token_a_addr: string // compare case-insensitively; the backend does not normalise case
+  token_a_symbol: string
+  token_b_addr: string // compare case-insensitively; the backend does not normalise case
+  token_b_symbol: string
+  price: number
+  price_change_24h: number
+  price_change_7d: number
+  volume_24h: bigint
+  volume_7d: bigint
+  lp_fee_tier: number
+  tvl: bigint
+  apr: number
+}
+export interface ListPairsResponse {
+  page: number
+  count: number
+  total: number
+  data: PairInfo[]
+}
+interface GetTableDataResponse {
+  page: number
+  count: number
+  total: number
+  data: (Omit<PairInfo, 'volume_24h' | 'volume_7d' | 'tvl'> & {
+    volume_24h: string
+    volume_7d: string
+    tvl: string
+  })[]
+}
+/**
+ * Fetches a paginated, sortable listing of every swap pair and its market data by making an API call to the swap backend.
+ *
+ * This does not require a connected wallet or a smart wallet, so it can be used to populate a market table or pair selector before the user connects.
+ *
+ * @param params (Optional) An object containing the sort order (defaults to 'tvl_desc'), the page to fetch (defaults to 1), and the number of pairs per page (defaults to 20, max 100).
+ * @returns {Promise<ListPairsResponse>} A promise that resolves to an object containing the current page, page size, total number of pairs, and an array of PairInfo objects. Each pair includes both token addresses and symbols, price, 24h/7d price change, 24h/7d volume, LP fee tier, TVL, and APR. The volumes and TVL are returned as strings from the API and converted to bigint in this function.
+ */
+export async function listPairs(params: ListPairsRequest = {}): Promise<ListPairsResponse> {
+  const orderBy = params.order_by ?? 'tvl_desc'
+  const page = params.page ?? 1
+  const count = params.count ?? 20
+
+  if (count > 100) {
+    throw new Error('Count cannot exceed 100')
+  }
+
+  // 2. Prepare and execute the API call
+  const url = getSwapBackendUrl(`get_table_data?order_by=${orderBy}&page=${page}&count=${count}`)
+  const result = await fetchWithErrors<GetTableDataResponse>(url, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  })
+
+  // 3. Convert the result to a BigInt
+  return {
+    page: result.page,
+    count: result.count,
+    total: result.total,
+    data: result.data.map(pair => ({
+      ...pair,
+      volume_24h: BigInt(pair.volume_24h),
+      volume_7d: BigInt(pair.volume_7d),
+      tvl: BigInt(pair.tvl),
+    })),
+  }
+}
+
 export interface GetPairVolumeRequest {
   pair_address: string
   days: number

@@ -29,6 +29,8 @@ export {
   getSwapStatus,
   getTokenDecimals,
   getUnwrapResult,
+  listPairs,
+  listTokens,
   tryGetSwapReferrerInfo,
 } from '../core/bis_swap' // Export all swap-related functions from the core BIS swap module
 export type {
@@ -40,9 +42,14 @@ export type {
   GetSwapStatusResponse,
   GetWalletActivitiesResponse,
   Kline,
+  ListPairsOrderBy,
+  ListPairsRequest,
+  ListPairsResponse,
   PairActivityEntry,
+  PairInfo,
   PairReserves,
   SwapBalance,
+  TokenInfo,
   WalletActivityEntry,
 } from '../core/bis_swap' // Export types related to wallet activities
 export type { AllBalanceDetails } from '../core/helpers' // Export the AllBalanceDetails type from the core helpers module
