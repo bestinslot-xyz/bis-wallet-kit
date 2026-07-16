@@ -716,12 +716,10 @@ interface GetTokensResponse {
  */
 export async function listTokens(): Promise<TokenInfo[]> {
   // 2. Prepare and execute the API call
+  // No Content-Type: this GET has no body, and the header would force a CORS preflight.
   const url = getSwapBackendUrl('get_tokens')
   const result = await fetchWithErrors<GetTokensResponse>(url, {
     method: 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-    },
   })
 
   return result.tokens
@@ -797,12 +795,17 @@ export async function listPairs(params: ListPairsRequest = {}): Promise<ListPair
   }
 
   // 2. Prepare and execute the API call
-  const url = getSwapBackendUrl(`get_table_data?order_by=${orderBy}&page=${page}&count=${count}`)
+  // Encoded rather than interpolated: the kit ships to untyped JS callers, so
+  // the param types are not enforced at runtime.
+  // No Content-Type: this GET has no body, and the header would force a CORS preflight.
+  const query = new URLSearchParams({
+    order_by: orderBy,
+    page: String(page),
+    count: String(count),
+  })
+  const url = getSwapBackendUrl(`get_table_data?${query}`)
   const result = await fetchWithErrors<GetTableDataResponse>(url, {
     method: 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-    },
   })
 
   // 3. Convert the result to a BigInt
