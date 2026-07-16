@@ -110,9 +110,13 @@ Quote first with `getAddLiquidityResult` / `getRemoveLiquidityResult`.
 await swap.deposit(tokenAddress, amount, feeRate /* , createAllowanceIfNeeded = true */)
 await swap.withdraw(tokenAddress, amount /* , targetAddress? */) // omit target → self
 
-// BTC: wrapBtc deposits BTC into the smart wallet as WBTC; unwrap is the reverse.
+// BTC: wrapBtc deposits BTC into the smart wallet as WBTC; unwrap is the reverse and
+// pays the BTC out on L1, so it takes the destination output script — not an address
+// and not a token address. Quote first with getUnwrapResult(pkscript, amount).
 await swap.wrapBtc(btcSats, feeRate)
-await swap.unwrap(tokenAddress, amount)
+
+const pkscript = bitcoinjs.address.toOutputScript(btcAddress, network).toString('hex')
+await swap.unwrap(pkscript, amountSats)
 ```
 
 ## Market data
