@@ -1,6 +1,6 @@
 import process from 'node:process'
 import { assert, describe, it } from 'vitest'
-import { balances, jsonInscription, mint, swap, wallet } from '../../src/node.ts'
+import { balances, bitcoinjs, jsonInscription, mint, swap, wallet } from '../../src/node.ts'
 
 /**
  * Long-running end-to-end lifecycle against a live signet endpoint:
@@ -68,6 +68,13 @@ describe('lifecycle: BRC-20 → swap (signet, end-to-end)', () => {
       const startBase = before.availableBalanceIn18Decimals
       console.warn(`start base balance: ${startBase}`)
 
+      // Record starting smart-wallet balances so the cleanup at the end can undo
+      // only what this run added, leaving any pre-existing WBTC/token untouched.
+      // (The pair address needs the swap factory, which isn't initialised until a
+      // swap op runs, so it's computed in the cleanup step instead.)
+      const startToken = await swap.getSwapBalance(TOKEN!)
+      const startWbtc = await swap.getSwapBalance(WBTC!)
+
       // 2. Mint BRC-20 via a broadcast inscription.
       const mintInscription = jsonInscription({
         p: 'brc-20',
@@ -90,11 +97,16 @@ describe('lifecycle: BRC-20 → swap (signet, end-to-end)', () => {
       console.warn(`minted delta (18dec): ${mintedDelta}`)
 
       // 4. Deposit half into the smart wallet (deposit auto-converts base→prog and creates the allowance).
+      //    Wait for the balance to increase by the deposit (delta, not an absolute
+      //    threshold) so a pre-existing balance can't make this pass before the
+      //    deposit tx confirms — otherwise the next BTC tx (the wrap) can pick the
+      //    same unconfirmed UTXO and hit bip125-replacement-disallowed.
       const depositAmt = mintedDelta / 2n
+      const tokenBeforeDeposit = await swap.getSwapBalance(TOKEN!)
       await swap.deposit(TOKEN!, depositAmt, FEE_RATE)
       await pollUntil(
         () => swap.getSwapBalance(TOKEN!),
-        bal => bal >= depositAmt,
+        bal => bal >= tokenBeforeDeposit + depositAmt,
         { label: 'token deposit to settle' },
       )
 
@@ -145,6 +157,43 @@ describe('lifecycle: BRC-20 → swap (signet, end-to-end)', () => {
         bal => bal < remaining,
         { label: 'withdraw to settle' },
       )
+
+      // 10. Cleanup (best-effort): undo this run's smart-wallet changes so a re-run
+      //     reverts to ~the starting state (minus fees and tiny swap slippage). This
+      //     is courtesy, not part of the lifecycle assertion, so a hiccup here (e.g.
+      //     a leftover below the unwrap minimum) only warns — it must not fail an
+      //     otherwise-complete run. The factory is initialised by the swaps above,
+      //     so the pair address resolves now. All of this pair's LP is removed (this
+      //     wallet holds no pre-existing position in it); token/WBTC are unwound by
+      //     delta to preserve the pre-existing balances recorded at the start. Each
+      //     order is followed by a settle wait so the next one sees fresh state.
+      try {
+        const pair = swap.getPairAddress(TOKEN!, WBTC!)
+        const lpNow = await swap.getSwapBalance(pair)
+        if (lpNow > 0n) {
+          await swap.removeLiquidity(TOKEN!, WBTC!, lpNow, 0n, 0n, SLIPPAGE_BPS)
+          await pollUntil(() => swap.getSwapBalance(pair), bal => bal < lpNow, { label: 'remove-liquidity to settle' })
+        }
+        const tokenNow = await swap.getSwapBalance(TOKEN!)
+        if (tokenNow > startToken) {
+          await swap.withdraw(TOKEN!, tokenNow - startToken)
+          await pollUntil(() => swap.getSwapBalance(TOKEN!), bal => bal < tokenNow, { label: 'cleanup withdraw to settle' })
+        }
+        const wbtcNow = await swap.getSwapBalance(WBTC!)
+        if (wbtcNow > startWbtc) {
+          // unwrapBtc's first arg is the L1 destination output script (hex), not a
+          // token address — the BTC is paid back out to this wallet. Signet shares
+          // testnet's address params in bitcoinjs-lib.
+          const pkscript = bitcoinjs.address
+            .toOutputScript(address, bitcoinjs.networks.testnet)
+            .toString('hex')
+          await swap.unwrapBtc(pkscript, wbtcNow - startWbtc)
+          await pollUntil(() => swap.getSwapBalance(WBTC!), bal => bal < wbtcNow, { label: 'unwrap to settle' })
+        }
+      }
+      catch (e) {
+        console.warn(`cleanup did not fully revert (recoverable manually): ${(e as Error).message}`)
+      }
     },
   )
 })
