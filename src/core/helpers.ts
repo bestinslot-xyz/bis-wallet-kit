@@ -695,7 +695,7 @@ export async function fetchWithErrors<T>(url: string, options: RequestInit): Pro
 export function getPublicRpcUrl(): string {
   const network = getNetwork()
   if (network === 'signet') {
-    return 'https://signet-rpc.bestinslot.xyz'
+    return 'https://rpc-signet.brc20.build'
   }
   else if (network === 'mainnet') {
     return 'https://rpc.brc20.build'
