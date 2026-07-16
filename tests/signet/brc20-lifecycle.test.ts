@@ -69,7 +69,10 @@ describe('lifecycle: BRC-20 → swap (signet, end-to-end)', () => {
       console.warn(`start base balance: ${startBase}`)
 
       // Record starting smart-wallet balances so the cleanup at the end can undo
-      // only what this run added, leaving any pre-existing WBTC/token untouched.
+      // only what this run added, leaving any pre-existing WBTC untouched. Step 8
+      // drains TOKEN outright, so a pre-existing token balance is withdrawn to the
+      // ordinals wallet either way and startToken only mops up what step 9 hasn't
+      // settled yet.
       // (The pair address needs the swap factory, which isn't initialised until a
       // swap op runs, so it's computed in the cleanup step instead.)
       const startToken = await swap.getSwapBalance(TOKEN!)
