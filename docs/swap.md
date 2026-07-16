@@ -116,9 +116,9 @@ passing an already slippage-adjusted floor applies slippage twice and silently w
 await swap.deposit(tokenAddress, amount, feeRate /* , createAllowanceIfNeeded = true */)
 await swap.withdraw(tokenAddress, amount /* , targetAddress? */) // omit target → self
 
-// BTC: wrapBtc deposits BTC into the smart wallet as WBTC; unwrap is the reverse and
+// BTC: wrapBtc deposits BTC into the smart wallet as WBTC; unwrapBtc is the reverse and
 // pays the BTC out on L1, so it takes the destination output script — not an address
-// and not a token address. Quote first with getUnwrapResult(pkscript, amount).
+// and not a token address. Quote first with getUnwrapBtcResult(pkscript, amount).
 await swap.wrapBtc(btcSats, feeRate)
 
 // The network must match btcAddress, or you derive a valid-looking script that pays
@@ -128,7 +128,7 @@ const network
   = wallet.getNetwork() === 'mainnet' ? bitcoinjs.networks.bitcoin : bitcoinjs.networks.testnet
 
 const pkscript = bitcoinjs.address.toOutputScript(btcAddress, network).toString('hex')
-await swap.unwrap(pkscript, amountSats)
+await swap.unwrapBtc(pkscript, amountSats)
 ```
 
 ## Market data

@@ -29,7 +29,7 @@ export {
   getSwapInfo,
   getSwapStatus,
   getTokenDecimals,
-  getUnwrapResult,
+  getUnwrapResult as getUnwrapBtcResult,
   listPairs,
   listTokens,
   tryGetSwapReferrerInfo,
@@ -222,13 +222,13 @@ export async function swapExactOutput(
  * Redeems WBTC from the smart wallet back into BTC on Bitcoin L1, the reverse of
  * `wrapBtc`. The BTC is paid out on L1 to `pkscript`, so that value must be an
  * output script rather than a token or wallet address. Quote first with
- * `getUnwrapResult`, which takes the same destination.
+ * `getUnwrapBtcResult`, which takes the same destination.
  *
  * @param pkscript - The output script (hex) of the destination Bitcoin address the unwrapped BTC is paid to.
  * @param amount - The amount of WBTC to unwrap, in sats.
  * @returns A promise that resolves to a boolean indicating the success of the unwrap operation.
  */
-export async function unwrap(pkscript: string, amount: bigint) {
+export async function unwrapBtc(pkscript: string, amount: bigint) {
   return (await prepareAndSendUnwrapOrder(pkscript, amount)).success
 }
 
