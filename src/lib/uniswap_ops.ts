@@ -214,6 +214,8 @@ function keyFor(tokenA: string, tokenB: string): string {
   return tokenA < tokenB ? tokenA + tokenB : tokenB + tokenA
 }
 
+// The 997/1000 factor below is the pool fee. It's published as POOL_FEE_BPS from
+// './swap-constants' — keep the two in step if either ever changes.
 function getAmountOut(aIn: bigint, rIn: bigint, rOut: bigint): bigint {
   if (aIn <= 0n) {
     throw new Error('Insufficient input amount')
@@ -1003,7 +1005,7 @@ function checkSwapSignature(
  * @param nonce A unique nonce as a bigint that is used in the construction of the message for BLS signature verification. This nonce helps to prevent replay attacks by ensuring that each swap request has a unique message, even if all other parameters are the same. The function will include this nonce in the message that is hashed and verified against the BLS signature to ensure the authenticity of the request.
  * @param token1FeeBps The fee for the input token in basis points (bps) as a bigint. This fee is applied to the amount of the input token being swapped and is deducted from the user's balance. The function will calculate the fee based on this value and ensure that it is properly accounted for in the user's balance updates after executing the swap.
  * @param token2FeeBps The fee for the output token in basis points (bps) as a bigint. This fee is applied to the amount of the output token being received and is deducted from the user's balance. The function will calculate the fee based on this value and ensure that it is properly accounted for in the user's balance updates after executing the swap.
- * @param btcFee The fee for BTC in basis points (bps) as a bigint. This fee is applied to the amount of BTC being swapped and is deducted from the user's balance. The function will calculate the fee based on this value and ensure that it is properly accounted for in the user's balance updates after executing the swap.
+ * @param btcFee The miner fee as a bigint, denominated in WBTC sats. It is a flat amount, not a rate: the function debits exactly this much WBTC from the user's balance on top of the swap, so it is not reflected in the amounts returned.
  *
  * @returns A promise that resolves to an object indicating the success of the operation. If successful, the object contains the actual amount of the output token received from the swap and the price impact of the swap. If there is an error, the object contains an error message describing the issue that occurred during the swap process.
  */
@@ -1177,7 +1179,7 @@ function checkSwap2Signature(
  * @param nonce A unique nonce as a bigint that is used in the construction of the message for BLS signature verification. This nonce helps to prevent replay attacks by ensuring that each swap request has a unique message, even if all other parameters are the same. The function will include this nonce in the message that is hashed and verified against the BLS signature to ensure the authenticity of the request.
  * @param token1FeeBps The fee for the input token in basis points (bps) as a bigint. This fee is applied to the amount of the input token being swapped and is deducted from the user's balance. The function will calculate the fee based on this value and ensure that it is properly accounted for in the user's balance updates after executing the swap.
  * @param token2FeeBps The fee for the output token in basis points (bps) as a bigint. This fee is applied to the amount of the output token being received and is deducted from the user's balance. The function will calculate the fee based on this value and ensure that it is properly accounted for in the user's balance updates after executing the swap.
- * @param btcFee The fee for BTC in basis points (bps) as a bigint. This fee is applied to the amount of BTC being swapped and is deducted from the user's balance. The function will calculate the fee based on this value and ensure that it is properly accounted for in the user's balance updates after executing the swap.
+ * @param btcFee The miner fee as a bigint, denominated in WBTC sats. It is a flat amount, not a rate: the function debits exactly this much WBTC from the user's balance on top of the swap, so it is not reflected in the amounts returned.
  *
  * @returns A promise that resolves to an object indicating the success of the operation. If successful, the object contains the actual amount of the input token used for the swap and the price impact of the swap. If there is an error, the object contains an error message describing the issue that occurred during the swap process.
  */
@@ -1338,7 +1340,7 @@ function checkWithdrawSignature(
  * @param amt The amount of the token to be withdrawn as a bigint. This amount is used to check if the user has sufficient balance of the specified token to withdraw. The function will also include this amount in the message for BLS signature verification and will update the user's balance accordingly after successfully executing the withdraw.
  * @param blsSignature The BLS signature as a hexadecimal string that is used to authenticate the withdraw request. This signature is generated by the user using their private key and is verified against the public key and the message constructed from the request parameters. The function will check the validity of this signature before proceeding with executing the withdraw, ensuring that only authorized requests are processed.
  * @param nonce A unique nonce as a bigint that is used in the construction of the message for BLS signature verification. This nonce helps to prevent replay attacks by ensuring that each withdraw request has a unique message, even if all other parameters are the same. The function will include this nonce in the message that is hashed and verified against the BLS signature to ensure the authenticity of the request.
- * @param btcFee The fee for BTC in basis points (bps) as a bigint. This fee is applied to the amount of BTC being withdrawn and is deducted from the user's balance. The function will calculate the fee based on this value and ensure that it is properly accounted for in the user's balance updates after executing the withdraw.
+ * @param btcFee The miner fee as a bigint, denominated in WBTC sats. It is a flat amount, not a rate: the function debits exactly this much WBTC from the user's balance on top of the withdraw, so it is not reflected in the amounts returned.
  *
  * @returns A promise that resolves to an object indicating the success of the operation. If successful, the object contains the amount of the token that was withdrawn. If there is an error, the object contains an error message describing the issue that occurred during the withdraw process.
  */
@@ -1437,7 +1439,7 @@ function checkUnwrapSignature(
  * @param amt The amount of the wrapped token (WBTC) to be unwrapped as a bigint. This amount is used to check if the user has sufficient balance of WBTC to unwrap. The function will also include this amount in the message for BLS signature verification and will update the user's balance accordingly after successfully executing the unwrap.
  * @param blsSignature The BLS signature as a hexadecimal string that is used to authenticate the unwrap request. This signature is generated by the user using their private key and is verified against the public key and the message constructed from the request parameters. The function will check the validity of this signature before proceeding with executing the unwrap, ensuring that only authorized requests are processed.
  * @param nonce A unique nonce as a bigint that is used in the construction of the message for BLS signature verification. This nonce helps to prevent replay attacks by ensuring that each unwrap request has a unique message, even if all other parameters are the same. The function will include this nonce in the message that is hashed and verified against the BLS signature to ensure the authenticity of the request.
- * @param btcFee The fee for BTC in basis points (bps) as a bigint. This fee is applied to the amount of BTC being unwrapped and is deducted from the user's balance. The function will calculate the fee based on this value and ensure that it is properly accounted for in the user's balance updates after executing the unwrap.
+ * @param btcFee The miner fee as a bigint, denominated in WBTC sats. It is a flat amount, not a rate: the function debits exactly this much WBTC from the user's balance on top of the unwrap, so it is not reflected in the amounts returned.
  *
  * @returns A promise that resolves to an object indicating the success of the operation. If successful, the object contains the amount of the wrapped token that was unwrapped. If there is an error, the object contains an error message describing the issue that occurred during the unwrap process.
  */

@@ -59,6 +59,45 @@ Swaps and quotes fail fast with a clear `No swap pool with liquidity for …` er
 pair has no pool (e.g. an unsupported token-to-token pair), rather than failing deeper in the swap
 math.
 
+## Quote fees
+
+Both quote functions return a `fees` breakdown (`SwapFees`) alongside the amount, so a UI can show
+the real cost instead of assuming a flat rate:
+
+```ts
+const quote = await swap.getSwapExactInputResult(tokenInAddress, tokenOutAddress, amountIn)
+quote.fees
+// {
+//   pool_fee_bps: 30n,       // constant-product pool fee
+//   token_in_fee_bps: 0n,    // protocol fee on the input leg
+//   token_in_fee: 0n,        //   ↳ in input-token units
+//   token_out_fee_bps: 25n,  // protocol fee on the output leg
+//   token_out_fee: 2490n,    //   ↳ in output-token units
+//   miner_fee_sats: 330n,    // flat miner fee, in WBTC sats
+// }
+```
+
+**Only `pool_fee_bps` is already reflected in the quoted amount.** The pool takes it on the way
+through, so `amount_out` is net of it — don't subtract it again. The other three are charged *on
+top* of the quoted amounts:
+
+```ts
+// What the swap really costs and really pays out:
+const totalIn = amountIn + quote.fees.token_in_fee
+const totalOut = quote.amount_out - quote.fees.token_out_fee
+// plus quote.fees.miner_fee_sats, debited in WBTC regardless of which leg it's on
+```
+
+The protocol fee (currently 25 bps) always sits on whichever leg is WBTC — so it lands in
+`token_in_fee_bps` when you spend WBTC and in `token_out_fee_bps` when you receive it. Read the
+values rather than hard-coding them.
+
+`miner_fee_sats` is a flat sat amount, not a rate. It can't be folded into a bps figure and stays
+meaningful only as an absolute number; use `satsToBtc`/`satsToUsd` to display it.
+
+`getSwapExactOutputResult` returns the same breakdown, with the fees priced off the required
+`amount_in` and the output you requested.
+
 ## Referrals
 
 Both swap functions take an optional final `referrerId`. When a valid referral ID is supplied, a
