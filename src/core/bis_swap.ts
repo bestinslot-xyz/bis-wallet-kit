@@ -187,6 +187,19 @@ export async function getSwapWalletFromDB(): Promise<BISSwapWalletInfo | null> {
 }
 
 /**
+ * Derives the BLS12-381 public key of a swap wallet from its private key, in the
+ * hex encoding the swap backend expects (the four field components, each padded to
+ * 128 hex chars). Shared by generation and import so both agree on the encoding.
+ *
+ * @param blsPrivKey The 32-byte BLS private key.
+ * @returns The public key as a 0x-prefixed hex string.
+ */
+function blsPubkeyHexFromPrivkey(blsPrivKey: Buffer): string {
+  const blsPubKey = bls12_381.shortSignatures.getPublicKey(blsPrivKey)
+  return `0x${blsPubKey.x.c0.toString(16).padStart(128, '0')}${blsPubKey.x.c1.toString(16).padStart(128, '0')}${blsPubKey.y.c0.toString(16).padStart(128, '0')}${blsPubKey.y.c1.toString(16).padStart(128, '0')}`
+}
+
+/**
  * Generates a new swap wallet by creating a BLS key pair derived from a deterministic signature of the user's ordinals wallet.
  *
  * The process involves:
@@ -224,8 +237,7 @@ export async function generateAndStoreSwapWallet(): Promise<BISSwapWalletInfo> {
   const skScalar = mod.mapHashToField(okm, bls12_381.fields.Fr.ORDER)
   const blsPrivKey = Buffer.from(skScalar)
 
-  const blsPubKey = bls12_381.shortSignatures.getPublicKey(blsPrivKey)
-  const blsPubKeyHex = `0x${blsPubKey.x.c0.toString(16).padStart(128, '0')}${blsPubKey.x.c1.toString(16).padStart(128, '0')}${blsPubKey.y.c0.toString(16).padStart(128, '0')}${blsPubKey.y.c1.toString(16).padStart(128, '0')}`
+  const blsPubKeyHex = blsPubkeyHexFromPrivkey(blsPrivKey)
   const blsPrivKeyHex = `0x${blsPrivKey.toString('hex')}`
 
   // 3. Create Swap Wallet Info and store in DB
@@ -236,6 +248,91 @@ export async function generateAndStoreSwapWallet(): Promise<BISSwapWalletInfo> {
   }
 
   // Store in IndexedDB
+  await saveSwapWalletInfo(swapWalletInfo)
+  return swapWalletInfo
+}
+
+/**
+ * Parses and validates a swap wallet security code, returning it as a BLS private key.
+ *
+ * Validation is local: the code is checked for shape and for being a usable BLS12-381 Fr scalar. There is no
+ * backend check available — the sequencer offers no pubkey-to-address lookup, and `get_swap_wallet_nonce` returns
+ * the same answer for an unregistered key as for a fresh one, so it cannot tell a wrong code from a new wallet.
+ *
+ * @param securityCode The security code, as hex with or without a `0x` prefix.
+ * @returns The 32-byte BLS private key.
+ */
+function parseSwapWalletSecurityCode(securityCode: string): Buffer {
+  const trimmed = securityCode.trim()
+  const hex = trimmed.toLowerCase().startsWith('0x') ? trimmed.slice(2) : trimmed
+  if (!/^[0-9a-f]{64}$/i.test(hex)) {
+    throw new Error('Invalid security code. Expected a 32-byte hex value.')
+  }
+
+  // A swap key is a scalar in [1, r-1]. Zero has no usable public key, and anything
+  // at or above the field order is not a distinct key — both mean the code is wrong,
+  // and catching that here is what keeps a typo from overwriting a working wallet.
+  const scalar = BigInt(`0x${hex}`)
+  if (scalar === 0n || scalar >= bls12_381.fields.Fr.ORDER) {
+    throw new Error('Invalid security code. Not a valid swap key.')
+  }
+
+  return Buffer.from(hex, 'hex')
+}
+
+export interface ImportSwapWalletOptions {
+  /**
+   * Replace a stored wallet whose key differs from the imported one. Required for that case, because an import
+   * is destructive: it is only ever needed when derivation is no longer reproducing the right key, so replacing
+   * the stored wallet is the point — but it should be asked for rather than happen as a side effect.
+   */
+  overwrite?: boolean
+}
+/**
+ * Restores a swap wallet from a saved security code, binding it to the connected ordinals wallet.
+ *
+ * Swap wallets are normally derived from a BIP-322 signature, and that derivation is guarded at creation by
+ * signing twice and comparing. If a wallet later starts signing non-deterministically — a wallet update, or the
+ * same address moved to a different implementation whose BIP-322 output differs byte-for-byte — the derivation
+ * no longer reproduces the key, and the funds become unreachable even though the address is still controlled.
+ * This is the way back: the saved code is exactly what the derivation was supposed to produce.
+ *
+ * Importing does not weaken the security of the code. It restores only the BLS half of a swap wallet's
+ * authority; the backend requires a BIP-322 signature from the ordinals address on every withdraw and unwrap,
+ * and resolves that address from the BLS public key. So a code imported under an address that does not own the
+ * funds is inert, and a stolen code still cannot move anything on its own.
+ *
+ * The code is validated before anything is stored, and re-importing the code already in storage is a no-op.
+ * Replacing a *different* stored wallet requires `overwrite`.
+ *
+ * @param securityCode The security code to import, as hex with or without a `0x` prefix.
+ * @param options Import options. Set `overwrite` to replace a stored wallet whose key differs from this one.
+ * @returns {Promise<BISSwapWalletInfo>} Resolves with the imported swap wallet, now stored against the connected ordinals address.
+ */
+export async function importSwapWallet(
+  securityCode: string,
+  options: ImportSwapWalletOptions = {},
+): Promise<BISSwapWalletInfo> {
+  const userOrdinalsWallet = getOrdinalsWallet()
+  if (!userOrdinalsWallet?.address) {
+    throw new Error('Ordinals wallet address not found.')
+  }
+
+  // Validate and derive before touching storage, so a bad code cannot destroy a working wallet.
+  const blsPrivKey = parseSwapWalletSecurityCode(securityCode)
+  const swapWalletInfo: BISSwapWalletInfo = {
+    bitcoinAddress: userOrdinalsWallet.address,
+    swapPubkey: blsPubkeyHexFromPrivkey(blsPrivKey),
+    swapPrivkey: `0x${blsPrivKey.toString('hex')}`,
+  }
+
+  const existing = await readSwapWalletInfo(userOrdinalsWallet.address)
+  if (existing && existing.swapPubkey !== swapWalletInfo.swapPubkey && !options.overwrite) {
+    throw new Error(
+      'A different swap wallet is already stored for this address. Pass { overwrite: true } to replace it.',
+    )
+  }
+
   await saveSwapWalletInfo(swapWalletInfo)
   return swapWalletInfo
 }
