@@ -240,6 +240,53 @@ export async function generateAndStoreSwapWallet(): Promise<BISSwapWalletInfo> {
   return swapWalletInfo
 }
 
+export interface EnsureSwapWalletResult {
+  /** The swap wallet now in storage, whether it was just created or already there. */
+  wallet: BISSwapWalletInfo
+  /** True only when this call derived and stored the wallet. False when one already existed. */
+  created: boolean
+}
+/**
+ * Returns the swap wallet for the connected ordinals wallet, deriving and storing one only if none exists yet.
+ *
+ * This is the idempotent counterpart to `generateAndStoreSwapWallet`, which re-derives (and so re-prompts for two
+ * signatures) on every call. Callers that just want the wallet to exist — e.g. on every connect — should use this
+ * instead, so a user with a wallet already on disk is never asked to sign again.
+ *
+ * `created` distinguishes the two paths, so a caller can show a first-run disclosure exactly once.
+ *
+ * @returns {Promise<EnsureSwapWalletResult>} Resolves with the swap wallet and whether this call created it.
+ */
+export async function ensureSwapWallet(): Promise<EnsureSwapWalletResult> {
+  const userOrdinalsWallet = getOrdinalsWallet()
+  if (!userOrdinalsWallet?.address) {
+    throw new Error('Ordinals wallet address not found.')
+  }
+
+  // Read against the connected address rather than via getSwapWalletFromDB, so the
+  // existence check and the generation below agree on which address they mean.
+  const existing = await readSwapWalletInfo(userOrdinalsWallet.address)
+  if (existing) {
+    return { wallet: existing, created: false }
+  }
+
+  return { wallet: await generateAndStoreSwapWallet(), created: true }
+}
+
+/**
+ * Reads the security code (the BLS private key) of the stored swap wallet for the connected ordinals wallet.
+ *
+ * The code is a second factor, not a recovery seed: on its own it cannot move funds, because the swap backend
+ * requires a BIP-322 signature from the ordinals address alongside every BLS-signed order. It is exposed so that
+ * an interface can show it again after creation without re-deriving the wallet.
+ *
+ * @returns {Promise<string | null>} Resolves with the security code, or null if no swap wallet is stored for the connected address.
+ */
+export async function getSwapWalletSecurityCode(): Promise<string | null> {
+  const walletInfo = await getSwapWalletFromDB()
+  return walletInfo?.swapPrivkey ?? null
+}
+
 export interface GetSwapStatusResponse {
   reorg_handler_running: boolean
   emergency_stop: boolean

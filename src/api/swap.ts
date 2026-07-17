@@ -14,6 +14,7 @@ import {
 
 export {
   generateAndStoreSwapWallet as createSwapWallet,
+  ensureSwapWallet,
   getAddLiquidityResult,
   getKlines,
   requestMinerFee as getMinerFee,
@@ -28,6 +29,7 @@ export {
   getSwap2Result as getSwapExactOutputResult,
   getSwapInfo,
   getSwapStatus,
+  getSwapWalletSecurityCode,
   getTokenDecimals,
   getUnwrapResult as getUnwrapBtcResult,
   listPairs,
@@ -35,6 +37,7 @@ export {
   tryGetSwapReferrerInfo,
 } from '../core/bis_swap' // Export all swap-related functions from the core BIS swap module
 export type {
+  EnsureSwapWalletResult,
   GetActivityOfPairResponse,
   GetKlinesRequest,
   GetKlinesResponse,
