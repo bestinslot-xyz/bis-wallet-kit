@@ -26,6 +26,8 @@ const SHARED_WALLET_FNS = [
 const SHARED_NAMESPACES: Record<string, string[]> = {
   swap: [
     'createSwapWallet',
+    'ensureSwapWallet',
+    'getSwapWalletSecurityCode',
     'importSwapWallet',
     'getAddLiquidityResult',
     'getKlines',
