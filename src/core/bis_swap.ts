@@ -1,3 +1,4 @@
+import type { SwapFees } from '../lib/swap-reporting'
 import type { UniswapInfoProxy } from '../lib/uniswap_ops'
 import type { BISNetwork } from '../types/common'
 import type { BISSwapWalletInfo } from './store'
@@ -11,6 +12,7 @@ import { sha256 } from '@noble/hashes/sha2.js'
 import * as bitcoinjs from 'bitcoinjs-lib'
 import * as ethers from 'ethers'
 import { getBitcoinNetwork } from '../lib/bitcoin'
+import { buildSwapFees } from '../lib/swap-reporting'
 import {
   addLiquidityRequest,
   calculatePairAddress,
@@ -3002,13 +3004,18 @@ async function getSwapFeesBps(
  * @param tokenOutAddr The address of the token being swapped to.
  * @param amtIn The amount of the input token to be swapped, represented as a bigint.
  *
- * @returns A promise that resolves to an object containing the expected output amount of the token being swapped to, the quoted price for the swap, and the price impact in basis points, all represented as bigints or numbers as appropriate.
+ * @returns A promise that resolves to an object containing the expected output amount of the token being swapped to, the quoted price for the swap, the price impact in basis points, and the fee breakdown (see `SwapFees` — `amount_out` is net of the pool fee only, with the rest charged on top).
  */
 export async function getSwapResult(
   tokenInAddr: string,
   tokenOutAddr: string,
   amtIn: bigint,
-): Promise<{ amount_out: bigint, quoted_price: number, price_impact_bps: bigint }> {
+): Promise<{
+  amount_out: bigint
+  quoted_price: number
+  price_impact_bps: bigint
+  fees: SwapFees
+}> {
   const swapInfo = await getSwapInfo()
   // saveInfo is handled by assertPoolExists below (single source of truth).
   await assertPoolExists(tokenInAddr, tokenOutAddr)
@@ -3064,6 +3071,7 @@ export async function getSwapResult(
     amount_out: result.amounts[1]!,
     quoted_price: quotedPriceNumber,
     price_impact_bps: result.price_impact_bps,
+    fees: buildSwapFees(amtIn, result.amounts[1]!, token1FeeBps, token2FeeBps, btcFee),
   }
 }
 
@@ -3270,13 +3278,18 @@ export async function prepareAndSendSwapOrder(
  * @param tokenOutAddr The address of the token being swapped to.
  * @param amtOut The amount of the output token expected from the swap, represented as a bigint.
  *
- * @returns A promise that resolves to an object containing the expected input amount of the token being swapped from, the quoted price for the swap, and the price impact in basis points, all represented as bigints or numbers as appropriate.
+ * @returns A promise that resolves to an object containing the expected input amount of the token being swapped from, the quoted price for the swap, the price impact in basis points, and the fee breakdown (see `SwapFees` — `amount_in` covers the pool fee only, with the rest charged on top).
  */
 export async function getSwap2Result(
   tokenInAddr: string,
   tokenOutAddr: string,
   amtOut: bigint,
-): Promise<{ amount_in: bigint, quoted_price: number, price_impact_bps: bigint }> {
+): Promise<{
+  amount_in: bigint
+  quoted_price: number
+  price_impact_bps: bigint
+  fees: SwapFees
+}> {
   const swapInfo = await getSwapInfo()
   // saveInfo is handled by assertPoolExists below (single source of truth).
   await assertPoolExists(tokenInAddr, tokenOutAddr)
@@ -3333,6 +3346,7 @@ export async function getSwap2Result(
     amount_in: result.amounts[0]!,
     quoted_price: quotedPriceNumber,
     price_impact_bps: result.price_impact_bps,
+    fees: buildSwapFees(result.amounts[0]!, amtOut, token1FeeBps, token2FeeBps, btcFee),
   }
 }
 

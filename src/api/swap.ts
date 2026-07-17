@@ -56,6 +56,7 @@ export type {
 } from '../core/bis_swap' // Export types related to wallet activities
 export type { AllBalanceDetails } from '../core/helpers' // Export the AllBalanceDetails type from the core helpers module
 export type { BISSwapWalletInfo } from '../core/store' // Export the BISSwapWalletInfo type from the core store module
+export type { SwapFees } from '../lib/swap-reporting' // The fee breakdown carried on swap quote results
 export { satsToBtc, satsToUsd, swapSide } from '../lib/swap-reporting' // Reporting helpers (buy/sell side, sat→BTC/USD)
 export { calculatePairAddress as getPairAddress } from '../lib/uniswap_ops'
 
