@@ -1,7 +1,8 @@
 import type { UniswapInfoProxy } from '../../src/lib/uniswap_ops.ts'
 import { assert, beforeAll, describe, it } from 'vitest'
+import { POOL_FEE_BPS } from '../../src/lib/swap-constants.ts'
 import { buildSwapFees } from '../../src/lib/swap-reporting.ts'
-import { POOL_FEE_BPS, saveInfo, swap2Request, swapRequest } from '../../src/lib/uniswap_ops.ts'
+import { saveInfo, swap2Request, swapRequest } from '../../src/lib/uniswap_ops.ts'
 
 // These drive the real AMM math through a stub proxy, so the fee breakdown is
 // checked against the amounts swapRequest/swap2Request actually produce rather
@@ -165,7 +166,7 @@ describe('buildSwapFees reconciles with swap2Request (exact output)', () => {
     // Round-tripping the exact-output quote back through the exact-input math must
     // land on the requested output (up to getAmountIn's +1 rounding in our favour).
     const roundTrip = refAmountOut(amountIn, RESERVE_TOKEN, RESERVE_WBTC)
-    assert.isAtLeast(Number(roundTrip), Number(AMOUNT_OUT))
+    assert.isTrue(roundTrip >= AMOUNT_OUT)
 
     const fees = buildSwapFees(amountIn, AMOUNT_OUT, 0n, 25n, MINER_FEE)
     assert.equal(fees.pool_fee_bps, 30n)

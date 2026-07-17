@@ -214,13 +214,8 @@ function keyFor(tokenA: string, tokenB: string): string {
   return tokenA < tokenB ? tokenA + tokenB : tokenB + tokenA
 }
 
-/**
- * The constant-product pool fee, in basis points. Charged by the pool on the way
- * in and already baked into the amounts `getAmountOut`/`getAmountIn` return, via
- * their 997/1000 factor — keep the two in step if either ever changes.
- */
-export const POOL_FEE_BPS = 30n
-
+// The 997/1000 factor below is the pool fee. It's published as POOL_FEE_BPS from
+// './swap-constants' — keep the two in step if either ever changes.
 function getAmountOut(aIn: bigint, rIn: bigint, rOut: bigint): bigint {
   if (aIn <= 0n) {
     throw new Error('Insufficient input amount')

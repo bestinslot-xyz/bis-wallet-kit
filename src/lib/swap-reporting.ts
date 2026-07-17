@@ -3,7 +3,7 @@
 // no decimals magic: the converters take values already in sats so their contract
 // is unambiguous, and the fee breakdown is assembled from values the caller holds.
 
-import { POOL_FEE_BPS } from './uniswap_ops'
+import { POOL_FEE_BPS } from './swap-constants'
 
 /**
  * Classifies a swap as a buy or sell relative to WBTC (the quote asset): you
