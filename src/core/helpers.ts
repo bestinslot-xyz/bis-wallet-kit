@@ -83,6 +83,15 @@ export function finalizePsbtInputs(psbt: bitcoinjs.Psbt, noSignIdxes?: number[])
     if (skip.has(i)) {
       continue
     }
+    // Already finalized upstream — skip it. Wallets that sign with
+    // autoFinalized:true (unisat, okx) return finalized inputs, and the kit sets
+    // finalScriptWitness directly on pre-signed script-path inputs. Re-finalizing
+    // any of these throws ("No tapleaf script signature provided" on taproot),
+    // because the partial-sig fields it would rebuild the witness from are gone.
+    const input = psbt.data.inputs[i]
+    if (input?.finalScriptWitness != null || input?.finalScriptSig != null) {
+      continue
+    }
     try {
       psbt.finalizeInput(i)
     }
