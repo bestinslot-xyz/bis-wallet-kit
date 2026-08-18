@@ -1340,6 +1340,8 @@ export async function buildReclaimCommitTx(
   unsignedPsbtHex: string
   commitVout: number
   commitOutputValue: number
+  commitFee: number
+  revealFee: number
 }> {
   if (reclaimInputs.length === 0)
     throw new Error('buildReclaimCommitTx requires at least one reclaim input')
@@ -1408,6 +1410,8 @@ export async function buildReclaimCommitTx(
     unsignedPsbtHex: unsignedCommitPsbt.toHex(),
     commitVout,
     commitOutputValue,
+    commitFee: built.tx_fee,
+    revealFee,
   }
 }
 
@@ -1489,6 +1493,149 @@ export async function assembleReclaimCommitAndReveal(
     commitVout: commit.commitVout,
     postage,
     secret,
+  }
+}
+
+/**
+ * Fetches the connected wallets' cardinal utxos and delegates to
+ * assembleReclaimCommitAndReveal to build, sign, and validate the reclaim
+ * commit+reveal pair, then broadcasts both txes unless dryRun is set.
+ */
+export async function mintWithReclaimsAll(
+  inscriptionDetails: InscriptionDetails,
+  reclaimInputs: ReclaimInput[],
+  feeRate: number,
+  postage: number | null,
+  dryRun: boolean,
+  signFunc: SignFunction,
+): Promise<{
+  commitTxId: string
+  signedCommitTxHex: string
+  revealTxId: string
+  signedRevealTxHex: string
+  inscriptionId: string
+  commitVout: number
+  postage: number
+  secret: string
+}> {
+  const userPaymentWallet = getPaymentWallet()
+  const userOrdinalsWallet = getOrdinalsWallet()
+  if (!userPaymentWallet || !userOrdinalsWallet)
+    throw new Error('Wallets not found')
+
+  const payerWallet = new WalletInfo(
+    false,
+    null,
+    userPaymentWallet.address,
+    null,
+    userPaymentWallet.pubkey,
+  )
+  const inscriptionWallet = new WalletInfo(
+    false,
+    null,
+    userOrdinalsWallet.address,
+    null,
+    userOrdinalsWallet.pubkey,
+  )
+
+  if (postage == null || postage <= 0) {
+    postage = getDustValue(inscriptionWallet)
+  }
+
+  const cardinalUtxos = await getCardinalUtxos(payerWallet.addr!)
+
+  const res = await assembleReclaimCommitAndReveal(
+    cardinalUtxos,
+    reclaimInputs,
+    payerWallet,
+    inscriptionWallet,
+    inscriptionDetails,
+    feeRate,
+    postage,
+    signFunc,
+  )
+
+  if (!dryRun)
+    await broadcastTxes([res.signedCommitTxHex, res.signedRevealTxHex])
+
+  return res
+}
+
+/**
+ * Estimates the fees for a reclaim mint by building the unsigned reclaim
+ * commit tx (Task 1) and a fee-sizing reveal tx offline, without signing or
+ * broadcasting. Mirrors mintWithExtraInputInCommitFeeRate.
+ */
+export async function mintWithReclaimsCheckFees(
+  inscriptionDetails: InscriptionDetails,
+  reclaimInputs: ReclaimInput[],
+  feeRate: number,
+  postage: number | null,
+): Promise<{
+  unsigned_commit_tx_hex: string
+  signed_reveal_tx_hex: string
+  inscription_id: string
+  total_fee: number
+  commit_vout: number
+}> {
+  const userPaymentWallet = getPaymentWallet()
+  const userOrdinalsWallet = getOrdinalsWallet()
+  if (!userPaymentWallet || !userOrdinalsWallet)
+    throw new Error('Wallets not found')
+
+  const payerWallet = new WalletInfo(
+    false,
+    null,
+    userPaymentWallet.address,
+    null,
+    userPaymentWallet.pubkey,
+  )
+  const inscriptionWallet = new WalletInfo(
+    false,
+    null,
+    userOrdinalsWallet.address,
+    null,
+    userOrdinalsWallet.pubkey,
+  )
+
+  if (postage == null || postage <= 0) {
+    postage = getDustValue(inscriptionWallet)
+  }
+
+  const cardinalUtxos = await getCardinalUtxos(payerWallet.addr!)
+
+  const secret = createSecretToken()
+  const commit = await buildReclaimCommitTx(
+    cardinalUtxos,
+    reclaimInputs,
+    payerWallet,
+    inscriptionWallet,
+    secret,
+    inscriptionDetails,
+    feeRate,
+    postage,
+  )
+
+  const dummyCommitTxId = commit.unsignedCommitTx.getId()
+  const reveal = await buildRevealTx(
+    inscriptionWallet,
+    dummyCommitTxId,
+    commit.commitOutputValue,
+    secret,
+    inscriptionDetails,
+    feeRate,
+    postage,
+    null,
+    null,
+    commit.commitVout,
+  )
+
+  return {
+    unsigned_commit_tx_hex: commit.unsignedCommitTx.toHex(),
+    signed_reveal_tx_hex: reveal.signedTxHex,
+    inscription_id: `${reveal.txId}i0`,
+    total_fee: commit.commitFee + commit.revealFee,
+    commit_vout: commit.commitVout,
   }
 }
 
