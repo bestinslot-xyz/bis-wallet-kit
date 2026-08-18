@@ -1303,6 +1303,104 @@ async function buildCommitTx(
   }
 }
 
+export interface ReclaimInput {
+  utxo: string
+  value: number
+  script_type: UtxoInfo['script_type']
+}
+
+/**
+ * Builds an unsigned combined commit tx that reclaims transfer inscriptions
+ * back to the inscription wallet while paying for a new taproot commit
+ * output in the same transaction.
+ *
+ * Output layout:
+ *  - outputs `0..n-1`: one self-send per reclaim input, 1:1 with the
+ *    reclaim inputs (same index, same value), so the ordinal sat carried
+ *    by each reclaim input flows onto its own output.
+ *  - output `n`: the taproot commit output, funded purely by the cardinal
+ *    utxos (never by reclaimed sats).
+ *  - any trailing output: payer change.
+ *
+ * Pure and network-free: all utxos are passed in by the caller.
+ */
+export function buildReclaimCommitTx(
+  cardinalUtxos: UtxoInfo[],
+  reclaimInputs: ReclaimInput[],
+  payerWallet: WalletInfo,
+  inscriptionWallet: WalletInfo,
+  secret: string,
+  inscriptionDetails: InscriptionDetails,
+  feeRate: number,
+  postage: number,
+): {
+  unsignedCommitTx: bitcoinjs.Transaction
+  unsignedPsbtHex: string
+  commitVout: number
+  commitOutputValue: number
+} {
+  if (reclaimInputs.length === 0)
+    throw new Error('buildReclaimCommitTx requires at least one reclaim input')
+
+  const seckey = get_seckey(secret)
+  const pubkey = get_pubkey(seckey, true)
+  const script = buildRevealScript(pubkey, inscriptionDetails)
+  const tapleaf = Tap.encodeScript(script)
+  const [tpubkey, cblock] = Tap.getPubKey(pubkey, { target: tapleaf })
+  const networkType = getBitcoinNetwork()
+  const commitTxAddress = bitcoinjs.payments.p2tr({
+    pubkey: Buffer.from(tpubkey, 'hex'),
+    network: networkType,
+  })
+
+  // reveal-fee sizing: identical dummy-reveal construction as buildCommitTx
+  const dummyRevealTx = Tx.create({
+    vin: [
+      {
+        txid: '00'.repeat(32),
+        vout: 0,
+        prevout: { value: 0, scriptPubKey: ['OP_1', tpubkey] },
+      },
+    ],
+    vout: [{ value: 0, scriptPubKey: inscriptionWallet.outputScript }],
+  })
+  dummyRevealTx.vin[0]!.witness = [Buff.hex('00'.repeat(64)), script, cblock]
+  const revealFee = Tx.util.getTxSize(dummyRevealTx).vsize * feeRate
+  const commitOutputValue = postage + revealFee
+
+  const commitWallet = new WalletInfo(false, null, commitTxAddress.address, null, tpubkey)
+
+  // reclaim self-sends first (1:1 with inputs), commit output after them
+  const forceInUtxos: UtxoInfoWithWallet[] = reclaimInputs.map(r => ({
+    utxo: r.utxo,
+    value: r.value,
+    script_type: r.script_type,
+    wallet: inscriptionWallet,
+  }))
+  const outputWallets: WalletInfo[] = reclaimInputs.map(() => inscriptionWallet)
+  const amounts: number[] = reclaimInputs.map(r => r.value)
+  outputWallets.push(commitWallet)
+  amounts.push(commitOutputValue)
+
+  const built = buildTransactionMultiOutput(
+    cardinalUtxos,
+    forceInUtxos,
+    payerWallet,
+    outputWallets,
+    amounts,
+    payerWallet, // change
+    feeRate,
+  )
+
+  const commitVout = reclaimInputs.length
+  return {
+    unsignedCommitTx: built.tx,
+    unsignedPsbtHex: '', // filled in Task 2 where signing needs a PSBT
+    commitVout,
+    commitOutputValue,
+  }
+}
+
 interface BuildCommitTxMultipleResult {
   unsigned_psbt_hex: string
   output_value: number
@@ -2238,6 +2336,7 @@ async function buildRevealTx(
   postage: number,
   paymentWallet: WalletInfo | null,
   payment: number | null,
+  commitVout: number = 0,
 ): Promise<SignResponse> {
   if (payment == null || payment < 0)
     payment = 0
@@ -2253,7 +2352,7 @@ async function buildRevealTx(
   const inputs = [
     {
       txid: commitTxid,
-      vout: 0,
+      vout: commitVout,
     },
   ]
 
