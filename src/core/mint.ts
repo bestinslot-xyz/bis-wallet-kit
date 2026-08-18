@@ -1458,11 +1458,13 @@ export async function assembleReclaimCommitAndReveal(
     postage,
   )
 
+  const ordAddrIdxes = reclaimInputs.map((_, i) => i)
+
   const signedCommit = await signFunc(
     commit.unsignedPsbtHex,
     payerWallet.addr!,
     inscriptionWallet.addr!,
-    [],
+    ordAddrIdxes,
   )
 
   const reveal = await buildRevealTx(
@@ -1653,6 +1655,7 @@ export async function resolveReclaimInputs(
   ordinalsAddress: string,
 ): Promise<ReclaimInput[]> {
   const out: ReclaimInput[] = []
+  const seenUtxos = new Set<string>()
   for (const r of reclaimInscriptions) {
     const details = await getInscriptionDetails(r.inscriptionId, ordinalsAddress)
     if (details == null)
@@ -1660,7 +1663,11 @@ export async function resolveReclaimInputs(
     if (details.satpoint.split(':')[2] !== '0')
       throw new Error(`Reclaim inscription not at sat offset 0: ${r.inscriptionId}`)
     const [txid, vout] = details.satpoint.split(':')
-    out.push({ utxo: `${txid}:${vout}`, value: details.value, script_type: details.script_type })
+    const utxo = `${txid}:${vout}`
+    if (seenUtxos.has(utxo))
+      throw new Error(`Duplicate reclaim UTXO: ${utxo} (inscription ${r.inscriptionId})`)
+    seenUtxos.add(utxo)
+    out.push({ utxo, value: details.value, script_type: details.script_type })
   }
   return out
 }

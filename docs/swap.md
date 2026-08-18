@@ -158,8 +158,9 @@ await swap.withdraw(tokenAddress, amount /* , targetAddress? */) // omit target 
 
 `deposit` also takes an optional 5th param, `reclaimInscriptions: { inscriptionId, amount }[]`. When
 the wallet's depositable balance is locked in transfer inscriptions (`transferrable_balance`), pass
-those inscriptions to reclaim; the kit sends them back to self inside the same deposit package (one
-extra signature, no extra transaction) so their balance funds the deposit. `amount` is the
+those inscriptions to reclaim; the kit sends them back to self inside the same deposit package (no
+extra transaction — the reclaim inputs are signed as part of the existing deposit commit) so their
+balance funds the deposit. `amount` is the
 inscription's BRC-20 transfer amount in 18-dec fixed point — caller-supplied, the kit does not read
 it on-chain.
 

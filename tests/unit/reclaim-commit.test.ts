@@ -1,3 +1,4 @@
+import type { SignFunction } from '../../src/provider/api.ts'
 import { Buffer } from 'node:buffer'
 import { Buff } from '@cmdcode/buff-utils'
 import * as bitcoinjs from 'bitcoinjs-lib'
@@ -10,6 +11,10 @@ import { InscriptionDetails } from '../../src/types/inscription.ts'
 import { WalletInfo } from '../../src/types/wallet.ts'
 
 const WIF = 'cN9spWsvaxA8taS7DFMxnk1yJD2gaF2PX1npuTpy3vuZFJdwavaw'
+// distinct WIF for the "ordinals" side of the split-address test, so payer and
+// inscription wallets are genuinely different addresses (not just aliases of the
+// same key), which is what the addr-idx routing bug required to surface.
+const ORD_WIF = 'cUHZRgEg7zhKQrik5YAbVC4rEJiFJZRw91ZaUKTxBWx6VzaktvLd'
 
 function transferInscription(tick: string, amt: string) {
   return new InscriptionDetails(
@@ -159,6 +164,81 @@ describe('assembleReclaimCommitAndReveal', () => {
     expect(Buffer.from(reveal.ins[0]!.hash).reverse().toString('hex')).toBe(res.commitTxId)
 
     // the signed commit tx is well-formed and actually decodes
+    const commit = bitcoinjs.Transaction.fromHex(res.signedCommitTxHex)
+    expect(commit.getId()).toBe(res.commitTxId)
+  })
+
+  it('routes the reclaim inputs to the ordinals key when payer and inscription wallets differ', async () => {
+    // payer (p2wpkh, payment key) and inscription (p2tr, ordinals key) are DISTINCT
+    // wallets/keys here, unlike the single-WIF tests above — this is what exercises
+    // signer key-routing (ordAddrIdxes) instead of masking it behind one shared key.
+    const payer = await wallet.connectLocalWallet(WIF, 'testnet', 'p2wpkh', 'unisat')
+    const payerWallet = new WalletInfo(false, null, payer.address, null, payer.pubkey)
+
+    const ord = await wallet.connectLocalWallet(ORD_WIF, 'testnet', 'p2tr', 'unisat')
+    const inscriptionWallet = new WalletInfo(false, null, ord.address, null, ord.pubkey)
+
+    expect(payerWallet.addr).not.toBe(inscriptionWallet.addr)
+
+    // A real split-wallet provider (unisat/xverse/okx/leather) holds a distinct key
+    // per address and signs input i with the payment key unless i appears in
+    // ordAddrIdxes, in which case it signs with the ordinals key (see e.g.
+    // src/provider/unisat.ts / local.ts: `if (ordAddrIdxes.includes(i)) { ... ord key
+    // ... } else { ... payment key ... }`). The in-repo 'local' provider only ever
+    // holds ONE key though, so it can't exercise real per-index key selection here.
+    // Instead we spy on the 4th arg (ordAddrIdxes) that assembleReclaimCommitAndReveal
+    // hands to the signer — that's precisely the value a real provider uses to decide
+    // which key to use for which input, and reverting Finding 1's fix (back to `[]`)
+    // makes this assertion fail (verified manually; see PR notes).
+    const captured: number[][] = []
+    const spySignFn: SignFunction = async (psbtHex, paymentAddr, ordAddr, ordAddrIdxes) => {
+      captured.push(ordAddrIdxes)
+      // Build a syntactically-valid "signed" tx without real signatures — we only
+      // care about the routing decision (ordAddrIdxes), not signature validity,
+      // and downstream code (reveal building, the stubbed mempool-accept check)
+      // only needs a well-formed txid/hex, not a consensus-valid witness.
+      const psbt = bitcoinjs.Psbt.fromHex(psbtHex)
+      const tx = new bitcoinjs.Transaction()
+      tx.version = 2
+      for (const inp of psbt.txInputs)
+        tx.addInput(inp.hash, inp.index, inp.sequence)
+      for (const out of psbt.txOutputs)
+        tx.addOutput(out.script, out.value)
+      for (let i = 0; i < tx.ins.length; i++)
+        tx.setWitness(i, [Buffer.alloc(64)])
+      return { signedTxHex: tx.toHex(), txId: tx.getId() }
+    }
+
+    const reclaimInputs = [
+      { utxo: `${'aa'.repeat(32)}:0`, value: 546, script_type: 'witness_v1_taproot' as const },
+      { utxo: `${'bb'.repeat(32)}:0`, value: 600, script_type: 'witness_v1_taproot' as const },
+    ]
+    const cardinalUtxos = [
+      { utxo: `${'cc'.repeat(32)}:1`, value: 100000, script_type: 'witness_v0_keyhash' as const },
+    ]
+
+    seedFakePrevout(reclaimInputs[0]!.utxo, reclaimInputs[0]!.value, inscriptionWallet.outputScript)
+    seedFakePrevout(reclaimInputs[1]!.utxo, reclaimInputs[1]!.value, inscriptionWallet.outputScript)
+    seedFakePrevout(cardinalUtxos[0]!.utxo, cardinalUtxos[0]!.value, payerWallet.outputScript)
+    stubMempoolAccept()
+
+    const res = await assembleReclaimCommitAndReveal(
+      cardinalUtxos,
+      reclaimInputs,
+      payerWallet,
+      inscriptionWallet,
+      transferInscription('sats', '1000'),
+      5,
+      546,
+      spySignFn,
+    )
+
+    // the ONLY sign() call must mark every reclaim input index as ordinals-owned,
+    // routing them to the ordinals key rather than the payment key.
+    expect(captured).toHaveLength(1)
+    expect(captured[0]).toEqual([0, 1])
+
+    // sanity: the resulting commit tx is still well-formed
     const commit = bitcoinjs.Transaction.fromHex(res.signedCommitTxHex)
     expect(commit.getId()).toBe(res.commitTxId)
   })
