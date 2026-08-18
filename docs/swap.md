@@ -154,7 +154,16 @@ passing an already slippage-adjusted floor applies slippage twice and silently w
 // your base BRC-20 balance (and creates the allowance) when it's short.
 await swap.deposit(tokenAddress, amount, feeRate /* , createAllowanceIfNeeded = true */)
 await swap.withdraw(tokenAddress, amount /* , targetAddress? */) // omit target → self
+```
 
+`deposit` also takes an optional 5th param, `reclaimInscriptions: { inscriptionId, amount }[]`. When
+the wallet's depositable balance is locked in transfer inscriptions (`transferrable_balance`), pass
+those inscriptions to reclaim; the kit sends them back to self inside the same deposit package (one
+extra signature, no extra transaction) so their balance funds the deposit. `amount` is the
+inscription's BRC-20 transfer amount in 18-dec fixed point — caller-supplied, the kit does not read
+it on-chain.
+
+```ts
 // BTC: wrapBtc deposits BTC into the smart wallet as WBTC; unwrapBtc is the reverse and
 // pays the BTC out on L1, so it takes the destination output script — not an address
 // and not a token address. Quote first with getUnwrapBtcResult(pkscript, amount).
