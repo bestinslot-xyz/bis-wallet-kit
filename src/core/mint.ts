@@ -1639,6 +1639,32 @@ export async function mintWithReclaimsCheckFees(
   }
 }
 
+/**
+ * Resolves reclaim inscriptions (transfer inscriptions to reclaim toward the
+ * base-deposit sufficiency check) into `ReclaimInput`s for
+ * `buildReclaimCommitTx`/`mintWithReclaimsAll`/`mintWithReclaimsCheckFees`.
+ *
+ * Looks up each inscription's current UTXO via `getInscriptionDetails` and
+ * enforces that it sits at sat offset 0 of its satpoint, which the reclaim
+ * commit tx assumes when self-sending the reclaim input.
+ */
+export async function resolveReclaimInputs(
+  reclaimInscriptions: { inscriptionId: string, amount: bigint }[],
+  ordinalsAddress: string,
+): Promise<ReclaimInput[]> {
+  const out: ReclaimInput[] = []
+  for (const r of reclaimInscriptions) {
+    const details = await getInscriptionDetails(r.inscriptionId, ordinalsAddress)
+    if (details == null)
+      throw new Error(`Reclaim inscription not found in wallet: ${r.inscriptionId}`)
+    if (details.satpoint.split(':')[2] !== '0')
+      throw new Error(`Reclaim inscription not at sat offset 0: ${r.inscriptionId}`)
+    const [txid, vout] = details.satpoint.split(':')
+    out.push({ utxo: `${txid}:${vout}`, value: details.value, script_type: details.script_type })
+  }
+  return out
+}
+
 interface BuildCommitTxMultipleResult {
   unsigned_psbt_hex: string
   output_value: number

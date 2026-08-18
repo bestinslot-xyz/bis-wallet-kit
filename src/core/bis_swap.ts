@@ -32,6 +32,9 @@ import {
   mintAllCheckFees,
   mintWithExtraInputInCommitAll,
   mintWithExtraInputInCommitFeeRate,
+  mintWithReclaimsAll,
+  mintWithReclaimsCheckFees,
+  resolveReclaimInputs,
   sendInscriptionToOpReturnWithExtraInputsAndExtraOutputAll,
   sendInscriptionToOpReturnWithExtraInputsAndExtraOutputFeeRate,
 } from './mint'
@@ -1596,15 +1599,36 @@ export async function createAndBroadcastDepositOrder(
       ),
     )
 
-    baseDepositMintRes = await mintAll(
-      baseDepositInscriptionDetails,
-      feeRate,
-      null,
-      null,
-      0,
-      true,
-      signFn,
-    )
+    if ((reclaimInscriptions?.length ?? 0) > 0) {
+      const reclaimInputs = await resolveReclaimInputs(reclaimInscriptions!, ordinalsAddress)
+      const res = await mintWithReclaimsAll(
+        baseDepositInscriptionDetails,
+        reclaimInputs,
+        feeRate,
+        null,
+        true,
+        signFn,
+      )
+      baseDepositMintRes = {
+        signed_commit_tx_hex: res.signedCommitTxHex,
+        signed_reveal_tx_hex: res.signedRevealTxHex,
+        commit_txid: res.commitTxId,
+        reveal_txid: res.revealTxId,
+        inscription_id: res.inscriptionId,
+        secret: res.secret,
+      }
+    }
+    else {
+      baseDepositMintRes = await mintAll(
+        baseDepositInscriptionDetails,
+        feeRate,
+        null,
+        null,
+        0,
+        true,
+        signFn,
+      )
+    }
     baseDepositCommitTxHex = baseDepositMintRes.signed_commit_tx_hex
     baseDepositRevealTxHex = baseDepositMintRes.signed_reveal_tx_hex
     baseDepositCommitTxId = baseDepositMintRes.commit_txid
@@ -1925,6 +1949,13 @@ export async function getMinerFeesOfDepositOrder(
 
   const payerWallet = new WalletInfo(false, null, payerAddr, null, payerPublicKey)
 
+  const userOrdinalsWallet = getOrdinalsWallet()
+  if (!userOrdinalsWallet)
+    throw new Error('Ordinals wallet not found')
+  if (!userOrdinalsWallet.address)
+    throw new Error('Ordinals wallet address not found')
+  const ordinalsAddress = userOrdinalsWallet.address
+
   let useBaseAvailableBalanceAmt = 0n
   let baseTokenDecimals = 0
   let baseTokenTicker = ''
@@ -2032,13 +2063,20 @@ export async function getMinerFeesOfDepositOrder(
       ),
     )
 
-    const baseDepositMintRes = await mintAllCheckFees(
-      baseDepositInscriptionDetails,
-      feeRate,
-      null,
-      null,
-      0,
-    )
+    const baseDepositMintRes = (reclaimInscriptions?.length ?? 0) > 0
+      ? await mintWithReclaimsCheckFees(
+          baseDepositInscriptionDetails,
+          await resolveReclaimInputs(reclaimInscriptions!, ordinalsAddress),
+          feeRate,
+          null,
+        )
+      : await mintAllCheckFees(
+          baseDepositInscriptionDetails,
+          feeRate,
+          null,
+          null,
+          0,
+        )
     baseDepositCommitTxHex = baseDepositMintRes.unsigned_commit_tx_hex
     baseDepositRevealTxHex = baseDepositMintRes.signed_reveal_tx_hex
     baseDepositInscriptionId = baseDepositMintRes.inscription_id
