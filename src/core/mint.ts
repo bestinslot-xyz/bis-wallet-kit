@@ -1322,9 +1322,11 @@ export interface ReclaimInput {
  *    utxos (never by reclaimed sats).
  *  - any trailing output: payer change.
  *
- * Pure and network-free: all utxos are passed in by the caller.
+ * The candidate utxo set is passed in by the caller; the only network access
+ * is the PSBT-building step, which looks up each spent input's prevout tx
+ * (mirrors buildCommitTx).
  */
-export function buildReclaimCommitTx(
+export async function buildReclaimCommitTx(
   cardinalUtxos: UtxoInfo[],
   reclaimInputs: ReclaimInput[],
   payerWallet: WalletInfo,
@@ -1333,12 +1335,12 @@ export function buildReclaimCommitTx(
   inscriptionDetails: InscriptionDetails,
   feeRate: number,
   postage: number,
-): {
+): Promise<{
   unsignedCommitTx: bitcoinjs.Transaction
   unsignedPsbtHex: string
   commitVout: number
   commitOutputValue: number
-} {
+}> {
   if (reclaimInputs.length === 0)
     throw new Error('buildReclaimCommitTx requires at least one reclaim input')
 
@@ -1393,11 +1395,100 @@ export function buildReclaimCommitTx(
   )
 
   const commitVout = reclaimInputs.length
+
+  const unsignedCommitPsbt = await buildPsbtFromTx(
+    built.tx,
+    cardinalUtxos,
+    payerWallet,
+    forceInUtxos,
+  )
+
   return {
     unsignedCommitTx: built.tx,
-    unsignedPsbtHex: '', // filled in Task 2 where signing needs a PSBT
+    unsignedPsbtHex: unsignedCommitPsbt.toHex(),
     commitVout,
     commitOutputValue,
+  }
+}
+
+/**
+ * Builds, signs, and validates a full reclaim commit+reveal pair offline: creates
+ * a fresh secret, builds the reclaim commit tx (Task 1), signs its PSBT with the
+ * caller-supplied signFunc, builds the reveal tx spending the relocated commit
+ * output, and checks both signed txes with the mempool-accept validator before
+ * returning them for the caller to broadcast.
+ *
+ * Pure w.r.t. network selection: all utxos are passed in by the caller. Network
+ * access (prevout lookups, mempool-accept validation) is delegated to the same
+ * helpers buildCommitTx-based flows already use.
+ */
+export async function assembleReclaimCommitAndReveal(
+  cardinalUtxos: UtxoInfo[],
+  reclaimInputs: ReclaimInput[],
+  payerWallet: WalletInfo,
+  inscriptionWallet: WalletInfo,
+  inscriptionDetails: InscriptionDetails,
+  feeRate: number,
+  postage: number,
+  signFunc: SignFunction,
+): Promise<{
+  commitTxId: string
+  signedCommitTxHex: string
+  revealTxId: string
+  signedRevealTxHex: string
+  inscriptionId: string
+  commitVout: number
+  postage: number
+  secret: string
+}> {
+  const secret = createSecretToken()
+
+  const commit = await buildReclaimCommitTx(
+    cardinalUtxos,
+    reclaimInputs,
+    payerWallet,
+    inscriptionWallet,
+    secret,
+    inscriptionDetails,
+    feeRate,
+    postage,
+  )
+
+  const signedCommit = await signFunc(
+    commit.unsignedPsbtHex,
+    payerWallet.addr!,
+    inscriptionWallet.addr!,
+    [],
+  )
+
+  const reveal = await buildRevealTx(
+    inscriptionWallet,
+    signedCommit.txId,
+    commit.commitOutputValue,
+    secret,
+    inscriptionDetails,
+    feeRate,
+    postage,
+    null,
+    null,
+    commit.commitVout,
+  )
+
+  const isValid = await validateTxes([signedCommit.signedTxHex, reveal.signedTxHex])
+  for (const entry of isValid) {
+    if (!entry.allowed)
+      throw new Error(entry['reject-reason'])
+  }
+
+  return {
+    commitTxId: signedCommit.txId,
+    signedCommitTxHex: signedCommit.signedTxHex,
+    revealTxId: reveal.txId,
+    signedRevealTxHex: reveal.signedTxHex,
+    inscriptionId: `${reveal.txId}i0`,
+    commitVout: commit.commitVout,
+    postage,
+    secret,
   }
 }
 
