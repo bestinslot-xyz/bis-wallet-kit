@@ -1481,6 +1481,8 @@ export async function assembleReclaimCommitAndReveal(
   )
 
   const isValid = await validateTxes([signedCommit.signedTxHex, reveal.signedTxHex])
+  if (isValid == null)
+    throw new Error('Reclaim commit/reveal validation failed (testmempoolaccept request failed)')
   for (const entry of isValid) {
     if (!entry.allowed)
       throw new Error(entry['reject-reason'])
