@@ -32,6 +32,9 @@ import {
   mintAllCheckFees,
   mintWithExtraInputInCommitAll,
   mintWithExtraInputInCommitFeeRate,
+  mintWithReclaimsAll,
+  mintWithReclaimsCheckFees,
+  resolveReclaimInputs,
   sendInscriptionToOpReturnWithExtraInputsAndExtraOutputAll,
   sendInscriptionToOpReturnWithExtraInputsAndExtraOutputFeeRate,
 } from './mint'
@@ -1411,6 +1414,17 @@ function convertAmountToBRC20String(amountInDec18: bigint, decimals: number): st
   return fractionalPart ? `${integerPart}.${fractionalPart}` : integerPart
 }
 
+export interface ReclaimInscription {
+  inscriptionId: string
+  amount: bigint
+}
+
+export function sumReclaimAmounts(reclaims?: ReclaimInscription[] | null): bigint {
+  if (!reclaims)
+    return 0n
+  return reclaims.reduce((sum, r) => sum + r.amount, 0n)
+}
+
 /**
  * Creates and broadcasts a deposit order for swapping BRC-20 tokens by performing necessary checks, generating signatures, and making API calls to the swap backend. The function handles both BRC-2.0 and base BRC-20 token balances, checks allowances, and prepares the required data for the deposit order.
  *
@@ -1418,6 +1432,7 @@ function convertAmountToBRC20String(amountInDec18: bigint, decimals: number): st
  * @param tokenAmount The amount of the BRC-20 token to deposit, represented as a bigint in 18 decimals format.
  * @param feeRate The fee rate to use for the transactions, represented in sats/vbyte.
  * @param createAllowanceIfNeeded A boolean flag indicating whether to create an allowance for the BRC-2.0 token transfer if the current allowance is insufficient. Defaults to true.
+ * @param reclaimInscriptions Optional transfer inscriptions to reclaim toward the base-layer sufficiency check, each with `inscriptionId` and `amount` (bigint, 18 decimals).
  *
  * @returns {Promise<string[]>} A promise that resolves to an array of transaction IDs (txids) for the transactions involved in the deposit order, including the commit transaction, reveal transaction, and send-to-opreturn transaction.
  */
@@ -1426,6 +1441,7 @@ export async function createAndBroadcastDepositOrder(
   tokenAmount: bigint,
   feeRate: number,
   createAllowanceIfNeeded: boolean = true,
+  reclaimInscriptions?: ReclaimInscription[],
 ): Promise<string[]> {
   // Get connected wallet
   const walletInfo = getWalletInfo()
@@ -1466,9 +1482,10 @@ export async function createAndBroadcastDepositOrder(
     baseTokenDecimals = currentBaseAvailableTokenInfo.decimals
     baseTokenTicker = currentBaseAvailableTokenInfo.ticker
     useBaseAvailableBalanceAmount = tokenAmount - currentTokenAmount
-    if (currentBaseAvailableTokenAmount < useBaseAvailableBalanceAmount) {
+    const reclaimTotal = sumReclaimAmounts(reclaimInscriptions)
+    if (currentBaseAvailableTokenAmount + reclaimTotal < useBaseAvailableBalanceAmount) {
       console.error(
-        `Insufficient BRC-2.0 + BRC20 available balance. Current BRC-2.0: ${currentTokenAmount}, Available in base: ${currentBaseAvailableTokenAmount}, Required: ${tokenAmount}`,
+        `Insufficient BRC-2.0 + BRC20 available balance. Current BRC-2.0: ${currentTokenAmount}, Available in base: ${currentBaseAvailableTokenAmount}, Reclaimable: ${reclaimTotal}, Required: ${tokenAmount}`,
       )
       throw new Error('Insufficient BRC-2.0 + BRC20 available balance')
     }
@@ -1582,15 +1599,36 @@ export async function createAndBroadcastDepositOrder(
       ),
     )
 
-    baseDepositMintRes = await mintAll(
-      baseDepositInscriptionDetails,
-      feeRate,
-      null,
-      null,
-      0,
-      true,
-      signFn,
-    )
+    if ((reclaimInscriptions?.length ?? 0) > 0) {
+      const reclaimInputs = await resolveReclaimInputs(reclaimInscriptions!, ordinalsAddress)
+      const res = await mintWithReclaimsAll(
+        baseDepositInscriptionDetails,
+        reclaimInputs,
+        feeRate,
+        null,
+        true,
+        signFn,
+      )
+      baseDepositMintRes = {
+        signed_commit_tx_hex: res.signedCommitTxHex,
+        signed_reveal_tx_hex: res.signedRevealTxHex,
+        commit_txid: res.commitTxId,
+        reveal_txid: res.revealTxId,
+        inscription_id: res.inscriptionId,
+        secret: res.secret,
+      }
+    }
+    else {
+      baseDepositMintRes = await mintAll(
+        baseDepositInscriptionDetails,
+        feeRate,
+        null,
+        null,
+        0,
+        true,
+        signFn,
+      )
+    }
     baseDepositCommitTxHex = baseDepositMintRes.signed_commit_tx_hex
     baseDepositRevealTxHex = baseDepositMintRes.signed_reveal_tx_hex
     baseDepositCommitTxId = baseDepositMintRes.commit_txid
@@ -1883,6 +1921,7 @@ export async function getMinerFeesOfDepositOrder(
   tokenAmount: bigint,
   feeRate: number,
   createAllowanceIfNeeded: boolean = true,
+  reclaimInscriptions?: ReclaimInscription[],
 ): Promise<{
   needs_approval: boolean
   allowance_fees_total: number
@@ -1921,9 +1960,10 @@ export async function getMinerFeesOfDepositOrder(
     baseTokenDecimals = currentBaseAvailableTokenInfo.decimals
     baseTokenTicker = currentBaseAvailableTokenInfo.ticker
     useBaseAvailableBalanceAmt = tokenAmount - currentTokenAmount
-    if (currentBaseAvailableTokenAmount < useBaseAvailableBalanceAmt) {
+    const reclaimTotal = sumReclaimAmounts(reclaimInscriptions)
+    if (currentBaseAvailableTokenAmount + reclaimTotal < useBaseAvailableBalanceAmt) {
       console.error(
-        `Insufficient BRC-2.0 + BRC20 available balance. Current BRC-2.0: ${currentTokenAmount}, Available in base: ${currentBaseAvailableTokenAmount}, Required: ${tokenAmount}`,
+        `Insufficient BRC-2.0 + BRC20 available balance. Current BRC-2.0: ${currentTokenAmount}, Available in base: ${currentBaseAvailableTokenAmount}, Reclaimable: ${reclaimTotal}, Required: ${tokenAmount}`,
       )
       throw new Error('Insufficient BRC-2.0 + BRC20 available balance')
     }
@@ -2016,13 +2056,31 @@ export async function getMinerFeesOfDepositOrder(
       ),
     )
 
-    const baseDepositMintRes = await mintAllCheckFees(
-      baseDepositInscriptionDetails,
-      feeRate,
-      null,
-      null,
-      0,
-    )
+    let baseDepositMintRes
+    if ((reclaimInscriptions?.length ?? 0) > 0) {
+      const userOrdinalsWallet = getOrdinalsWallet()
+      if (!userOrdinalsWallet)
+        throw new Error('Ordinals wallet not found')
+      if (!userOrdinalsWallet.address)
+        throw new Error('Ordinals wallet address not found')
+      const ordinalsAddress = userOrdinalsWallet.address
+      const reclaimInputs = await resolveReclaimInputs(reclaimInscriptions!, ordinalsAddress)
+      baseDepositMintRes = await mintWithReclaimsCheckFees(
+        baseDepositInscriptionDetails,
+        reclaimInputs,
+        feeRate,
+        null,
+      )
+    }
+    else {
+      baseDepositMintRes = await mintAllCheckFees(
+        baseDepositInscriptionDetails,
+        feeRate,
+        null,
+        null,
+        0,
+      )
+    }
     baseDepositCommitTxHex = baseDepositMintRes.unsigned_commit_tx_hex
     baseDepositRevealTxHex = baseDepositMintRes.signed_reveal_tx_hex
     baseDepositInscriptionId = baseDepositMintRes.inscription_id

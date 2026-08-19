@@ -245,6 +245,7 @@ export async function unwrapBtc(pkscript: string, amount: bigint) {
  * @param amount - The amount of the token to deposit, specified as a bigint.
  * @param feeRate - The fee rate for the deposit operation.
  * @param createAllowanceIfNeeded - Whether to create an allowance if needed.
+ * @param reclaimInscriptions - Optional transfer inscriptions to reclaim toward the deposit, each with `inscriptionId` and `amount` (bigint, 18 decimals).
  * @returns A promise that resolves to an array of transaction IDs related to the deposit operation.
  */
 export async function deposit(
@@ -252,12 +253,14 @@ export async function deposit(
   amount: bigint,
   feeRate: number,
   createAllowanceIfNeeded: boolean = true,
+  reclaimInscriptions?: { inscriptionId: string, amount: bigint }[],
 ): Promise<string[]> {
   return await createAndBroadcastDepositOrder(
     tokenAddress,
     amount,
     feeRate,
     createAllowanceIfNeeded,
+    reclaimInscriptions,
   )
 }
 

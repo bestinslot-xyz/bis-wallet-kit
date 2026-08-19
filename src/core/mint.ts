@@ -1303,6 +1303,377 @@ async function buildCommitTx(
   }
 }
 
+export interface ReclaimInput {
+  utxo: string
+  value: number
+  script_type: UtxoInfo['script_type']
+}
+
+/**
+ * Builds an unsigned combined commit tx that reclaims transfer inscriptions
+ * back to the inscription wallet while paying for a new taproot commit
+ * output in the same transaction.
+ *
+ * Output layout:
+ *  - outputs `0..n-1`: one self-send per reclaim input, 1:1 with the
+ *    reclaim inputs (same index, same value), so the ordinal sat carried
+ *    by each reclaim input flows onto its own output.
+ *  - output `n`: the taproot commit output, funded purely by the cardinal
+ *    utxos (never by reclaimed sats).
+ *  - any trailing output: payer change.
+ *
+ * The candidate utxo set is passed in by the caller; the only network access
+ * is the PSBT-building step, which looks up each spent input's prevout tx
+ * (mirrors buildCommitTx).
+ */
+export async function buildReclaimCommitTx(
+  cardinalUtxos: UtxoInfo[],
+  reclaimInputs: ReclaimInput[],
+  payerWallet: WalletInfo,
+  inscriptionWallet: WalletInfo,
+  secret: string,
+  inscriptionDetails: InscriptionDetails,
+  feeRate: number,
+  postage: number,
+): Promise<{
+  unsignedCommitTx: bitcoinjs.Transaction
+  unsignedPsbtHex: string
+  commitVout: number
+  commitOutputValue: number
+  commitFee: number
+  revealFee: number
+}> {
+  if (reclaimInputs.length === 0)
+    throw new Error('buildReclaimCommitTx requires at least one reclaim input')
+
+  const seckey = get_seckey(secret)
+  const pubkey = get_pubkey(seckey, true)
+  const script = buildRevealScript(pubkey, inscriptionDetails)
+  const tapleaf = Tap.encodeScript(script)
+  const [tpubkey, cblock] = Tap.getPubKey(pubkey, { target: tapleaf })
+  const networkType = getBitcoinNetwork()
+  const commitTxAddress = bitcoinjs.payments.p2tr({
+    pubkey: Buffer.from(tpubkey, 'hex'),
+    network: networkType,
+  })
+
+  // reveal-fee sizing: identical dummy-reveal construction as buildCommitTx
+  const dummyRevealTx = Tx.create({
+    vin: [
+      {
+        txid: '00'.repeat(32),
+        vout: 0,
+        prevout: { value: 0, scriptPubKey: ['OP_1', tpubkey] },
+      },
+    ],
+    vout: [{ value: 0, scriptPubKey: inscriptionWallet.outputScript }],
+  })
+  dummyRevealTx.vin[0]!.witness = [Buff.hex('00'.repeat(64)), script, cblock]
+  const revealFee = Tx.util.getTxSize(dummyRevealTx).vsize * feeRate
+  const commitOutputValue = postage + revealFee
+
+  const commitWallet = new WalletInfo(false, null, commitTxAddress.address, null, tpubkey)
+
+  // reclaim self-sends first (1:1 with inputs), commit output after them
+  const forceInUtxos: UtxoInfoWithWallet[] = reclaimInputs.map(r => ({
+    utxo: r.utxo,
+    value: r.value,
+    script_type: r.script_type,
+    wallet: inscriptionWallet,
+  }))
+  const outputWallets: WalletInfo[] = reclaimInputs.map(() => inscriptionWallet)
+  const amounts: number[] = reclaimInputs.map(r => r.value)
+  outputWallets.push(commitWallet)
+  amounts.push(commitOutputValue)
+
+  const built = buildTransactionMultiOutput(
+    cardinalUtxos,
+    forceInUtxos,
+    payerWallet,
+    outputWallets,
+    amounts,
+    payerWallet, // change
+    feeRate,
+  )
+
+  const commitVout = reclaimInputs.length
+
+  const unsignedCommitPsbt = await buildPsbtFromTx(
+    built.tx,
+    cardinalUtxos,
+    payerWallet,
+    forceInUtxos,
+  )
+
+  return {
+    unsignedCommitTx: built.tx,
+    unsignedPsbtHex: unsignedCommitPsbt.toHex(),
+    commitVout,
+    commitOutputValue,
+    commitFee: built.tx_fee,
+    revealFee,
+  }
+}
+
+/**
+ * Builds, signs, and validates a full reclaim commit+reveal pair offline: creates
+ * a fresh secret, builds the reclaim commit tx (Task 1), signs its PSBT with the
+ * caller-supplied signFunc, builds the reveal tx spending the relocated commit
+ * output, and checks both signed txes with the mempool-accept validator before
+ * returning them for the caller to broadcast.
+ *
+ * Pure w.r.t. network selection: all utxos are passed in by the caller. Network
+ * access (prevout lookups, mempool-accept validation) is delegated to the same
+ * helpers buildCommitTx-based flows already use.
+ */
+export async function assembleReclaimCommitAndReveal(
+  cardinalUtxos: UtxoInfo[],
+  reclaimInputs: ReclaimInput[],
+  payerWallet: WalletInfo,
+  inscriptionWallet: WalletInfo,
+  inscriptionDetails: InscriptionDetails,
+  feeRate: number,
+  postage: number,
+  signFunc: SignFunction,
+): Promise<{
+  commitTxId: string
+  signedCommitTxHex: string
+  revealTxId: string
+  signedRevealTxHex: string
+  inscriptionId: string
+  commitVout: number
+  postage: number
+  secret: string
+}> {
+  const secret = createSecretToken()
+
+  const commit = await buildReclaimCommitTx(
+    cardinalUtxos,
+    reclaimInputs,
+    payerWallet,
+    inscriptionWallet,
+    secret,
+    inscriptionDetails,
+    feeRate,
+    postage,
+  )
+
+  const ordAddrIdxes = reclaimInputs.map((_, i) => i)
+
+  const signedCommit = await signFunc(
+    commit.unsignedPsbtHex,
+    payerWallet.addr!,
+    inscriptionWallet.addr!,
+    ordAddrIdxes,
+  )
+
+  const reveal = await buildRevealTx(
+    inscriptionWallet,
+    signedCommit.txId,
+    commit.commitOutputValue,
+    secret,
+    inscriptionDetails,
+    feeRate,
+    postage,
+    null,
+    null,
+    commit.commitVout,
+  )
+
+  const isValid = await validateTxes([signedCommit.signedTxHex, reveal.signedTxHex])
+  if (isValid == null)
+    throw new Error('Reclaim commit/reveal validation failed (testmempoolaccept request failed)')
+  for (const entry of isValid) {
+    if (!entry.allowed)
+      throw new Error(entry['reject-reason'])
+  }
+
+  return {
+    commitTxId: signedCommit.txId,
+    signedCommitTxHex: signedCommit.signedTxHex,
+    revealTxId: reveal.txId,
+    signedRevealTxHex: reveal.signedTxHex,
+    inscriptionId: `${reveal.txId}i0`,
+    commitVout: commit.commitVout,
+    postage,
+    secret,
+  }
+}
+
+/**
+ * Fetches the connected wallets' cardinal utxos and delegates to
+ * assembleReclaimCommitAndReveal to build, sign, and validate the reclaim
+ * commit+reveal pair, then broadcasts both txes unless dryRun is set.
+ */
+export async function mintWithReclaimsAll(
+  inscriptionDetails: InscriptionDetails,
+  reclaimInputs: ReclaimInput[],
+  feeRate: number,
+  postage: number | null,
+  dryRun: boolean,
+  signFunc: SignFunction,
+): Promise<{
+  commitTxId: string
+  signedCommitTxHex: string
+  revealTxId: string
+  signedRevealTxHex: string
+  inscriptionId: string
+  commitVout: number
+  postage: number
+  secret: string
+}> {
+  const userPaymentWallet = getPaymentWallet()
+  const userOrdinalsWallet = getOrdinalsWallet()
+  if (!userPaymentWallet || !userOrdinalsWallet)
+    throw new Error('Wallets not found')
+
+  const payerWallet = new WalletInfo(
+    false,
+    null,
+    userPaymentWallet.address,
+    null,
+    userPaymentWallet.pubkey,
+  )
+  const inscriptionWallet = new WalletInfo(
+    false,
+    null,
+    userOrdinalsWallet.address,
+    null,
+    userOrdinalsWallet.pubkey,
+  )
+
+  if (postage == null || postage <= 0) {
+    postage = getDustValue(inscriptionWallet)
+  }
+
+  const cardinalUtxos = await getCardinalUtxos(payerWallet.addr!)
+
+  const res = await assembleReclaimCommitAndReveal(
+    cardinalUtxos,
+    reclaimInputs,
+    payerWallet,
+    inscriptionWallet,
+    inscriptionDetails,
+    feeRate,
+    postage,
+    signFunc,
+  )
+
+  if (!dryRun)
+    await broadcastTxes([res.signedCommitTxHex, res.signedRevealTxHex])
+
+  return res
+}
+
+/**
+ * Estimates the fees for a reclaim mint by building the unsigned reclaim
+ * commit tx (Task 1) and a fee-sizing reveal tx offline, without signing or
+ * broadcasting. Mirrors mintWithExtraInputInCommitFeeRate.
+ */
+export async function mintWithReclaimsCheckFees(
+  inscriptionDetails: InscriptionDetails,
+  reclaimInputs: ReclaimInput[],
+  feeRate: number,
+  postage: number | null,
+): Promise<{
+  unsigned_commit_tx_hex: string
+  signed_reveal_tx_hex: string
+  inscription_id: string
+  total_fee: number
+  commit_vout: number
+}> {
+  const userPaymentWallet = getPaymentWallet()
+  const userOrdinalsWallet = getOrdinalsWallet()
+  if (!userPaymentWallet || !userOrdinalsWallet)
+    throw new Error('Wallets not found')
+
+  const payerWallet = new WalletInfo(
+    false,
+    null,
+    userPaymentWallet.address,
+    null,
+    userPaymentWallet.pubkey,
+  )
+  const inscriptionWallet = new WalletInfo(
+    false,
+    null,
+    userOrdinalsWallet.address,
+    null,
+    userOrdinalsWallet.pubkey,
+  )
+
+  if (postage == null || postage <= 0) {
+    postage = getDustValue(inscriptionWallet)
+  }
+
+  const cardinalUtxos = await getCardinalUtxos(payerWallet.addr!)
+
+  const secret = createSecretToken()
+  const commit = await buildReclaimCommitTx(
+    cardinalUtxos,
+    reclaimInputs,
+    payerWallet,
+    inscriptionWallet,
+    secret,
+    inscriptionDetails,
+    feeRate,
+    postage,
+  )
+
+  const dummyCommitTxId = commit.unsignedCommitTx.getId()
+  const reveal = await buildRevealTx(
+    inscriptionWallet,
+    dummyCommitTxId,
+    commit.commitOutputValue,
+    secret,
+    inscriptionDetails,
+    feeRate,
+    postage,
+    null,
+    null,
+    commit.commitVout,
+  )
+
+  return {
+    unsigned_commit_tx_hex: commit.unsignedCommitTx.toHex(),
+    signed_reveal_tx_hex: reveal.signedTxHex,
+    inscription_id: `${reveal.txId}i0`,
+    total_fee: commit.commitFee + commit.revealFee,
+    commit_vout: commit.commitVout,
+  }
+}
+
+/**
+ * Resolves reclaim inscriptions (transfer inscriptions to reclaim toward the
+ * base-deposit sufficiency check) into `ReclaimInput`s for
+ * `buildReclaimCommitTx`/`mintWithReclaimsAll`/`mintWithReclaimsCheckFees`.
+ *
+ * Looks up each inscription's current UTXO via `getInscriptionDetails` and
+ * enforces that it sits at sat offset 0 of its satpoint, which the reclaim
+ * commit tx assumes when self-sending the reclaim input.
+ */
+export async function resolveReclaimInputs(
+  reclaimInscriptions: { inscriptionId: string, amount: bigint }[],
+  ordinalsAddress: string,
+): Promise<ReclaimInput[]> {
+  const out: ReclaimInput[] = []
+  const seenUtxos = new Set<string>()
+  for (const r of reclaimInscriptions) {
+    const details = await getInscriptionDetails(r.inscriptionId, ordinalsAddress)
+    if (details == null)
+      throw new Error(`Reclaim inscription not found in wallet: ${r.inscriptionId}`)
+    if (details.satpoint.split(':')[2] !== '0')
+      throw new Error(`Reclaim inscription not at sat offset 0: ${r.inscriptionId}`)
+    const [txid, vout] = details.satpoint.split(':')
+    const utxo = `${txid}:${vout}`
+    if (seenUtxos.has(utxo))
+      throw new Error(`Duplicate reclaim UTXO: ${utxo} (inscription ${r.inscriptionId})`)
+    seenUtxos.add(utxo)
+    out.push({ utxo, value: details.value, script_type: details.script_type })
+  }
+  return out
+}
+
 interface BuildCommitTxMultipleResult {
   unsigned_psbt_hex: string
   output_value: number
@@ -2238,6 +2609,7 @@ async function buildRevealTx(
   postage: number,
   paymentWallet: WalletInfo | null,
   payment: number | null,
+  commitVout: number = 0,
 ): Promise<SignResponse> {
   if (payment == null || payment < 0)
     payment = 0
@@ -2253,7 +2625,7 @@ async function buildRevealTx(
   const inputs = [
     {
       txid: commitTxid,
-      vout: 0,
+      vout: commitVout,
     },
   ]
 
