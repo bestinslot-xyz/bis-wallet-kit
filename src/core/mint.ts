@@ -527,6 +527,8 @@ async function mintMultipleAll(
   )
 
   const isValid = await validateTxes([signedCommitTx.signedTxHex, revealTx.signed_reveal_tx_hex])
+  if (isValid == null)
+    throw new Error('Multiple inscription commit/reveal validation failed (testmempoolaccept request failed)')
 
   for (const entry of isValid) {
     if (!entry.allowed) {
@@ -2217,6 +2219,8 @@ async function sendMultiInscriptionWithBufferAll(
   )
 
   const isValid = await validateTxes([signedTx.signedTxHex])
+  if (isValid == null)
+    throw new Error('Multi-inscription buffered send validation failed (testmempoolaccept request failed)')
   for (const entry of isValid) {
     if (!entry.allowed) {
       throw new Error(entry['reject-reason'])
@@ -2347,6 +2351,8 @@ export async function sendInscriptionAll(
   const signedTx = await signFunc(unsignedPsbtHex, payerWallet.addr, inscriptionWallet.addr, [0])
 
   const isValid = await validateTxes([signedTx.signedTxHex])
+  if (isValid == null)
+    throw new Error('Inscription send validation failed (testmempoolaccept request failed)')
   for (const entry of isValid) {
     if (!entry.allowed) {
       throw new Error(entry['reject-reason'])
@@ -3079,6 +3085,8 @@ export async function mintAll(
   )
 
   const isValid = await validateTxes([signedCommitTx.signedTxHex, revealTx.signedTxHex])
+  if (isValid == null)
+    throw new Error('Mint commit/reveal validation failed (testmempoolaccept request failed)')
 
   for (const entry of isValid) {
     if (!entry.allowed) {
@@ -3185,6 +3193,8 @@ export async function mintAllPaymentWallet(
   )
 
   const isValid = await validateTxes([signedCommitTx.signedTxHex, revealTx.signedTxHex])
+  if (isValid == null)
+    throw new Error('Payment-wallet mint commit/reveal validation failed (testmempoolaccept request failed)')
 
   for (const entry of isValid) {
     if (!entry.allowed) {
@@ -3399,6 +3409,8 @@ export async function sendInscriptionToOpReturnAll(
   const signedTx = await signFunc(unsignedPsbtHex, payerWallet.addr, inscriptionWallet.addr, [0])
 
   const isValid = await validateTxes([signedTx.signedTxHex])
+  if (isValid == null)
+    throw new Error('OP_RETURN inscription send validation failed (testmempoolaccept request failed)')
 
   for (const entry of isValid) {
     if (!entry.allowed) {
@@ -3513,6 +3525,8 @@ export async function sendInscriptionInPaymentWalletToOpReturnAll(
   const signedTx = await signFunc(unsignedPsbtHex, payerWallet.addr, inscriptionWallet.addr, [])
 
   const isValid = await validateTxes([signedTx.signedTxHex])
+  if (isValid == null)
+    throw new Error('Payment-wallet OP_RETURN inscription send validation failed (testmempoolaccept request failed)')
 
   for (const entry of isValid) {
     if (!entry.allowed) {
@@ -3641,6 +3655,8 @@ export async function mintWithParentAll(
   }
 
   const isValid = await validateTxes([signedCommitTx.signedTxHex, signedRevealTx.signedTxHex])
+  if (isValid == null)
+    throw new Error('Mint-with-parent commit/reveal validation failed (testmempoolaccept request failed)')
 
   for (const entry of isValid) {
     if (!entry.allowed) {
@@ -3774,6 +3790,8 @@ export async function sendInscriptionToOpReturnWithExtraInputsAndExtraOutputAll(
   const signedTx = await signFunc(unsignedPsbtHex, payerWallet.addr, inscriptionWallet.addr, [0])
 
   const isValid = await validateTxes([signedTx.signedTxHex])
+  if (isValid == null)
+    throw new Error('OP_RETURN inscription send with extra inputs/output validation failed (testmempoolaccept request failed)')
 
   for (const entry of isValid) {
     if (!entry.allowed) {
@@ -3981,6 +3999,8 @@ export async function mintWithExtraInputInCommitAll(
   )
 
   const isValid = await validateTxes([signedCommitTx.signedTxHex, revealTx.signedTxHex])
+  if (isValid == null)
+    throw new Error('Mint with extra commit input validation failed (testmempoolaccept request failed)')
 
   for (const entry of isValid) {
     if (!entry.allowed) {
