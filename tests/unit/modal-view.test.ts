@@ -22,7 +22,7 @@ describe('bisModalView', () => {
     const view = new BisModalView(root)
     view.showConnect({ onSelect: vi.fn(), onError: vi.fn() })
     const buttons = root.querySelectorAll('[data-provider]')
-    expect(buttons.length).toBe(5)
+    expect(buttons.length).toBe(4)
     expect([...buttons].map(b => b.getAttribute('data-provider'))).toContain('unisat')
   })
 
@@ -53,7 +53,7 @@ describe('bisModalView', () => {
     expect(errorBox.querySelector('img')).toBeNull()
     expect(errorBox.textContent).toContain('<img src=x onerror=alert(1)>')
     root.querySelector<HTMLButtonElement>('[data-retry]')!.click()
-    expect(root.querySelectorAll('[data-provider]').length).toBe(5)
+    expect(root.querySelectorAll('[data-provider]').length).toBe(4)
   })
 
   it('applies the forced theme class', () => {
