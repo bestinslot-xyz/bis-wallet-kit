@@ -31,8 +31,7 @@ pnpm add react # only if you use the /react adapter
 
 ## Connect a wallet
 
-In a browser, open the modal and let the user pick a wallet (OKX, Unisat, Xverse, Leather, or Magic
-Eden):
+In a browser, open the modal and let the user pick a wallet (OKX, Unisat, Xverse, or Leather):
 
 ```ts
 import { modal, wallet } from '@bestinslot/wallet-kit'
