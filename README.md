@@ -11,7 +11,6 @@ Bitcoin-native dApps and web apps needing simple, multi-wallet support.
 - ✅ Unisat
 - ✅ Xverse
 - ✅ Leather
-- ✅ Magic Eden
 
 ## 📚 Documentation
 

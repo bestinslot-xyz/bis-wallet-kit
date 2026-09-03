@@ -8,7 +8,6 @@ declare global {
       request: RequestFn
       listen: ListenFn
     }
-    magicEden?: any
     okxwallet?: any
     XverseProviders?: any
   }

@@ -9,7 +9,7 @@ pnpm add @bestinslot/wallet-kit
 
 The package ships as ESM only, in two flavours resolved automatically by your environment:
 
-- **browser** — extension wallets (OKX, Unisat, Xverse, Leather, Magic Eden) + the framework-free
+- **browser** — extension wallets (OKX, Unisat, Xverse, Leather) + the framework-free
   connect modal, plus all the feature APIs.
 - **server** (Node/Bun) — the same feature APIs (swap, inscriptions, BRC-2.0, balances) connected
   via a local WIF wallet (`wallet.connectLocalWallet`), with no Vue or modal. Ideal for

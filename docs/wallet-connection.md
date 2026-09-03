@@ -17,7 +17,7 @@ modal.setTheme('dark') // 'light' | 'dark' | 'system' (default 'system')
 Lower-level modal controls are also exported: `modal.create`, `modal.showConnect`,
 `modal.showConnectConfirmation`, `modal.showError`, `modal.hide`.
 
-Supported providers: `okx`, `unisat`, `xverse`, `leather`, `me` (Magic Eden), and `local` (Node only
+Supported providers: `okx`, `unisat`, `xverse`, `leather`, and `local` (Node only
 — see below).
 
 ## Sessions
@@ -26,7 +26,7 @@ A session describes the connected wallet:
 
 ```ts
 interface BISSession {
-  provider: 'okx' | 'unisat' | 'xverse' | 'leather' | 'me' | 'local'
+  provider: 'okx' | 'unisat' | 'xverse' | 'leather' | 'local'
   wallets: BISWallet[]
   signature: string | null
 }
