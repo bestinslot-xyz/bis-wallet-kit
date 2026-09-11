@@ -46,6 +46,7 @@ function fakeCardinalUtxo(txid: string, value: number) {
 let utxos: ReturnType<typeof fakeCardinalUtxo>[]
 let prevHexByTxid: Record<string, string>
 let mempoolResult: unknown
+let broadcastShouldFail: boolean
 const broadcastBodies: string[][] = []
 let fetchMock: ReturnType<typeof vi.fn>
 
@@ -58,6 +59,7 @@ describe('local sendBTC', () => {
     utxos = []
     prevHexByTxid = {}
     mempoolResult = [{ allowed: true }]
+    broadcastShouldFail = false
     broadcastBodies.length = 0
 
     fetchMock = vi.fn(async (url: string | URL, opts?: any) => {
@@ -69,6 +71,8 @@ describe('local sendBTC', () => {
       if (u.includes('/testmempoolaccept'))
         return jsonResponse(mempoolResult)
       if (u.includes('/sendrawtransactions')) {
+        if (broadcastShouldFail)
+          throw new Error('network down')
         broadcastBodies.push(JSON.parse(opts.body).txhexes)
         return jsonResponse({ result: 'ok' })
       }
@@ -119,6 +123,15 @@ describe('local sendBTC', () => {
 
     await expect(wallet.sendBTC(50000, RECIPIENT, 1)).rejects.toThrow(/Not enough funds/)
     assert.equal(broadcastBodies.length, 0)
+  })
+
+  it('throws when broadcasting fails instead of reporting success', async () => {
+    const txid = 'dd'.repeat(32)
+    utxos = [fakeCardinalUtxo(txid, 100000)]
+    prevHexByTxid[txid] = prevTxHex(100000)
+    broadcastShouldFail = true
+
+    await expect(wallet.sendBTC(50000, RECIPIENT, 1)).rejects.toThrow(/broadcast/i)
   })
 
   it('requires a positive feeRate for the local wallet', async () => {

@@ -474,7 +474,10 @@ async function sendBTC(amountSats: number, toAddress: string, feeRate?: number):
     }
   }
 
-  await broadcastTxes([signed.signedTxHex])
+  const broadcastResult = await broadcastTxes([signed.signedTxHex])
+  if (broadcastResult == null) {
+    throw new Error('Failed to broadcast transaction.')
+  }
 
   return signed.txId
 }

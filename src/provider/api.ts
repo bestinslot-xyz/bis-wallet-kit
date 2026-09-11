@@ -86,6 +86,7 @@ export interface BISProvider {
    *
    * @param amountSats The amount of Bitcoin to send in satoshis. This value will be sent to the provider to initiate the transaction.
    * @param toAddress The address to which the Bitcoin should be sent. This value will be sent to the provider along with the amount to initiate the transaction.
+   * @param feeRate Optional fee rate in satoshis per virtual byte (sat/vB). Extension providers estimate the fee themselves and ignore this value; the local (WIF) provider builds the transaction in-process and requires it.
    * @returns A promise that resolves to the transaction ID (txid) of the sent transaction as a string. This allows developers to track the transaction on the blockchain. If there is an error in sending the Bitcoin, the promise will be rejected with a descriptive error message.
    */
   sendBTC: (amountSats: number, toAddress: string, feeRate?: number) => Promise<string>
