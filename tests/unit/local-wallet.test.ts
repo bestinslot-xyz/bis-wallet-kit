@@ -80,4 +80,20 @@ describe('createWallet (local key generation)', () => {
     assert.equal(session?.provider, 'local')
     assert.equal(session?.wallets[0]?.address, w.address)
   })
+
+  it('rejects an invalid wallet type without mutating network state', async () => {
+    await wallet.connectLocalWallet(WIF, 'testnet', 'p2wpkh', 'unisat')
+    await expect(
+      wallet.createWallet('mainnet', 'p2sh' as any),
+    ).rejects.toThrow(/Invalid wallet type/)
+    assert.equal(wallet.getNetwork(), 'testnet')
+  })
+
+  it('rejects an invalid wallet source without mutating network state', async () => {
+    await wallet.connectLocalWallet(WIF, 'testnet', 'p2wpkh', 'unisat')
+    await expect(
+      wallet.createWallet('mainnet', 'p2tr', 'phantom' as any),
+    ).rejects.toThrow(/Invalid wallet source/)
+    assert.equal(wallet.getNetwork(), 'testnet')
+  })
 })

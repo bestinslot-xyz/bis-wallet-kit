@@ -121,6 +121,14 @@ export async function createWallet(
   walletType: LocalWalletType = 'p2wpkh',
   sourceWallet: LocalWalletSource = 'unisat',
 ): Promise<BISWallet & { wif: string }> {
+  if (walletType !== 'p2wpkh' && walletType !== 'p2tr') {
+    throw new Error('Invalid wallet type. Supported types are p2wpkh and p2tr.')
+  }
+
+  if (sourceWallet !== 'unisat' && sourceWallet !== 'okx') {
+    throw new Error('Invalid wallet source. Supported sources are unisat and okx.')
+  }
+
   setNetwork(network)
   const keyPair = ECPairFactory(tinysecp).makeRandom({ network: getBitcoinNetwork() })
   const wif = keyPair.toWIF()
