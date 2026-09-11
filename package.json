@@ -1,7 +1,7 @@
 {
   "name": "@bestinslot/wallet-kit",
   "type": "module",
-  "version": "0.6.26",
+  "version": "0.7.0",
   "private": false,
   "packageManager": "pnpm@10.28.2",
   "description": "A lightweight JavaScript library for connecting Bitcoin wallets with a unified API.",
@@ -50,6 +50,7 @@
     "dev": "vite",
     "build": "vue-tsc -b && vite build",
     "build:debug": "vue-tsc -b && vite build --minify=false",
+    "prepublishOnly": "vue-tsc -b && vite build && node scripts/verify-build-flavours.mjs",
     "preview": "vite preview",
     "lint": "eslint",
     "lint:fix": "prettier --write . && eslint --fix",
@@ -129,6 +130,6 @@
     "vue-tsc": "^3.2.2"
   },
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com/"
+    "access": "public"
   }
 }
