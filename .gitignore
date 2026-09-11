@@ -29,5 +29,5 @@ docs/api/
 *.sln
 *.sw?
 
-# npm lockfile — this repo uses pnpm
-package-lock.json
+# npm lockfile at the repo root — this repo uses pnpm (examples may manage their own)
+/package-lock.json
