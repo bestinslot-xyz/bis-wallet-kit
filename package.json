@@ -131,5 +131,11 @@
   },
   "publishConfig": {
     "access": "public"
+  },
+  "pnpm": {
+    "overrides": {
+      "ws": "^8.21.0",
+      "elliptic>bn.js": "^4.12.3"
+    }
   }
 }

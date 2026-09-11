@@ -28,3 +28,6 @@ docs/api/
 *.njsproj
 *.sln
 *.sw?
+
+# npm lockfile — this repo uses pnpm
+package-lock.json
