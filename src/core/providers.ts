@@ -209,15 +209,20 @@ export async function signMessageLocalVerifyDeterministic(message: string): Prom
  *
  * @param amountSats The amount to send, in satoshis.
  * @param toAddress The destination address.
+ * @param feeRate Optional fee rate in sat/vB. Extension providers estimate the fee themselves and ignore this; the local (WIF) provider requires it.
  * @returns The transaction ID of the sent transaction.
  */
-export async function sendBTC(amountSats: number, toAddress: string): Promise<string> {
+export async function sendBTC(
+  amountSats: number,
+  toAddress: string,
+  feeRate?: number,
+): Promise<string> {
   if (!Number.isInteger(amountSats) || amountSats <= 0) {
     throw new Error('amountSats must be a positive integer (satoshis).')
   }
 
   const provider = requireProvider(getWalletInfo()?.provider)
-  const txid = await provider.sendBTC(amountSats, toAddress)
+  const txid = await provider.sendBTC(amountSats, toAddress, feeRate)
 
   if (!txid) {
     console.error('Send BTC result not found.')

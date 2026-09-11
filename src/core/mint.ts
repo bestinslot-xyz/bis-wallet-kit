@@ -825,7 +825,7 @@ interface BuildTransactionResult {
 // amount is in sat
 // payment_wallet is the wallet to send the payment to (can be null)
 // payment is the amount to send to payment_wallet (can be null, bust be bigger than DUST_LIMIT)
-function buildTransaction(
+export function buildTransaction(
   utxoInfos: UtxoInfo[],
   forceInUtxos: UtxoInfoWithWallet[],
   payerWallet: WalletInfo,
@@ -1027,7 +1027,7 @@ interface TransactionInOuts {
   ins: { hash: Buffer, index: number }[]
   outs: { value: number, script: Buffer }[]
 }
-async function buildPsbtFromTx(
+export async function buildPsbtFromTx(
   tx: TransactionInOuts,
   cardinalUtxos: UtxoInfo[],
   payerWallet: WalletInfo,

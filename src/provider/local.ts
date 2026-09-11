@@ -8,11 +8,19 @@ import * as bitcoinjs from 'bitcoinjs-lib'
 import * as bitcoinMessage from 'bitcoinjs-message'
 import { ECPairFactory } from 'ecpair'
 import * as tinysecp from 'tiny-secp256k1'
-import { broadcastTxes, finalizePsbtInputs, hexToBase64 } from '../core/helpers'
+import {
+  broadcastTxes,
+  finalizePsbtInputs,
+  getCardinalUtxos,
+  hexToBase64,
+  validateTxes,
+} from '../core/helpers'
+import { buildPsbtFromTx, buildTransaction } from '../core/mint'
 import { memoryStorage } from '../core/storage'
 import { saveWalletInfo } from '../core/store'
 import { getNetwork, setNetwork } from '../core/store-network'
 import { getBitcoinNetwork } from '../lib/bitcoin'
+import { WalletInfo } from '../types/wallet'
 
 // @ts-expect-error not in use
 // eslint-disable-next-line unused-imports/no-unused-vars
@@ -404,15 +412,71 @@ async function sign(
 }
 
 /**
- * Sends Bitcoin (BTC) from the locally stored wallet to a specified address. The sendBTC function is currently not supported in this local provider implementation, and it throws an error indicating that sending BTC is not supported. This function is intended to allow users to send BTC directly from their locally stored wallet to another address, but due to the limitations of the local provider, this functionality is not available at this time. If there is a need for sending BTC in the future, this function can be implemented with the necessary logic to create and broadcast a transaction using the locally stored wallet information.
+ * Sends Bitcoin (BTC) from the locally stored wallet to a specified address. Unlike the
+ * extension providers — which delegate to the wallet extension's own send flow — the local
+ * provider builds, signs, and broadcasts the transaction in-process. It funds the send from
+ * the wallet's cardinal (non-inscribed) UTXOs, selecting inputs and computing change back to
+ * the wallet, then validates the transaction against the mempool before broadcasting.
  *
- * @param _amountSats The amount of Bitcoin to be sent, specified in satoshis as a number. This parameter represents the quantity of BTC that the user intends to send from their locally stored wallet to the specified address. The amount should be provided in satoshis, which is the smallest unit of Bitcoin, where 1 BTC is equal to 100 million satoshis.
- * @param _toAddress The destination address to which the Bitcoin should be sent. This is the address of the recipient who will receive the BTC from the sender's locally stored wallet. The address should be a valid Bitcoin address that can receive funds on the appropriate network (mainnet, testnet, etc.) based on the wallet's network settings.
+ * @param amountSats The amount of Bitcoin to send, in satoshis. Must be a positive integer.
+ * @param toAddress The destination address. Must be valid for the wallet's current network.
+ * @param feeRate The fee rate in satoshis per virtual byte (sat/vB). Required for the local provider (there is no fee estimator); throws if missing or not positive.
  *
- * @throws An error indicating that sending BTC is not supported in the local provider implementation. This is a placeholder function that can be implemented in the future if there is a need for sending BTC directly from the locally stored wallet, but currently it does not provide any functionality for creating or broadcasting transactions.
+ * @returns A promise resolving to the broadcasted transaction's id.
+ * @throws If amountSats is not a positive integer, feeRate is missing/non-positive, there are not enough funds, or the transaction is rejected by the mempool.
  */
-function sendBTC(_amountSats: number, _toAddress: string): Promise<string> {
-  throw new Error('Send BTC not supported.')
+async function sendBTC(amountSats: number, toAddress: string, feeRate?: number): Promise<string> {
+  if (!Number.isInteger(amountSats) || amountSats <= 0) {
+    throw new Error('amountSats must be a positive integer (satoshis).')
+  }
+
+  if (feeRate == null || !Number.isFinite(feeRate) || feeRate <= 0) {
+    throw new Error('feeRate (sat/vB) must be a positive number for the local wallet.')
+  }
+
+  await checkNetwork()
+
+  const walletInfo = await getWalletInfo()
+  if (!walletInfo) {
+    throw new Error('No private key found.')
+  }
+
+  const payerAddress = walletInfo.address
+  const payerPubkey = Buffer.from(walletInfo.keyPair.publicKey).toString('hex')
+  const payerWallet = new WalletInfo(false, null, payerAddress, null, payerPubkey)
+  const recipientWallet = new WalletInfo(false, null, toAddress, null, null)
+
+  const cardinalUtxos = await getCardinalUtxos(payerAddress)
+
+  const unsignedTxResp = buildTransaction(
+    cardinalUtxos,
+    [],
+    payerWallet,
+    [],
+    recipientWallet,
+    payerWallet,
+    feeRate,
+    amountSats,
+    null,
+    null,
+  )
+
+  const unsignedPsbt = await buildPsbtFromTx(unsignedTxResp.tx, cardinalUtxos, payerWallet, [])
+  const signed = await sign(unsignedPsbt.toHex(), payerAddress, payerAddress, [])
+
+  const isValid = await validateTxes([signed.signedTxHex])
+  if (isValid == null) {
+    throw new Error('Send BTC validation failed (testmempoolaccept request failed).')
+  }
+  for (const entry of isValid) {
+    if (!entry.allowed) {
+      throw new Error(entry['reject-reason'])
+    }
+  }
+
+  await broadcastTxes([signed.signedTxHex])
+
+  return signed.txId
 }
 
 export const LOCAL: BISProvider = {
