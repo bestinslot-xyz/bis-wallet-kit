@@ -96,6 +96,38 @@ export async function saveWallet(
   return wallet
 }
 
+/**
+ * Generates a brand-new single-key Bitcoin wallet and connects it, returning
+ * the private key alongside the derived address. This is the counterpart to
+ * {@link saveWallet}: instead of importing an existing WIF, it produces a fresh
+ * random key (via secp256k1) for the given network and wallet type, then loads
+ * it through the same path so the returned address is guaranteed to re-import
+ * to the same key. It is intended for headless agents that need to create a
+ * fundable address on the fly.
+ *
+ * The wallet is a single (non-HD) key — there is no mnemonic or derivation
+ * path. The returned WIF is the ONLY secret; the caller is solely responsible
+ * for storing it. This function does not persist the key anywhere beyond the
+ * in-memory session used by the current process.
+ *
+ * @param network The network the wallet is for, e.g. 'mainnet' or 'testnet'. This determines the WIF version and address format.
+ * @param walletType The address type to derive, either 'p2wpkh' (default) or 'p2tr'.
+ * @param sourceWallet The source label recorded for the session, either 'unisat' (default) or 'okx'.
+ *
+ * @returns A promise resolving to the connected wallet ({ address, pubkey, purpose }) plus the generated `wif` private key. Throws if the wallet type or source is invalid.
+ */
+export async function createWallet(
+  network: BISNetwork,
+  walletType: LocalWalletType = 'p2wpkh',
+  sourceWallet: LocalWalletSource = 'unisat',
+): Promise<BISWallet & { wif: string }> {
+  setNetwork(network)
+  const keyPair = ECPairFactory(tinysecp).makeRandom({ network: getBitcoinNetwork() })
+  const wif = keyPair.toWIF()
+  const wallet = await saveWallet(wif, network, walletType, sourceWallet)
+  return { ...wallet, wif }
+}
+
 interface LocalWalletInfo {
   xOnly: Buffer
   keyPair: ECPairInterface
