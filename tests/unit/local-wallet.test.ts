@@ -45,3 +45,55 @@ describe('local wallet provider', () => {
     assert.ok(typeof sig === 'string' && sig.length > 0)
   })
 })
+
+describe('createWallet (local key generation)', () => {
+  it('generates a p2wpkh wallet with a wif, address, pubkey and purpose', async () => {
+    const w = await wallet.createWallet('testnet', 'p2wpkh')
+    assert.ok(w.wif && typeof w.wif === 'string')
+    assert.match(w.address, /^tb1q/)
+    assert.ok(w.pubkey)
+    assert.equal(w.purpose, 'all')
+  })
+
+  it('generates a p2tr wallet', async () => {
+    const w = await wallet.createWallet('testnet', 'p2tr')
+    assert.match(w.address, /^tb1p/)
+  })
+
+  it('generates a wif that re-imports to the same address (round-trip)', async () => {
+    const generated = await wallet.createWallet('testnet', 'p2wpkh')
+    const reimported = await wallet.connectLocalWallet(generated.wif, 'testnet', 'p2wpkh', 'unisat')
+    assert.equal(reimported.address, generated.address)
+    assert.equal(reimported.pubkey, generated.pubkey)
+  })
+
+  it('generates a distinct key on each call', async () => {
+    const a = await wallet.createWallet('testnet', 'p2wpkh')
+    const b = await wallet.createWallet('testnet', 'p2wpkh')
+    assert.notEqual(a.wif, b.wif)
+    assert.notEqual(a.address, b.address)
+  })
+
+  it('connects the generated wallet as a retrievable session', async () => {
+    const w = await wallet.createWallet('testnet', 'p2tr')
+    const session = wallet.getSession()
+    assert.equal(session?.provider, 'local')
+    assert.equal(session?.wallets[0]?.address, w.address)
+  })
+
+  it('rejects an invalid wallet type without mutating network state', async () => {
+    await wallet.connectLocalWallet(WIF, 'testnet', 'p2wpkh', 'unisat')
+    await expect(
+      wallet.createWallet('mainnet', 'p2sh' as any),
+    ).rejects.toThrow(/Invalid wallet type/)
+    assert.equal(wallet.getNetwork(), 'testnet')
+  })
+
+  it('rejects an invalid wallet source without mutating network state', async () => {
+    await wallet.connectLocalWallet(WIF, 'testnet', 'p2wpkh', 'unisat')
+    await expect(
+      wallet.createWallet('mainnet', 'p2tr', 'phantom' as any),
+    ).rejects.toThrow(/Invalid wallet source/)
+    assert.equal(wallet.getNetwork(), 'testnet')
+  })
+})
