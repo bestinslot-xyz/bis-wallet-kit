@@ -44,6 +44,14 @@ describe('local wallet provider', () => {
     const sig = await wallet.signMessageLocalVerify('gm', 'payment')
     assert.ok(typeof sig === 'string' && sig.length > 0)
   })
+
+  it('lockLocalWallet clears the in-memory key so signing is no longer possible', async () => {
+    await wallet.connectLocalWallet(WIF, 'testnet', 'p2wpkh', 'unisat')
+    assert.ok(wallet.getSession())
+    wallet.lockLocalWallet()
+    assert.equal(wallet.getSession(), null)
+    await expect(wallet.signMessageLocalVerify('gm', 'payment')).rejects.toThrow()
+  })
 })
 
 describe('createWallet (local key generation)', () => {

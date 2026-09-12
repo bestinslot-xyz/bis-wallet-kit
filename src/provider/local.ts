@@ -17,7 +17,7 @@ import {
 } from '../core/helpers'
 import { buildPsbtFromTx, buildTransaction } from '../core/mint'
 import { memoryStorage } from '../core/storage'
-import { saveWalletInfo } from '../core/store'
+import { clearWalletInfo, saveWalletInfo } from '../core/store'
 import { getNetwork, setNetwork } from '../core/store-network'
 import { getBitcoinNetwork } from '../lib/bitcoin'
 import { WalletInfo } from '../types/wallet'
@@ -480,6 +480,25 @@ async function sendBTC(amountSats: number, toAddress: string, feeRate?: number):
   }
 
   return signed.txId
+}
+
+/**
+ * Locks the local (WIF) wallet by evicting all in-memory key material and
+ * clearing the connected session. After calling this, no private key remains
+ * resident in the process: `getSession()` returns `null`, and any subsequent
+ * sign/send call will fail with "No private key found." until a wallet is
+ * reconnected via {@link saveWallet} (`connectLocalWallet`) or {@link createWallet}.
+ *
+ * This is intended for callers (e.g. an MCP server) that want to hold a key
+ * only for the duration of a single approved operation rather than keep it
+ * resident for the life of the process.
+ */
+export function lockLocalWallet(): void {
+  LOCAL_WALLET_STORAGE.remove(PRIV_KEY)
+  LOCAL_WALLET_STORAGE.remove(NETWORK_KEY)
+  LOCAL_WALLET_STORAGE.remove(WALLET_TYPE_KEY)
+  LOCAL_WALLET_STORAGE.remove(SOURCE_KEY)
+  clearWalletInfo()
 }
 
 export const LOCAL: BISProvider = {
