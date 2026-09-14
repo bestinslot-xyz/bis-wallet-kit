@@ -486,8 +486,10 @@ async function sendBTC(amountSats: number, toAddress: string, feeRate?: number):
  * Locks the local (WIF) wallet by evicting all in-memory key material and
  * clearing the connected session. After calling this, no private key remains
  * resident in the process: `getSession()` returns `null`, and any subsequent
- * sign/send call will fail with "No private key found." until a wallet is
- * reconnected via {@link saveWallet} (`connectLocalWallet`) or {@link createWallet}.
+ * sign/send call will fail until a wallet is reconnected via {@link saveWallet}
+ * (`connectLocalWallet`) or {@link createWallet}. (The exact error depends on the
+ * call path — e.g. a missing key or, if the network was also cleared, a network
+ * check — so callers should not rely on a specific error message.)
  *
  * This is intended for callers (e.g. an MCP server) that want to hold a key
  * only for the duration of a single approved operation rather than keep it
