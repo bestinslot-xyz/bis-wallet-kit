@@ -1,40 +1,52 @@
 #!/usr/bin/env node
-// Bump the version, commit it with our release convention, and cut a matching
-// annotated git tag (vX.Y.Z). Run `pnpm publish` afterwards.
+// Cut a release for @bestinslot/wallet-kit. `main` is protected (changes must
+// go through a PR), so this is a two-step flow:
 //
-//   pnpm release patch     -> 0.7.1 -> 0.7.2
-//   pnpm release minor     -> 0.7.1 -> 0.8.0
-//   pnpm release major     -> 0.7.1 -> 1.0.0
-//   pnpm release 1.2.3      -> set an explicit version
+//   1. pnpm release <major|minor|patch|x.y.z>
+//        Branches off origin/main, bumps package.json, and opens a
+//        "chore(release): bump version to X.Y.Z" PR against main.
+//
+//   2. pnpm release:tag        (after that PR is merged)
+//        Cuts the annotated vX.Y.Z tag on the merged main commit and pushes
+//        it. Tagging is deferred to here because PRs squash-merge, so the tag
+//        must point at the real merge commit — not the pre-merge bump commit.
+//
+// Then run `pnpm publish`.
 //
 // Flags:
-//   --push   also push the branch + tag to origin
 //   --dry    print what would happen without changing anything
 
 import { execFileSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
 import process from 'node:process'
 
 const args = process.argv.slice(2)
-const push = args.includes('--push')
 const dry = args.includes('--dry')
+const tagOnly = args.includes('--tag')
 const bump = args.find(a => !a.startsWith('--'))
 
 const ALLOWED = ['major', 'minor', 'patch']
 // Fully-anchored semver (with optional prerelease) so only the documented
 // `x.y.z` form is accepted, e.g. `1.2.3foo` is rejected.
-const isExplicit = bump !== undefined && /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/.test(bump)
+const SEMVER = /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/
 
-if (bump === undefined || (!ALLOWED.includes(bump) && !isExplicit)) {
-  console.error(
-    `Usage: pnpm release <major|minor|patch|x.y.z> [--push] [--dry]\n` +
-      `Got: ${bump ?? '(nothing)'}`
-  )
+const die = msg => {
+  console.error(msg)
   process.exit(1)
 }
 
-// Inherit stdio so the operator sees the real command output (and stderr) when
-// `npm version` or `git push` fails, instead of a swallowed Node stack trace.
+// Capture command output. On failure, exit cleanly with the command's own
+// stderr instead of letting a raw Node stack trace surface.
+const capture = (cmd, cmdArgs) => {
+  try {
+    return execFileSync(cmd, cmdArgs, { encoding: 'utf8' }).trim()
+  } catch (err) {
+    const detail = (err.stderr || err.message || '').toString().trim()
+    die(`Command failed: ${cmd} ${cmdArgs.join(' ')}\n${detail}`)
+  }
+}
+
+// Run for effect; inherit stdio so the operator sees real command output when
+// something fails, instead of a swallowed Node stack trace.
 const run = (cmd, cmdArgs) => {
   if (dry) {
     console.log(`[dry] ${cmd} ${cmdArgs.join(' ')}`)
@@ -43,50 +55,88 @@ const run = (cmd, cmdArgs) => {
   execFileSync(cmd, cmdArgs, { stdio: 'inherit' })
 }
 
-// Preconditions: clean working tree and on main. (We do not verify main is
-// up-to-date with its upstream — push/pull is left to the operator.)
-const status = execFileSync('git', ['status', '--porcelain'], { encoding: 'utf8' })
-if (status.trim()) {
-  console.error('Working tree is not clean. Commit or stash first:\n' + status)
-  process.exit(1)
+// The version currently on origin/main is the authoritative base for both flows.
+const baseVersionOnMain = () => {
+  const pkg = JSON.parse(capture('git', ['show', 'origin/main:package.json']))
+  return pkg.version
 }
 
-const branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
-  encoding: 'utf8',
-}).trim()
-if (branch !== 'main') {
-  console.error(`Refusing to release from "${branch}"; switch to main first.`)
-  process.exit(1)
+const nextVersion = (cur, kind) => {
+  if (SEMVER.test(kind)) return kind
+  // Extract just the numeric core so a prerelease base (e.g. 1.2.3-beta.1)
+  // still yields a clean major/minor/patch bump.
+  const m = cur.match(/^(\d+)\.(\d+)\.(\d+)/)
+  if (!m) die(`Can't parse base version "${cur}".`)
+  const [maj, min, pat] = m.slice(1, 4).map(Number)
+  if (kind === 'major') return `${maj + 1}.0.0`
+  if (kind === 'minor') return `${maj}.${min + 1}.0`
+  return `${maj}.${min}.${pat + 1}`
 }
 
-const before = JSON.parse(readFileSync('package.json', 'utf8')).version
-console.log(`Current version: ${before} (branch ${branch})`)
+// Validate the bump arg up front (before any git work) for the PR flow.
+if (!tagOnly && (bump === undefined || (!ALLOWED.includes(bump) && !SEMVER.test(bump)))) {
+  die(
+    `Usage:\n` +
+      `  pnpm release <major|minor|patch|x.y.z> [--dry]   open the bump PR\n` +
+      `  pnpm release:tag [--dry]                          tag main after merge\n` +
+      `Got: ${bump ?? '(nothing)'}`
+  )
+}
 
-// `npm version` bumps package.json, commits, and tags in one shot.
-// -m keeps our "chore(release): bump version to X.Y.Z" convention; the tag
-// defaults to vX.Y.Z.
-run('npm', ['version', bump, '-m', 'chore(release): bump version to %s'])
+// Shared precondition: clean working tree.
+const status = capture('git', ['status', '--porcelain'])
+if (status) die('Working tree is not clean. Commit or stash first:\n' + status)
 
-if (dry) {
-  // We can't know the resolved version without actually bumping, so describe
-  // the intent rather than claiming a concrete tag was cut.
-  console.log(`\n[dry] Would bump "${bump}", commit, and cut the vX.Y.Z tag.`)
-  if (push) console.log('[dry] Would push the branch and tag to origin.')
+run('git', ['fetch', 'origin', 'main', '--tags'])
+
+if (tagOnly) {
+  // Step 2: tag the merged commit on origin/main.
+  const version = baseVersionOnMain()
+  const tag = `v${version}`
+  const existing = capture('git', ['tag', '--list', tag])
+  if (existing) die(`Tag ${tag} already exists locally. Nothing to do.`)
+
+  run('git', ['tag', '-a', tag, 'origin/main', '-m', tag])
+  run('git', ['push', 'origin', tag])
+  console.log(
+    dry
+      ? `\n[dry] Would cut ${tag} on origin/main and push it.`
+      : `\nCut and pushed ${tag} (pointing at origin/main). Now run \`pnpm publish\`.`
+  )
   process.exit(0)
 }
 
-const after = JSON.parse(readFileSync('package.json', 'utf8')).version
-const tag = `v${after}`
-console.log(`\nCut ${tag} (commit + tag created locally).`)
+// Step 1: open the version-bump PR.
+const base = baseVersionOnMain()
+const version = nextVersion(base, bump)
+const branch = `release/v${version}`
+const message = `chore(release): bump version to ${version}`
 
-if (push) {
-  run('git', ['push', '--follow-tags', 'origin', branch])
-  console.log(`Pushed ${branch} and ${tag} to origin.`)
-} else {
-  console.log(
-    `\nNext:\n` +
-      `  git push --follow-tags origin main   # publish the tag\n` +
-      `  pnpm publish                          # build + release to npm\n` +
-      `(or re-run with --push to push automatically)`
-  )
+console.log(`Base (origin/main): ${base} -> new: ${version} on ${branch}`)
+
+run('git', ['switch', '-c', branch, 'origin/main'])
+run('npm', ['version', '--no-git-tag-version', version])
+run('git', ['commit', '-am', message])
+run('git', ['push', '-u', 'origin', branch])
+
+if (dry) {
+  console.log(`\n[dry] Would open a PR: "${message}" (${branch} -> main).`)
+  process.exit(0)
 }
+
+const url = capture('gh', [
+  'pr',
+  'create',
+  '--base',
+  'main',
+  '--head',
+  branch,
+  '--title',
+  message,
+  '--body',
+  `Automated release bump to \`${version}\`.\n\nAfter merge, run \`pnpm release:tag\` to cut \`v${version}\` on main, then \`pnpm publish\`.`,
+])
+
+console.log(
+  `\nOpened release PR: ${url}\n` + `After it merges: \`pnpm release:tag\` then \`pnpm publish\`.`
+)
