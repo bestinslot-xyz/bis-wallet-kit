@@ -221,13 +221,15 @@ function addressToPkscript(address: string): string {
  * the hash is `sha256(sha256(preimage))`. The pkscript binds the commitment to
  * the deployer, preventing cross-wallet replay.
  *
- * @param tick - The 6-byte ticker.
+ * @param tick - The 6-byte namespaced ticker (must match /^[A-Za-z0-9-]{6}$/).
  * @param salt - The salt, as a hex string.
  * @param pkscript - The deployer's output script, as a hex string.
  * @returns The commitment hash, as a lowercase hex string.
- * @throws If the salt or pkscript is not valid hex.
+ * @throws If the ticker is not a valid 6-byte namespaced ticker, or the salt/pkscript is not valid hex.
  */
 export function computeBrc20PredeployHash(tick: string, salt: string, pkscript: string): string {
+  if (typeof tick !== 'string' || !SIX_BYTE_TICKER_RE.test(tick))
+    throw new Error('6-byte ticker must match /^[A-Za-z0-9-]{6}$/')
   assertHex(salt, 'salt')
   assertHex(pkscript, 'pkscript')
   const preimage = Buffer.concat([

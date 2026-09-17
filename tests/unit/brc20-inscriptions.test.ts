@@ -147,4 +147,10 @@ describe('brc20 inscription builders', () => {
   it('rejects a non-hex salt', () => {
     expect(() => computeBrc20PredeployHash('ticker', 'xyz', VECTOR.pkscript)).toThrow()
   })
+
+  it('computeBrc20PredeployHash rejects tickers that are not valid 6-byte tickers', () => {
+    expect(() => computeBrc20PredeployHash('ordi', VECTOR.salt, VECTOR.pkscript)).toThrow()
+    expect(() => computeBrc20PredeployHash('toolong', VECTOR.salt, VECTOR.pkscript)).toThrow()
+    expect(() => computeBrc20PredeployHash('six!yt', VECTOR.salt, VECTOR.pkscript)).toThrow()
+  })
 })
