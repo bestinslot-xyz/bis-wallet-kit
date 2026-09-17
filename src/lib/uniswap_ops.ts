@@ -1109,7 +1109,17 @@ export async function swapRequest(
       = priceBefore > priceAfter ? priceBefore - priceAfter : priceAfter - priceBefore
     const priceImpactBps = priceBefore !== 0n ? (priceImpact * 10000n) / priceBefore : 0n
 
-    return { success: true, amounts, price_impact_bps: priceImpactBps }
+    // reserve_in / reserve_out are the PRE-swap pool reserves, oriented to the
+    // in/out token order (getReserves returns reserveA for its first arg). The
+    // simulation already fetched them to price the swap, so surfacing them here
+    // saves callers a second getPairReserves round-trip.
+    return {
+      success: true,
+      amounts,
+      price_impact_bps: priceImpactBps,
+      reserve_in: currentReserveA,
+      reserve_out: currentReserveB,
+    }
   }
   catch (e: any) {
     console.error('Error in swap_request:', e)
@@ -1279,10 +1289,20 @@ export async function swap2Request(
       = priceBefore > priceAfter ? priceBefore - priceAfter : priceAfter - priceBefore
     const priceImpactBps = priceBefore !== 0n ? (priceImpact * 10000n) / priceBefore : 0n
 
-    return { success: true, amounts, price_impact_bps: priceImpactBps }
+    // reserve_in / reserve_out are the PRE-swap pool reserves, oriented to the
+    // in/out token order (getReserves returns reserveA for its first arg). The
+    // simulation already fetched them to price the swap, so surfacing them here
+    // saves callers a second getPairReserves round-trip.
+    return {
+      success: true,
+      amounts,
+      price_impact_bps: priceImpactBps,
+      reserve_in: currentReserveA,
+      reserve_out: currentReserveB,
+    }
   }
   catch (e: any) {
-    console.error('Error in swap_request:', e)
+    console.error('Error in swap2_request:', e)
     return { success: false, error_message: e.message }
   }
 }

@@ -3216,6 +3216,11 @@ export async function getSwapResult(
   amount_out: bigint
   quoted_price: number
   price_impact_bps: bigint
+  // Pre-swap pool reserves for the in/out pair, already fetched to price the
+  // swap. Surfaced so callers can read midprice/reserves without a second
+  // getPairReserves call.
+  reserve_in: bigint
+  reserve_out: bigint
   fees: SwapFees
 }> {
   const swapInfo = await getSwapInfo()
@@ -3273,6 +3278,8 @@ export async function getSwapResult(
     amount_out: result.amounts[1]!,
     quoted_price: quotedPriceNumber,
     price_impact_bps: result.price_impact_bps,
+    reserve_in: result.reserve_in,
+    reserve_out: result.reserve_out,
     fees: buildSwapFees(amtIn, result.amounts[1]!, token1FeeBps, token2FeeBps, btcFee),
   }
 }
@@ -3490,6 +3497,11 @@ export async function getSwap2Result(
   amount_in: bigint
   quoted_price: number
   price_impact_bps: bigint
+  // Pre-swap pool reserves for the in/out pair, already fetched to price the
+  // swap. Surfaced so callers can read midprice/reserves without a second
+  // getPairReserves call.
+  reserve_in: bigint
+  reserve_out: bigint
   fees: SwapFees
 }> {
   const swapInfo = await getSwapInfo()
@@ -3548,6 +3560,8 @@ export async function getSwap2Result(
     amount_in: result.amounts[0]!,
     quoted_price: quotedPriceNumber,
     price_impact_bps: result.price_impact_bps,
+    reserve_in: result.reserve_in,
+    reserve_out: result.reserve_out,
     fees: buildSwapFees(result.amounts[0]!, amtOut, token1FeeBps, token2FeeBps, btcFee),
   }
 }
