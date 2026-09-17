@@ -177,3 +177,28 @@ describe('buildSwapFees reconciles with swap2Request (exact output)', () => {
     assert.equal(AMOUNT_OUT - fees.token_out_fee - fees.miner_fee_sats, 997_170n)
   })
 })
+
+describe('swapRequest / swap2Request surface the pre-swap reserves', () => {
+  // The pre-swap reserves let a caller derive midprice without a second
+  // getPairReserves round-trip. They must come back oriented to the in/out
+  // tokens (reserve_in = the input token's reserve), not in address-sorted order.
+  it('reports reserve_in / reserve_out for exact input, in in/out order', async () => {
+    const sell = await swapRequest(proxy, PUBKEY, TOKEN, WBTC, 1_000_000_000n, 0n, '', 0n, 0n, 25n, MINER_FEE)
+    assert.equal(sell.success, true)
+    assert.equal(sell.reserve_in, RESERVE_TOKEN)
+    assert.equal(sell.reserve_out, RESERVE_WBTC)
+
+    // Flipping the input token flips the orientation.
+    const buy = await swapRequest(proxy, PUBKEY, WBTC, TOKEN, 1_000_000n, 0n, '', 0n, 25n, 0n, MINER_FEE)
+    assert.equal(buy.success, true)
+    assert.equal(buy.reserve_in, RESERVE_WBTC)
+    assert.equal(buy.reserve_out, RESERVE_TOKEN)
+  })
+
+  it('reports reserve_in / reserve_out for exact output, in in/out order', async () => {
+    const result = await swap2Request(proxy, PUBKEY, TOKEN, WBTC, 2n ** 256n - 1n, 1_000_000n, '', 0n, 0n, 25n, MINER_FEE)
+    assert.equal(result.success, true)
+    assert.equal(result.reserve_in, RESERVE_TOKEN)
+    assert.equal(result.reserve_out, RESERVE_WBTC)
+  })
+})
