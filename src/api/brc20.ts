@@ -7,6 +7,25 @@ import {
   withdrawFromBrc20Prog as withdrawFromBrc20ProgCore,
 } from '../core/brc20'
 
+// Pure builders for base BRC-20 inscription payloads (deploy / mint / transfer
+// and the 6-byte namespace predeploy → deploy pair). These generate content
+// only; inscribe them with the `mint` namespace helpers (`inscribe`,
+// `inscribeWithParent`) and drive any block-waiting yourself.
+export type {
+  Brc20AmountOptions,
+  Brc20DeployOptions,
+  Brc20PredeployOptions,
+  Brc20PredeployResult,
+} from '../core/brc20-inscriptions'
+export {
+  computeBrc20PredeployHash,
+  deployBrc20Inscription,
+  generateBrc20Salt,
+  mintBrc20Inscription,
+  predeployInscriptions,
+  transferBrc20Inscription,
+} from '../core/brc20-inscriptions'
+
 /**
  * Interface representing the result of an inscription and send to OP_RETURN operation, including transaction IDs, signed transaction hexes, inscription ID, postage, and secret used in the minting process. This interface is used to encapsulate the details of the deploy, call and deposit operations in the BRC2.0 programmable module.
  *
