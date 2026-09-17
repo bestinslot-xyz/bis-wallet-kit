@@ -1302,7 +1302,7 @@ export async function swap2Request(
     }
   }
   catch (e: any) {
-    console.error('Error in swap_request:', e)
+    console.error('Error in swap2_request:', e)
     return { success: false, error_message: e.message }
   }
 }
