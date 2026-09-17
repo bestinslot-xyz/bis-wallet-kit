@@ -29,8 +29,21 @@ const ALLOWED = ['major', 'minor', 'patch']
 // `x.y.z` form is accepted, e.g. `1.2.3foo` is rejected.
 const SEMVER = /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/
 
-// Capture command output (throws on non-zero exit, surfacing stderr).
-const capture = (cmd, cmdArgs) => execFileSync(cmd, cmdArgs, { encoding: 'utf8' }).trim()
+const die = msg => {
+  console.error(msg)
+  process.exit(1)
+}
+
+// Capture command output. On failure, exit cleanly with the command's own
+// stderr instead of letting a raw Node stack trace surface.
+const capture = (cmd, cmdArgs) => {
+  try {
+    return execFileSync(cmd, cmdArgs, { encoding: 'utf8' }).trim()
+  } catch (err) {
+    const detail = (err.stderr || err.message || '').toString().trim()
+    die(`Command failed: ${cmd} ${cmdArgs.join(' ')}\n${detail}`)
+  }
+}
 
 // Run for effect; inherit stdio so the operator sees real command output when
 // something fails, instead of a swallowed Node stack trace.
@@ -42,11 +55,6 @@ const run = (cmd, cmdArgs) => {
   execFileSync(cmd, cmdArgs, { stdio: 'inherit' })
 }
 
-const die = msg => {
-  console.error(msg)
-  process.exit(1)
-}
-
 // The version currently on origin/main is the authoritative base for both flows.
 const baseVersionOnMain = () => {
   const pkg = JSON.parse(capture('git', ['show', 'origin/main:package.json']))
@@ -55,8 +63,11 @@ const baseVersionOnMain = () => {
 
 const nextVersion = (cur, kind) => {
   if (SEMVER.test(kind)) return kind
-  const [maj, min, pat] = cur.split('.').map(Number)
-  if ([maj, min, pat].some(Number.isNaN)) die(`Can't parse base version "${cur}".`)
+  // Extract just the numeric core so a prerelease base (e.g. 1.2.3-beta.1)
+  // still yields a clean major/minor/patch bump.
+  const m = cur.match(/^(\d+)\.(\d+)\.(\d+)/)
+  if (!m) die(`Can't parse base version "${cur}".`)
+  const [maj, min, pat] = m.slice(1, 4).map(Number)
   if (kind === 'major') return `${maj + 1}.0.0`
   if (kind === 'minor') return `${maj}.${min + 1}.0`
   return `${maj}.${min}.${pat + 1}`
