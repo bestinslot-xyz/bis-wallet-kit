@@ -1079,6 +1079,47 @@ export async function getKlines(params: GetKlinesRequest): Promise<GetKlinesResp
   return result
 }
 
+export interface GetTvlHistoryRequest {
+  pair_address: string
+  days: number // max 365; the backend clamps out-of-range values
+}
+export interface TvlPoint {
+  timestamp: number // unix ms for the day bucket
+  block_height: number // block the reserves were sampled at
+  tvl: string // total value locked, in WBTC sats
+}
+export interface GetTvlHistoryResponse {
+  pair_address: string
+  token_a_address: string
+  token_a_symbol: string
+  token_b_address: string
+  token_b_symbol: string
+  wbtc_side: 'token_a' | 'token_b' | ''
+  period_days: number
+  points: TvlPoint[]
+}
+/**
+ * Fetches a daily Total Value Locked (TVL) series for a token pair from the swap backend, for charting TVL over time.
+ *
+ * TVL is valued in WBTC sats (2 x the WBTC-side reserve). Points are one per day, oldest first, each carrying the pair's reserves as of that day (carried forward across days with no on-chain change). A pair with no WBTC side reports `wbtc_side: ''` and a zero series.
+ *
+ * @param params An object with the pair address and the number of days to look back (max 365; the backend clamps out-of-range values).
+ * @returns {Promise<GetTvlHistoryResponse>} A promise that resolves to the pair address, token addresses and symbols, which side is WBTC, the period in days, and the ascending array of `{ timestamp, block_height, tvl }` points. Each `tvl` is a string of sats and can be converted to bigint if needed.
+ */
+export async function getTvlHistory(
+  params: GetTvlHistoryRequest,
+): Promise<GetTvlHistoryResponse> {
+  const url = getSwapBackendUrl(`tvl/${params.pair_address}?days=${params.days}`)
+  const result = await fetchWithErrors<GetTvlHistoryResponse>(url, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  })
+
+  return result
+}
+
 export interface GetActivityOfPairRequest {
   pair_address: string
   limit: number // max 200
