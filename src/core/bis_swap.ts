@@ -1109,7 +1109,13 @@ export interface GetTvlHistoryResponse {
 export async function getTvlHistory(
   params: GetTvlHistoryRequest,
 ): Promise<GetTvlHistoryResponse> {
-  const url = getSwapBackendUrl(`tvl/${params.pair_address}?days=${params.days}`)
+  // Encode the path segment and query so a malformed pair_address/days can't
+  // produce a broken URL or leak into the path/query.
+  const url = getSwapBackendUrl(
+    `tvl/${encodeURIComponent(params.pair_address)}?${new URLSearchParams({
+      days: String(params.days),
+    })}`,
+  )
   const result = await fetchWithErrors<GetTvlHistoryResponse>(url, {
     method: 'GET',
     headers: {
