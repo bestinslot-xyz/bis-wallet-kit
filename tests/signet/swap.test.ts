@@ -141,6 +141,15 @@ describe('swap (signet)', () => {
     assert.ok(typeof result.total_trades === 'number')
   })
 
+  it.skipIf(!env.swapPair)('returns tvl history', async () => {
+    const result = await swap.getTvlHistory({ pair_address: env.swapPair!, days: 7 })
+    assert.ok(Array.isArray(result.points))
+    if (result.points.length > 0) {
+      assert.ok(typeof result.points[0].tvl === 'string')
+      assert.ok(typeof result.points[0].timestamp === 'number')
+    }
+  })
+
   it.skipIf(!env.swapPair)('returns activity for a pair', async () => {
     const result = await swap.getActivityOfPair(env.swapPair!, 10, 0)
     assert.ok(Array.isArray(result.activities))

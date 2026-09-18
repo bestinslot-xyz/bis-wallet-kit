@@ -187,6 +187,7 @@ await swap.getKlines({
   /* GetKlinesRequest */
 })
 await swap.getPairVolumeOverDays(/* … */)
+await swap.getTvlHistory(/* GetTvlHistoryRequest — daily TVL series in WBTC sats */)
 await swap.getActivityOfPair(pairAddress, limit, offset)
 await swap.getWalletActivities(pubkey, pairAddress)
 ```

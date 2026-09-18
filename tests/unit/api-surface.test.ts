@@ -36,6 +36,7 @@ const SHARED_NAMESPACES: Record<string, string[]> = {
     'getMinerFeesOfWrapOrder',
     'getPairReserves',
     'getPairVolumeOverDays',
+    'getTvlHistory',
     'getRemoveLiquidityResult',
     'getSwapExactOutputResult',
     'getSwapBalance',

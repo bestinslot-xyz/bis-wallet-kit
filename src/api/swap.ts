@@ -31,6 +31,7 @@ export {
   getSwapStatus,
   getSwapWalletSecurityCode,
   getTokenDecimals,
+  getTvlHistory,
   getUnwrapResult as getUnwrapBtcResult,
   importSwapWallet,
   listPairs,
@@ -45,6 +46,8 @@ export type {
   GetPairVolumeRequest,
   GetPairVolumeResponse,
   GetSwapStatusResponse,
+  GetTvlHistoryRequest,
+  GetTvlHistoryResponse,
   GetWalletActivitiesResponse,
   ImportSwapWalletOptions,
   Kline,
@@ -57,6 +60,7 @@ export type {
   SwapBalance,
   SwapInfo,
   TokenInfo,
+  TvlPoint,
   WalletActivityEntry,
 } from '../core/bis_swap' // Export types related to wallet activities
 export type { AllBalanceDetails } from '../core/helpers' // Export the AllBalanceDetails type from the core helpers module
