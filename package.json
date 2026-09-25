@@ -119,7 +119,7 @@
     "eslint-plugin-jsdoc": "^62.6.1",
     "husky": "9.1.7",
     "jsdom": "^29.1.1",
-    "lint-staged": "17.5.1",
+    "lint-staged": "16.4.0",
     "prettier": "3.9.9",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
