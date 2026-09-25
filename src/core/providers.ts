@@ -1,7 +1,41 @@
 import type { BISProvider, SignFunction } from '../provider/api'
 import type { BISSession, BISWallet, BISWalletProvider, BISWalletPurpose } from '../types/common'
 import { verifySignature, verifySignatureLocal } from './helpers'
-import { getWalletInfo, saveWalletInfo } from './store'
+import { clearWalletInfo, getWalletInfo, saveWalletInfo } from './store'
+
+/**
+ * Thrown before signing when the account active in the wallet extension differs from the
+ * connected session (the user switched accounts inside the wallet after connecting). The stored
+ * session is cleared when this is thrown; the app should prompt the user to reconnect.
+ */
+export class WalletAccountChangedError extends Error {
+  readonly code = 'WALLET_ACCOUNT_CHANGED'
+
+  /**
+   * @param expectedAddress The address of the connected session.
+   * @param accounts The addresses the wallet reports as active.
+   */
+  constructor(
+    readonly expectedAddress: string,
+    readonly accounts: string[],
+  ) {
+    super('Connected wallet account changed. Please reconnect.')
+    this.name = 'WalletAccountChangedError'
+  }
+}
+
+/**
+ * Emitted when the wallet's active account no longer matches the connected session. The stored
+ * session has already been cleared when listeners run.
+ */
+export interface AccountChangeEvent {
+  provider: BISWalletProvider
+  previousAddresses: string[]
+  accounts: string[]
+}
+
+const accountListeners = new Set<(event: AccountChangeEvent) => void>()
+let accountWatch: { provider: BISWalletProvider, unsubscribe: () => void } | null = null
 
 /**
  * Registry of wallet providers, populated per build via `registerProvider`. The
@@ -58,8 +92,99 @@ export async function getWallets(provider: BISWalletProvider): Promise<BISSessio
 
   // Save local storage
   saveWalletInfo(resp)
+  watchAccounts()
 
   return resp
+}
+
+/**
+ * Subscribes to account switches made inside the connected wallet extension (supported by
+ * Unisat and OKX). When the wallet's active account stops matching the session, the kit clears
+ * the stored session and calls the listener so the app can prompt a reconnect.
+ *
+ * @param listener Called with the provider, the session's previous addresses and the wallet's new accounts.
+ * @returns An unsubscribe function that removes the listener.
+ */
+export function subscribeToAccountChanges(listener: (event: AccountChangeEvent) => void): () => void {
+  accountListeners.add(listener)
+  watchAccounts()
+  return () => {
+    accountListeners.delete(listener)
+  }
+}
+
+// Arms the account-change listener of the session's provider. Idempotent per
+// provider, so it also runs before each signature to cover sessions restored
+// from storage after a page reload.
+function watchAccounts() {
+  const providerName = getWalletInfo()?.provider
+  if (accountWatch && accountWatch.provider === providerName)
+    return
+
+  accountWatch?.unsubscribe()
+  accountWatch = null
+
+  const impl = providerName ? PROVIDERS[providerName] : undefined
+  if (!providerName || !impl?.onAccountsChanged)
+    return
+
+  accountWatch = {
+    provider: providerName,
+    unsubscribe: impl.onAccountsChanged(accounts => handleAccountsChanged(providerName, accounts)),
+  }
+}
+
+// An empty account list means the wallet cannot tell (e.g. it is locked), which is not a switch.
+function handleAccountsChanged(provider: BISWalletProvider, accounts: string[]) {
+  const session = getWalletInfo()
+  if (!session || session.provider !== provider || accounts.length === 0)
+    return
+  if (session.wallets.some(wallet => accounts.includes(wallet.address)))
+    return
+
+  clearWalletInfo()
+  accountWatch?.unsubscribe()
+  accountWatch = null
+
+  const event: AccountChangeEvent = {
+    provider,
+    previousAddresses: session.wallets.map(wallet => wallet.address),
+    accounts,
+  }
+  for (const listener of accountListeners) {
+    try {
+      listener(event)
+    }
+    catch (err) {
+      console.error('Account change listener failed.', err)
+    }
+  }
+}
+
+/**
+ * Throws a WalletAccountChangedError when the wallet's active account differs from `address`.
+ * Providers without a silent `getAccounts` are not checked. A failing `getAccounts` is left to
+ * the signing call that follows, which reports the provider's own error.
+ */
+async function assertActiveAccount(providerName: BISWalletProvider, address: string) {
+  watchAccounts()
+
+  const impl = requireProvider(providerName)
+  if (!impl.getAccounts)
+    return
+
+  let accounts: string[]
+  try {
+    accounts = await impl.getAccounts()
+  }
+  catch {
+    return
+  }
+
+  if (accounts.length > 0 && !accounts.includes(address)) {
+    handleAccountsChanged(providerName, accounts)
+    throw new WalletAccountChangedError(address, accounts)
+  }
 }
 
 function getWallet(walletType: BISWalletPurpose): BISWallet | undefined {
@@ -140,10 +265,13 @@ export async function signMessage(message: string, walletType: BISWalletPurpose)
     throw new Error('Wallet not found.')
   }
 
-  const provider = requireProvider(getWalletInfo()?.provider)
+  const providerName = getWalletInfo()!.provider
+  await assertActiveAccount(providerName, wallet.address)
+
+  const provider = requireProvider(providerName)
   const signature = await provider.signMessage(message, walletType, wallet.address)
 
-  if (!verifySignature(message, signature, wallet.address)) {
+  if (!(await verifySignature(message, signature, wallet.address))) {
     console.error('Signature verification failed.')
     throw new Error('Signature verification failed.')
   }
@@ -169,7 +297,10 @@ export async function signMessageLocalVerify(
     throw new Error('Wallet not found.')
   }
 
-  const provider = requireProvider(getWalletInfo()?.provider)
+  const providerName = getWalletInfo()!.provider
+  await assertActiveAccount(providerName, wallet.address)
+
+  const provider = requireProvider(providerName)
   const signature = await provider.signMessage(message, walletType, wallet.address)
 
   if (!verifySignatureLocal(message, signature, wallet.address)) {
@@ -188,7 +319,12 @@ export async function signMessageLocalVerify(
  * @returns The signature as a hex string.
  */
 export async function signMessageLocalVerifyDeterministic(message: string): Promise<string> {
-  const provider = requireProvider(getWalletInfo()?.provider)
+  const providerName = getWalletInfo()?.provider
+  const paymentWallet = getWallet('payment')
+  if (providerName && paymentWallet)
+    await assertActiveAccount(providerName, paymentWallet.address)
+
+  const provider = requireProvider(providerName)
   const signatureRes = await provider.signMessageDeterministic(message)
 
   if (!signatureRes) {

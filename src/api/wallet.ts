@@ -16,11 +16,14 @@ export {
   signMessage,
   signMessageLocalVerify,
   signMessageLocalVerifyDeterministic,
+  subscribeToAccountChanges,
+  WalletAccountChangedError,
 } from '../core/bis' // Export all wallet-related functions from the core BIS module
-export { getNetwork } from '../core/store-network' // Read the currently selected network (mirror of setNetwork)
+export type { AccountChangeEvent } from '../core/bis'
 
 // Re-export wallet-related types
 export type { WalletInfo }
+export { getNetwork } from '../core/store-network' // Read the currently selected network (mirror of setNetwork)
 export type {
   BISNetwork,
   BISSession,

@@ -74,6 +74,30 @@ const sigDet = await wallet.signMessageLocalVerifyDeterministic('hello')
 
 `walletType` is `'ordinals' | 'payment' | 'all'`.
 
+### Account switches inside the wallet
+
+Unisat and OKX let the user switch accounts inside the extension after connecting. Before each
+signature the kit asks the wallet for its active account. If it no longer matches the session, the
+kit clears the session and throws `WalletAccountChangedError` ("Connected wallet account changed.
+Please reconnect.") without prompting for a signature.
+
+To react as soon as the switch happens, subscribe:
+
+```ts
+const unsubscribe = wallet.subscribeToAccountChanges(({ provider, previousAddresses, accounts }) => {
+  // The session is already cleared: prompt the user to reconnect.
+})
+
+try {
+  await wallet.signMessageLocalVerify('hello', 'payment')
+}
+catch (e) {
+  if (e instanceof wallet.WalletAccountChangedError) {
+    // prompt reconnect
+  }
+}
+```
+
 ## Sending
 
 ```ts
