@@ -46,6 +46,21 @@ async function getWallets(): Promise<BISWallet[]> {
   return wallets
 }
 
+async function getAccounts(): Promise<string[]> {
+  if (typeof window.unisat?.getAccounts !== 'function') return []
+
+  return (await window.unisat.getAccounts()) ?? []
+}
+
+function onAccountsChanged(handler: (accounts: string[]) => void): () => void {
+  const unisat = window.unisat
+  if (!unisat?.on) return () => {}
+
+  const listener = (accounts: string[]) => handler(accounts ?? [])
+  unisat.on('accountsChanged', listener)
+  return () => unisat.removeListener?.('accountsChanged', listener)
+}
+
 async function signMessage(message: string): Promise<string> {
   // Check extension and network
   await checkNetwork()
@@ -202,6 +217,8 @@ async function sign(
 export const UNISAT: BISProvider = {
   checkNetwork,
   getWallets,
+  getAccounts,
+  onAccountsChanged,
   signMessage,
   signMessageDeterministic,
   sendBTC,

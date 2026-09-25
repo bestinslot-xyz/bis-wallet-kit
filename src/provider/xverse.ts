@@ -1,4 +1,5 @@
 import type { BISWallet } from '../api/wallet'
+import type { BISWalletPurpose } from '../types/common'
 import type { BISProvider, SignResponse } from './api'
 import { Buffer } from 'node:buffer'
 import * as bitcoinjs from 'bitcoinjs-lib'
@@ -52,7 +53,11 @@ async function getWallets(): Promise<BISWallet[]> {
   return wallets
 }
 
-async function signMessage(message: string, address: string): Promise<string> {
+async function signMessage(
+  message: string,
+  _walletType: BISWalletPurpose,
+  address: string
+): Promise<string> {
   if (!window.XverseProviders?.BitcoinProvider) throw new Error('Xverse extension not found.')
 
   const request = createUnsecuredToken({

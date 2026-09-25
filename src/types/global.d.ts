@@ -15,6 +15,9 @@ declare global {
 
 interface UniSat {
   requestAccounts: () => Promise<string[]>
+  getAccounts: () => Promise<string[]>
+  on: (event: 'accountsChanged', handler: (accounts: string[]) => void) => void
+  removeListener: (event: 'accountsChanged', handler: (accounts: string[]) => void) => void
   getNetwork: () => Promise<'livenet' | 'testnet'>
   switchNetwork: (network: string) => Promise<void>
   signMessage: (message: string, type?: 'ecdsa' | 'bip322-simple') => Promise<string>
