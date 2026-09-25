@@ -7,22 +7,17 @@ import { base64ToHex, finalizePsbtInputs, hexToBase64 } from '../core/helpers'
 import { getPaymentWallet } from '../core/providers'
 
 async function getWallets(): Promise<BISWallet[]> {
-  if (!window.okxwallet)
-    throw new Error('OKX extension not found.')
+  if (!window.okxwallet) throw new Error('OKX extension not found.')
 
   const network = getNetwork()
   let data
 
-  if (network === 'mainnet')
-    data = await window.okxwallet.bitcoin.connect()
-  else if (network === 'testnet')
-    data = await window.okxwallet.bitcoinTestnet.connect()
-  else if (network === 'signet')
-    data = await window.okxwallet.bitcoinSignet.connect()
+  if (network === 'mainnet') data = await window.okxwallet.bitcoin.connect()
+  else if (network === 'testnet') data = await window.okxwallet.bitcoinTestnet.connect()
+  else if (network === 'signet') data = await window.okxwallet.bitcoinSignet.connect()
   else throw new Error('Unsupported network for OKX.')
 
-  if (!data)
-    throw new Error('Error fetching wallet data.')
+  if (!data) throw new Error('Error fetching wallet data.')
 
   return [
     {
@@ -34,8 +29,7 @@ async function getWallets(): Promise<BISWallet[]> {
 }
 
 async function signMessage(message: string): Promise<string> {
-  if (!window.okxwallet)
-    throw new Error('OKX extension not found.')
+  if (!window.okxwallet) throw new Error('OKX extension not found.')
 
   const network = getNetwork()
   let signedMessage
@@ -52,14 +46,12 @@ async function signMessage(message: string): Promise<string> {
 }
 
 async function signMessageDeterministic(
-  message: string,
-): Promise<{ signature: string, address: string }> {
-  if (!window.okxwallet)
-    throw new Error('OKX extension not found.')
+  message: string
+): Promise<{ signature: string; address: string }> {
+  if (!window.okxwallet) throw new Error('OKX extension not found.')
 
   const wallet = getPaymentWallet()
-  if (!wallet)
-    throw new Error('No payment wallet found.')
+  if (!wallet) throw new Error('No payment wallet found.')
   const address = wallet.address
 
   const network = getNetwork()
@@ -80,22 +72,18 @@ async function signMessageDeterministic(
 }
 
 async function sendBTC(amountSats: number, toAddress: string): Promise<string> {
-  if (!window.okxwallet)
-    throw new Error('OKX extension not found.')
+  if (!window.okxwallet) throw new Error('OKX extension not found.')
 
   const network = getNetwork()
   let txId
 
   if (network === 'mainnet') {
     txId = await window.okxwallet.bitcoin.sendBitcoin(toAddress, amountSats)
-  }
-  else if (network === 'testnet') {
+  } else if (network === 'testnet') {
     txId = await window.okxwallet.bitcoinTestnet.sendBitcoin(toAddress, amountSats)
-  }
-  else if (network === 'signet') {
+  } else if (network === 'signet') {
     txId = await window.okxwallet.bitcoinSignet.sendBitcoin(toAddress, amountSats)
-  }
-  else {
+  } else {
     throw new Error('Unsupported network for OKX.')
   }
 
@@ -127,42 +115,36 @@ async function signPSBT(psbtBase64: string, broadcast: boolean, inputsToSign: an
     let signedPsbtHex = null
     if (options) {
       signedPsbtHex = await window.okxwallet.bitcoin.signPsbt(psbt, options)
-    }
-    else {
+    } else {
       signedPsbtHex = await window.okxwallet.bitcoin.signPsbt(psbt)
     }
     if (broadcast) {
       await window.okxwallet.bitcoin.pushPsbt(signedPsbtHex)
     }
     return signedPsbtHex
-  }
-  else if (getNetwork() === 'testnet') {
+  } else if (getNetwork() === 'testnet') {
     if (broadcast) {
       throw new Error('Cannot broadcast on testnet with okx')
     }
     let signedPsbtHex = null
     if (options) {
       signedPsbtHex = await window.okxwallet.bitcoinTestnet.signPsbt(psbt, options)
-    }
-    else {
+    } else {
       signedPsbtHex = await window.okxwallet.bitcoinTestnet.signPsbt(psbt)
     }
     return signedPsbtHex
-  }
-  else if (getNetwork() === 'signet') {
+  } else if (getNetwork() === 'signet') {
     if (broadcast) {
       throw new Error('Cannot broadcast on signet with okx')
     }
     let signedPsbtHex = null
     if (options) {
       signedPsbtHex = await window.okxwallet.bitcoinSignet.signPsbt(psbt, options)
-    }
-    else {
+    } else {
       signedPsbtHex = await window.okxwallet.bitcoinSignet.signPsbt(psbt)
     }
     return signedPsbtHex
-  }
-  else {
+  } else {
     throw new Error('Unsupported network for OKX.')
   }
 }
@@ -173,20 +155,17 @@ async function sign(
   ordAddr: string,
   ordAddrIdxes: number[],
   _useTweakSignerIdxes?: number[], // not used in OKX
-  noSignIdxes?: number[],
+  noSignIdxes?: number[]
 ): Promise<SignResponse> {
   let signed = null
   if (!paymentAddr) {
     signed = await signPSBT(hexToBase64(unsignedPsbtHex), false, [])
-  }
-  else {
+  } else {
     const psbt = bitcoinjs.Psbt.fromHex(unsignedPsbtHex)
     const insToSign = []
     for (let i = 0; i < psbt.inputCount; i++) {
-      if (noSignIdxes && noSignIdxes.includes(i))
-        continue
-      if (ordAddrIdxes.includes(i))
-        continue
+      if (noSignIdxes && noSignIdxes.includes(i)) continue
+      if (ordAddrIdxes.includes(i)) continue
       insToSign.push(i)
     }
     signed = await signPSBT(hexToBase64(unsignedPsbtHex), false, [

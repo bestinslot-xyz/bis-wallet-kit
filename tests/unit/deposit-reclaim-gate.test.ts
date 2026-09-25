@@ -8,9 +8,11 @@ describe('sumReclaimAmounts', () => {
     expect(sumReclaimAmounts([])).toBe(0n)
   })
   it('sums the amounts', () => {
-    expect(sumReclaimAmounts([
-      { inscriptionId: 'a', amount: 10n },
-      { inscriptionId: 'b', amount: 25n },
-    ])).toBe(35n)
+    expect(
+      sumReclaimAmounts([
+        { inscriptionId: 'a', amount: 10n },
+        { inscriptionId: 'b', amount: 25n },
+      ])
+    ).toBe(35n)
   })
 })

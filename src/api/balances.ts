@@ -190,7 +190,7 @@ export interface BaseBRC20Balance {
  */
 export async function getBaseBRC20BalanceOfAddress(
   btcAddress: string,
-  tokenAddress: string,
+  tokenAddress: string
 ): Promise<BaseBRC20Balance> {
   const tokenAddressUpperCase = tokenAddress.toUpperCase()
   const url = getSwapBackendUrl('check_base_brc20_balance')
@@ -225,7 +225,7 @@ export async function getBaseBRC20BalanceOfAddress(
  */
 export async function getBRC20ProgBalanceOfAddress(
   bitcoinAddress: string,
-  tokenAddress: string,
+  tokenAddress: string
 ): Promise<bigint> {
   const url = getSwapBackendUrl('check_brc20_balance')
   const body = {
@@ -255,14 +255,14 @@ export async function getBRC20ProgBalanceOfAddress(
  */
 export async function getBRC20ProgBalanceOfTicker(
   bitcoinAddress: string,
-  ticker: string,
+  ticker: string
 ): Promise<bigint> {
   const tickerBytes = Buffer.from(ticker, 'utf-8')
   const result = await ethCallOnPublicRpc(
     BRC20_CONTROLLER_ADDRESS,
     BRC20_CONTROLLER_ABI,
     'balanceOf',
-    [tickerBytes, getEvmAddressFromBitcoinAddress(bitcoinAddress)],
+    [tickerBytes, getEvmAddressFromBitcoinAddress(bitcoinAddress)]
   )
 
   return BigInt(result)
@@ -281,7 +281,7 @@ export async function getBRC20ProgTokenAddressOfTicker(ticker: string): Promise<
     BRC20_CONTROLLER_ADDRESS,
     BRC20_CONTROLLER_ABI,
     'getTickerAddress',
-    [tickerBytes],
+    [tickerBytes]
   )
 
   // Use last 40 characters of the result as the token address (20 bytes in hex)

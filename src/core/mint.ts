@@ -32,7 +32,7 @@ import { getBitcoinNetwork } from '../lib/bitcoin'
 import { InscriptionDetails } from '../types/inscription'
 import { WalletInfo } from '../types/wallet'
 
-const ENABLE_RBF_NO_LOCKTIME = 0xFFFFFFFD
+const ENABLE_RBF_NO_LOCKTIME = 0xfffffffd
 
 const DUST_VALUE_P2PKH = 546
 const DUST_VALUE_P2WPKH = 294
@@ -42,7 +42,7 @@ const DUST_VALUE_MAX = Math.max(
   DUST_VALUE_P2PKH,
   DUST_VALUE_P2WPKH,
   DUST_VALUE_P2SH,
-  DUST_VALUE_P2TR,
+  DUST_VALUE_P2TR
 )
 
 function createSecretToken(): string {
@@ -68,18 +68,12 @@ function convertInscriptionIdToBuffer(inscriptionId: string): Buff {
 }
 
 function getDustValue(wallet: WalletInfo): number {
-  if (wallet.isOpReturn)
-    return 0
-  else if (wallet.addr == null)
-    throw new Error('Wallet address is null')
-  else if (Address.decode(wallet.addr).type === 'p2sh')
-    return DUST_VALUE_P2SH
-  else if (Address.decode(wallet.addr).type === 'p2w-pkh')
-    return DUST_VALUE_P2WPKH
-  else if (Address.decode(wallet.addr).type === 'p2tr')
-    return DUST_VALUE_P2TR
-  else if (Address.decode(wallet.addr).type === 'p2pkh')
-    return DUST_VALUE_P2PKH
+  if (wallet.isOpReturn) return 0
+  else if (wallet.addr == null) throw new Error('Wallet address is null')
+  else if (Address.decode(wallet.addr).type === 'p2sh') return DUST_VALUE_P2SH
+  else if (Address.decode(wallet.addr).type === 'p2w-pkh') return DUST_VALUE_P2WPKH
+  else if (Address.decode(wallet.addr).type === 'p2tr') return DUST_VALUE_P2TR
+  else if (Address.decode(wallet.addr).type === 'p2pkh') return DUST_VALUE_P2PKH
 
   return DUST_VALUE_MAX
 }
@@ -161,16 +155,13 @@ const ADDITIONAL_INPUT_P2WSH_VBYTES = 68 // TODO: fix here!! (NOTE: P2WSH in P2S
 const ADDITIONAL_INPUT_P2TR_VBYTES = 58 // TODO: fix here!!
 
 function calculateAdditionalFee(scriptType: string, feeRate: number): number {
-  if (scriptType === 'pubkeyhash')
-    return Math.ceil(ADDITIONAL_INPUT_P2PKH_VBYTES) * feeRate
-  if (scriptType === 'scripthash')
-    return Math.ceil(ADDITIONAL_INPUT_P2SH_VBYTES) * feeRate
+  if (scriptType === 'pubkeyhash') return Math.ceil(ADDITIONAL_INPUT_P2PKH_VBYTES) * feeRate
+  if (scriptType === 'scripthash') return Math.ceil(ADDITIONAL_INPUT_P2SH_VBYTES) * feeRate
   if (scriptType === 'witness_v0_keyhash')
     return Math.ceil(ADDITIONAL_INPUT_P2WPKH_VBYTES) * feeRate
   if (scriptType === 'witness_v0_scripthash')
     return Math.ceil(ADDITIONAL_INPUT_P2WSH_VBYTES) * feeRate
-  if (scriptType === 'witness_v1_taproot')
-    return Math.ceil(ADDITIONAL_INPUT_P2TR_VBYTES) * feeRate
+  if (scriptType === 'witness_v1_taproot') return Math.ceil(ADDITIONAL_INPUT_P2TR_VBYTES) * feeRate
   return 0
 }
 
@@ -181,13 +172,12 @@ async function getMintMultipleFeeAll(
   feeRate: number,
   postage: number | null,
   paymentAddress: string | null,
-  payment: number | null,
+  payment: number | null
 ): Promise<InscribeFees> {
   // Get connected wallet
   const userPaymentWallet = getPaymentWallet()
   const userOrdinalsWallet = getOrdinalsWallet()
-  if (!userPaymentWallet || !userOrdinalsWallet)
-    throw new Error('Wallets not found')
+  if (!userPaymentWallet || !userOrdinalsWallet) throw new Error('Wallets not found')
 
   const payerAddress = userPaymentWallet.address
   const payerPublicKey = userPaymentWallet.pubkey
@@ -200,7 +190,7 @@ async function getMintMultipleFeeAll(
     null,
     inscriptionAddress,
     null,
-    inscriptionPublicKey,
+    inscriptionPublicKey
   )
   let paymentWallet = null
   if (paymentAddress != null) {
@@ -220,7 +210,7 @@ async function getMintMultipleFeeAll(
     feeRate,
     postage,
     paymentWallet,
-    payment,
+    payment
   )
   return {
     totalFee: commitTx.commit_fee + commitTx.reveal_fee,
@@ -244,13 +234,12 @@ export async function getInscribeMultipleFee(
   inscriptionDetailsArray: InscriptionDetails[],
   feeRate: number,
   postage: number | null,
-  paymentOpts?: PaymentOpts,
+  paymentOpts?: PaymentOpts
 ): Promise<InscribeFees> {
   // Get connected wallet
   const walletInfo = getWalletInfo()
 
-  if (!walletInfo || !walletInfo.wallets)
-    throw new Error('Wallets not found')
+  if (!walletInfo || !walletInfo.wallets) throw new Error('Wallets not found')
 
   if (!Array.isArray(inscriptionDetailsArray))
     throw new Error('inscriptionDetailsArray must be of type array [bis.InscriptionDetails]')
@@ -268,8 +257,8 @@ export async function getInscribeMultipleFee(
     if (typeof paymentOpts.paymentAddress != 'string')
       throw new Error('paymentAddress must be a string')
     if (
-      typeof paymentOpts.paymentAmount != 'number'
-      || !Number.isInteger(paymentOpts.paymentAmount)
+      typeof paymentOpts.paymentAmount != 'number' ||
+      !Number.isInteger(paymentOpts.paymentAmount)
     ) {
       throw new TypeError('paymentAmount must be an integer')
     }
@@ -280,7 +269,7 @@ export async function getInscribeMultipleFee(
     feeRate,
     postage,
     paymentOpts?.paymentAddress || null,
-    paymentOpts?.paymentAmount || null,
+    paymentOpts?.paymentAmount || null
   )
 }
 
@@ -290,12 +279,11 @@ export async function inscribeWithParent(
   feeRate: number,
   postage: number | null,
   dryRun: boolean,
-  paymentOpts?: PaymentOpts,
+  paymentOpts?: PaymentOpts
 ): Promise<InscribeResult> {
   // Get connected wallet
   const walletInfo = getWalletInfo()
-  if (!walletInfo || !walletInfo.wallets)
-    throw new Error('Wallets not found')
+  if (!walletInfo || !walletInfo.wallets) throw new Error('Wallets not found')
   if (!(inscriptionDetails instanceof InscriptionDetails))
     throw new Error('inscriptionDetails must be of type bis.InscriptionDetails')
   if (typeof parentInscriptionId !== 'string')
@@ -308,8 +296,8 @@ export async function inscribeWithParent(
     if (typeof paymentOpts.paymentAddress != 'string')
       throw new Error('paymentAddress must be a string')
     if (
-      typeof paymentOpts.paymentAmount != 'number'
-      || !Number.isInteger(paymentOpts.paymentAmount)
+      typeof paymentOpts.paymentAmount != 'number' ||
+      !Number.isInteger(paymentOpts.paymentAmount)
     ) {
       throw new TypeError('paymentAmount must be an integer')
     }
@@ -324,7 +312,7 @@ export async function inscribeWithParent(
     paymentOpts?.paymentAddress ?? null,
     paymentOpts?.paymentAmount ?? null,
     dryRun,
-    signFn,
+    signFn
   )
 }
 
@@ -333,13 +321,12 @@ export async function inscribeMultiple(
   feeRate: number,
   postage: number | null,
   dryRun: boolean,
-  paymentOpts?: PaymentOpts,
+  paymentOpts?: PaymentOpts
 ): Promise<InscribeMultipleResult> {
   // Get connected wallet
   const walletInfo = getWalletInfo()
 
-  if (!walletInfo || !walletInfo.wallets)
-    throw new Error('Wallets not found')
+  if (!walletInfo || !walletInfo.wallets) throw new Error('Wallets not found')
 
   // Checks
   if (!Array.isArray(inscriptionDetailsArray))
@@ -358,15 +345,14 @@ export async function inscribeMultiple(
     if (paymentAddress != null && typeof paymentAddress != 'string')
       throw new Error('paymentAddress must be a string')
     if (
-      paymentAmount != null
-      && (typeof paymentAmount != 'number' || !Number.isInteger(paymentAmount))
+      paymentAmount != null &&
+      (typeof paymentAmount != 'number' || !Number.isInteger(paymentAmount))
     ) {
       throw new Error('paymentAmount must be an integer')
     }
   }
 
-  if (typeof dryRun != 'boolean')
-    throw new Error('dryRun must be a boolean')
+  if (typeof dryRun != 'boolean') throw new Error('dryRun must be a boolean')
 
   // Sign function
   const signFn = getSignFn(walletInfo.provider)
@@ -378,7 +364,7 @@ export async function inscribeMultiple(
     paymentOpts?.paymentAddress ?? null,
     paymentOpts?.paymentAmount ?? null,
     dryRun,
-    signFn,
+    signFn
   )
 }
 
@@ -395,10 +381,9 @@ async function buildRevealTxMultiple(
   inscriptionDetailsArray: InscriptionDetails[],
   postage: number,
   paymentWallet: WalletInfo | null,
-  payment: number | null,
+  payment: number | null
 ): Promise<BuildRevealTxMultipleResult> {
-  if (!payment || payment < 0)
-    payment = 0
+  if (!payment || payment < 0) payment = 0
 
   const seckey = get_seckey(secret)
   const pubkey = get_pubkey(seckey, true)
@@ -450,8 +435,7 @@ async function buildRevealTxMultiple(
   txData.vin[0]!.witness = [sig, script, cblock]
 
   const isValid = Signer.taproot.verify(txData, 0, { pubkey, throws: true })
-  if (!isValid)
-    throw new Error('Invalid signature')
+  if (!isValid) throw new Error('Invalid signature')
 
   return {
     txid: Tx.util.getTxid(txData),
@@ -466,13 +450,12 @@ async function mintMultipleAll(
   paymentAddress: string | null,
   payment: number | null,
   dryRun: boolean,
-  signFn: SignFunction,
+  signFn: SignFunction
 ): Promise<InscribeMultipleResult> {
   // Get connected wallet
   const userPaymentWallet = getPaymentWallet()
   const userOrdinalsWallet = getOrdinalsWallet()
-  if (!userPaymentWallet || !userOrdinalsWallet)
-    throw new Error('Wallets not found')
+  if (!userPaymentWallet || !userOrdinalsWallet) throw new Error('Wallets not found')
 
   const payerAddress = userPaymentWallet.address
   const payerPublicKey = userPaymentWallet.pubkey
@@ -485,7 +468,7 @@ async function mintMultipleAll(
     null,
     inscriptionAddress,
     null,
-    inscriptionPublicKey,
+    inscriptionPublicKey
   )
   let paymentWallet = null
   if (paymentAddress != null) {
@@ -505,13 +488,13 @@ async function mintMultipleAll(
     feeRate,
     postage,
     paymentWallet,
-    payment,
+    payment
   )
   const signedCommitTx = await signFn(
     commitTx.unsigned_psbt_hex,
     payerAddress,
     inscriptionAddress,
-    [],
+    []
   )
 
   const commitTxId = signedCommitTx.txId
@@ -523,12 +506,14 @@ async function mintMultipleAll(
     inscriptionDetailsArray,
     postage,
     paymentWallet,
-    payment,
+    payment
   )
 
   const isValid = await validateTxes([signedCommitTx.signedTxHex, revealTx.signed_reveal_tx_hex])
   if (isValid == null)
-    throw new Error('Multiple inscription commit/reveal validation failed (testmempoolaccept request failed)')
+    throw new Error(
+      'Multiple inscription commit/reveal validation failed (testmempoolaccept request failed)'
+    )
 
   for (const entry of isValid) {
     if (!entry.allowed) {
@@ -588,8 +573,7 @@ function constructTxFromInOuts(inputs: TxInput[], outputs: TxOutput[]): bitcoinj
         sequence: ENABLE_RBF_NO_LOCKTIME,
         witness: [],
       })
-    }
-    else if (inputs[i]?.utxo.script_type === 'scripthash') {
+    } else if (inputs[i]?.utxo.script_type === 'scripthash') {
       // P2SH
       if (inputs[i]?.wallet.getRedeemScript() == null) {
         throw new Error('Redeem script is null on p2sh input')
@@ -612,8 +596,7 @@ function constructTxFromInOuts(inputs: TxInput[], outputs: TxOutput[]): bitcoinj
         sequence: ENABLE_RBF_NO_LOCKTIME,
         witness: [Buffer.from(repeatStr('00', 71), 'hex'), Buffer.from(publicKey, 'hex')],
       })
-    }
-    else if (inputs[i]?.utxo.script_type === 'witness_v0_keyhash') {
+    } else if (inputs[i]?.utxo.script_type === 'witness_v0_keyhash') {
       // P2WPKH
       if (inputs[i]?.wallet.publicKey == null) {
         throw new Error('publicKey is null on p2wpkh input')
@@ -636,12 +619,10 @@ function constructTxFromInOuts(inputs: TxInput[], outputs: TxOutput[]): bitcoinj
         sequence: ENABLE_RBF_NO_LOCKTIME,
         witness: [Buffer.from(repeatStr('00', 72), 'hex'), Buffer.from(publicKey, 'hex')],
       })
-    }
-    else if (inputs[i]?.utxo.script_type === 'witness_v0_scripthash') {
+    } else if (inputs[i]?.utxo.script_type === 'witness_v0_scripthash') {
       // P2WSH
       throw new Error('P2WSH is not supported yet')
-    }
-    else if (inputs[i]?.utxo.script_type === 'witness_v1_taproot') {
+    } else if (inputs[i]?.utxo.script_type === 'witness_v1_taproot') {
       // P2TR
       if (inputs[i]?.utxo.tapLeafScript) {
         const hash = inputs[i]?.utxo.utxo.split(':')[0]
@@ -670,8 +651,7 @@ function constructTxFromInOuts(inputs: TxInput[], outputs: TxOutput[]): bitcoinj
           sequence: ENABLE_RBF_NO_LOCKTIME,
           witness: [Buffer.from(repeatStr('00', 65), 'hex'), tapleafScriptScript, controlBlock],
         })
-      }
-      else {
+      } else {
         const hash = inputs[i]?.utxo.utxo.split(':')[0]
         const indexStr = inputs[i]?.utxo.utxo.split(':')[1]
         if (!hash || !indexStr) {
@@ -686,26 +666,19 @@ function constructTxFromInOuts(inputs: TxInput[], outputs: TxOutput[]): bitcoinj
           witness: [Buffer.from(repeatStr('00', 65), 'hex')],
         })
       }
-    }
-    else if (inputs[i]?.utxo.script_type === 'pubkey') {
+    } else if (inputs[i]?.utxo.script_type === 'pubkey') {
       throw new Error('pubkey input')
-    }
-    else if (inputs[i]?.utxo.script_type === 'anchor') {
+    } else if (inputs[i]?.utxo.script_type === 'anchor') {
       throw new Error('anchor input')
-    }
-    else if (inputs[i]?.utxo.script_type === 'witness_unknown') {
+    } else if (inputs[i]?.utxo.script_type === 'witness_unknown') {
       throw new Error('witness_unknown input')
-    }
-    else if (inputs[i]?.utxo.script_type === 'nulldata') {
+    } else if (inputs[i]?.utxo.script_type === 'nulldata') {
       throw new Error('nulldata input')
-    }
-    else if (inputs[i]?.utxo.script_type === 'multisig') {
+    } else if (inputs[i]?.utxo.script_type === 'multisig') {
       throw new Error('multisig input')
-    }
-    else if (inputs[i]?.utxo.script_type === 'nonstandard') {
+    } else if (inputs[i]?.utxo.script_type === 'nonstandard') {
       throw new Error('nonstandard input')
-    }
-    else {
+    } else {
       throw new Error('unknown input')
     }
   }
@@ -719,7 +692,7 @@ function constructTxFromInOuts(inputs: TxInput[], outputs: TxOutput[]): bitcoinj
 function buildRevealScript(
   pubkey: Buff,
   inscr: InscriptionDetails,
-  parentInscriptionId?: Buff,
+  parentInscriptionId?: Buff
 ): (string | Buff)[] {
   const script = [pubkey, 'OP_CHECKSIG', 'OP_0', 'OP_IF', Buff.str('ord')]
   if (inscr.mimeType) {
@@ -762,7 +735,7 @@ function buildRevealScript(
 function buildRevealScriptMultiple(
   pubkey: Buff,
   inscrs: InscriptionDetails[],
-  postage: number,
+  postage: number
 ): (string | Buff)[] {
   const script: (string | Buff)[] = [pubkey, 'OP_CHECKSIG']
   let inscriptionIdx = 0
@@ -835,7 +808,7 @@ export function buildTransaction(
   feeRate: number,
   amount: number,
   paymentWallet: WalletInfo | null,
-  payment: number | null,
+  payment: number | null
 ): BuildTransactionResult {
   const utxos = utxoInfos.slice()
 
@@ -851,8 +824,7 @@ export function buildTransaction(
         value: 0,
       })
       opReturnSizes.push(opReturnWallets[i]!.outputScript.length)
-    }
-    else {
+    } else {
       throw new Error('Invalid wallet type (one of op_return_wallets is not op_return)')
     }
   }
@@ -893,8 +865,7 @@ export function buildTransaction(
     let deficit = amount + fee - totalOutputAmount
     // const additional_fee = Math.ceil(is_payer_p2sh ? bis.ADDITIONAL_INPUT_P2SH_VBYTES : bis.ADDITIONAL_INPUT_P2TR_VBYTES) * fee_rate // TODO: fix here!!
     while (deficit > 0) {
-      if (utxos.length === 0)
-        throw new Error('Not enough funds')
+      if (utxos.length === 0) throw new Error('Not enough funds')
 
       const lastUtxo = utxos[utxos.length - 1]!
       const requiredAmount = deficit + calculateAdditionalFee(lastUtxo.script_type, feeRate)
@@ -925,11 +896,10 @@ export function buildTransaction(
             }
           }
         }
-      }
-      else {
-        const benefit
-          = utxos[utxos.length - 1]!.value
-            - calculateAdditionalFee(utxos[utxos.length - 1]!.script_type, feeRate)
+      } else {
+        const benefit =
+          utxos[utxos.length - 1]!.value -
+          calculateAdditionalFee(utxos[utxos.length - 1]!.script_type, feeRate)
         deficit -= benefit
         inputs.push({ utxo: utxos.pop()!, wallet: payerWallet })
         totalOutputAmount += inputs[inputs.length - 1]!.utxo.value
@@ -952,8 +922,7 @@ export function buildTransaction(
         value: toStrip,
       })
       feePayerOutputIndex = outputs.length - 1
-    }
-    else {
+    } else {
       outputs.push({
         wallet: changeWallet,
         out_script: changeWallet.outputScript,
@@ -961,26 +930,22 @@ export function buildTransaction(
       })
       feePayerOutputIndex = outputs.length - 1
     }
-  }
-  else {
+  } else {
     if (outputWallet != null) {
       outputs[opReturnSizes.length]!.value = totalOutputAmount
       feePayerOutputIndex = opReturnSizes.length
-    }
-    else {
+    } else {
       feePayerOutputIndex = -1
     }
   }
 
   if (usesPayment) {
-    if (payment == null)
-      throw new Error('Payment is null')
+    if (payment == null) throw new Error('Payment is null')
 
     if (outputWallet != null) {
       outputs[opReturnSizes.length]!.value -= payment
       outputs[opReturnSizes.length + 1]!.value += payment
-    }
-    else {
+    } else {
       outputs[opReturnSizes.length]!.value += payment
       totalOutputAmount -= payment
     }
@@ -996,11 +961,9 @@ export function buildTransaction(
     if (totalOutputAmount < fee) {
       throw new Error('Not enough funds to pay fee')
     }
-  }
-  else {
+  } else {
     const tempWallet = outputs[feePayerOutputIndex]!.wallet
-    if (!tempWallet)
-      throw new Error('Fee payer output does not exist')
+    if (!tempWallet) throw new Error('Fee payer output does not exist')
 
     if (outputs[feePayerOutputIndex]!.value - fee < getDustValue(tempWallet)) {
       throw new Error('Fee payer output cannot pay the fee')
@@ -1024,20 +987,20 @@ export function buildTransaction(
 }
 
 interface TransactionInOuts {
-  ins: { hash: Buffer, index: number }[]
-  outs: { value: number, script: Buffer }[]
+  ins: { hash: Buffer; index: number }[]
+  outs: { value: number; script: Buffer }[]
 }
 export async function buildPsbtFromTx(
   tx: TransactionInOuts,
   cardinalUtxos: UtxoInfo[],
   payerWallet: WalletInfo,
-  forceInUtxos: UtxoInfoWithWallet[],
+  forceInUtxos: UtxoInfoWithWallet[]
 ): Promise<bitcoinjs.Psbt> {
   const networkType = getBitcoinNetwork()
 
   const resPsbt = new bitcoinjs.Psbt({ network: networkType })
 
-  const willBeAddedSigs: { idx: number, signature: Buffer }[] = []
+  const willBeAddedSigs: { idx: number; signature: Buffer }[] = []
   for (const input of tx.ins) {
     // get corresponding cardinal utxo
     const utxo = `${input.hash.toString('hex')}:${input.index}`
@@ -1058,16 +1021,14 @@ export async function buildPsbtFromTx(
         }
       }
     }
-    if (utxoObj == null)
-      throw new Error('Cannot find utxo in cardinal_utxos')
+    if (utxoObj == null) throw new Error('Cannot find utxo in cardinal_utxos')
 
     const txhex = await getTxhex(input.hash.toString('hex'))
     const tx = bitcoinjs.Transaction.fromHex(txhex)
     for (const output in tx.outs) {
       try {
         tx.setWitness(Number.parseInt(output), [])
-      }
-      catch {}
+      } catch {}
     }
 
     if (utxoObj.script_type === 'pubkeyhash') {
@@ -1083,8 +1044,7 @@ export async function buildPsbtFromTx(
         // witnessUtxo: tx.outs[input.index],
         nonWitnessUtxo: tx.toBuffer(),
       })
-    }
-    else if (utxoObj.script_type === 'scripthash') {
+    } else if (utxoObj.script_type === 'scripthash') {
       // P2SH
       if (signerWallet.getRedeemScript() == null) {
         throw new Error('Redeem script is null on p2sh input')
@@ -1098,8 +1058,7 @@ export async function buildPsbtFromTx(
         nonWitnessUtxo: tx.toBuffer(),
         redeemScript: signerWallet.getRedeemScript(),
       })
-    }
-    else if (utxoObj.script_type === 'witness_v0_keyhash') {
+    } else if (utxoObj.script_type === 'witness_v0_keyhash') {
       // P2WPKH
       if (signerWallet.publicKey == null) {
         throw new Error('publicKey is null on p2wpkh input')
@@ -1111,8 +1070,7 @@ export async function buildPsbtFromTx(
         sequence: ENABLE_RBF_NO_LOCKTIME,
         witnessUtxo: tx.outs[input.index],
       })
-    }
-    else if (utxoObj.script_type === 'witness_v0_scripthash') {
+    } else if (utxoObj.script_type === 'witness_v0_scripthash') {
       // P2WSH
       if (signerWallet.getRedeemScript() == null) {
         throw new Error('Redeem script is null on p2wsh input')
@@ -1125,8 +1083,7 @@ export async function buildPsbtFromTx(
         witnessUtxo: tx.outs[input.index],
         witnessScript: signerWallet.getRedeemScript(), // TODO: is this correct??
       })
-    }
-    else if (utxoObj.script_type === 'witness_v1_taproot') {
+    } else if (utxoObj.script_type === 'witness_v1_taproot') {
       // P2TR
       const witnessUtxo = tx.outs[input.index]
       if (utxoObj.witnessUtxoScript != null) {
@@ -1138,8 +1095,7 @@ export async function buildPsbtFromTx(
         sequence = utxoObj.sequence
       }
 
-      if (!signerWallet.publicKey)
-        throw new Error('publicKey is null on p2tr input')
+      if (!signerWallet.publicKey) throw new Error('publicKey is null on p2tr input')
 
       if (utxoObj.tapLeafScript == null) {
         // only add tapInternalKey if its key spend path
@@ -1150,8 +1106,7 @@ export async function buildPsbtFromTx(
           witnessUtxo,
           tapInternalKey: TO_X_ONLY(Buffer.from(signerWallet.publicKey, 'hex')),
         })
-      }
-      else {
+      } else {
         resPsbt.addInput({
           hash: input.hash.toString('hex'),
           index: input.index,
@@ -1169,8 +1124,7 @@ export async function buildPsbtFromTx(
           })
         }
       }
-    }
-    else {
+    } else {
       throw new Error('unknown input')
     }
   }
@@ -1202,14 +1156,12 @@ async function buildCommitTx(
   postage: number,
   paymentWallet: WalletInfo | null,
   payment: number | null,
-  forceInUtxos: UtxoInfoWithWallet[],
+  forceInUtxos: UtxoInfoWithWallet[]
 ): Promise<BuildCommitTxResult> {
-  if (payment == null || payment < 0)
-    payment = 0
+  if (payment == null || payment < 0) payment = 0
   const changeWallet = payerWallet
 
-  if (!payerWallet.addr)
-    throw new Error('Payer wallet address is not set.')
+  if (!payerWallet.addr) throw new Error('Payer wallet address is not set.')
 
   const cardinalUtxos = await getCardinalUtxos(payerWallet.addr)
 
@@ -1235,8 +1187,7 @@ async function buildCommitTx(
     },
   ]
   if (payment > 0) {
-    if (!paymentWallet)
-      throw new Error('Payment wallet is not available.')
+    if (!paymentWallet) throw new Error('Payment wallet is not available.')
 
     dummyRevealVout.push({
       value: 0,
@@ -1263,7 +1214,7 @@ async function buildCommitTx(
   })
   dummyRevealTx.vin[0]!.witness = [
     Buff.hex(
-      '00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000',
+      '00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000'
     ),
     script,
     cblock,
@@ -1283,7 +1234,7 @@ async function buildCommitTx(
     feeRate,
     postage + revealFee + payment,
     null,
-    null,
+    null
   )
   const unsignedCommitTx = unsignedCommitTxResp.tx
   const commitFee = unsignedCommitTxResp.tx_fee
@@ -1293,7 +1244,7 @@ async function buildCommitTx(
     unsignedCommitTx,
     cardinalUtxos,
     payerWallet,
-    forceInUtxos,
+    forceInUtxos
   )
 
   return {
@@ -1336,7 +1287,7 @@ export async function buildReclaimCommitTx(
   secret: string,
   inscriptionDetails: InscriptionDetails,
   feeRate: number,
-  postage: number,
+  postage: number
 ): Promise<{
   unsignedCommitTx: bitcoinjs.Transaction
   unsignedPsbtHex: string
@@ -1395,7 +1346,7 @@ export async function buildReclaimCommitTx(
     outputWallets,
     amounts,
     payerWallet, // change
-    feeRate,
+    feeRate
   )
 
   const commitVout = reclaimInputs.length
@@ -1404,7 +1355,7 @@ export async function buildReclaimCommitTx(
     built.tx,
     cardinalUtxos,
     payerWallet,
-    forceInUtxos,
+    forceInUtxos
   )
 
   return {
@@ -1436,7 +1387,7 @@ export async function assembleReclaimCommitAndReveal(
   inscriptionDetails: InscriptionDetails,
   feeRate: number,
   postage: number,
-  signFunc: SignFunction,
+  signFunc: SignFunction
 ): Promise<{
   commitTxId: string
   signedCommitTxHex: string
@@ -1457,7 +1408,7 @@ export async function assembleReclaimCommitAndReveal(
     secret,
     inscriptionDetails,
     feeRate,
-    postage,
+    postage
   )
 
   const ordAddrIdxes = reclaimInputs.map((_, i) => i)
@@ -1466,7 +1417,7 @@ export async function assembleReclaimCommitAndReveal(
     commit.unsignedPsbtHex,
     payerWallet.addr!,
     inscriptionWallet.addr!,
-    ordAddrIdxes,
+    ordAddrIdxes
   )
 
   const reveal = await buildRevealTx(
@@ -1479,15 +1430,14 @@ export async function assembleReclaimCommitAndReveal(
     postage,
     null,
     null,
-    commit.commitVout,
+    commit.commitVout
   )
 
   const isValid = await validateTxes([signedCommit.signedTxHex, reveal.signedTxHex])
   if (isValid == null)
     throw new Error('Reclaim commit/reveal validation failed (testmempoolaccept request failed)')
   for (const entry of isValid) {
-    if (!entry.allowed)
-      throw new Error(entry['reject-reason'])
+    if (!entry.allowed) throw new Error(entry['reject-reason'])
   }
 
   return {
@@ -1513,7 +1463,7 @@ export async function mintWithReclaimsAll(
   feeRate: number,
   postage: number | null,
   dryRun: boolean,
-  signFunc: SignFunction,
+  signFunc: SignFunction
 ): Promise<{
   commitTxId: string
   signedCommitTxHex: string
@@ -1526,22 +1476,21 @@ export async function mintWithReclaimsAll(
 }> {
   const userPaymentWallet = getPaymentWallet()
   const userOrdinalsWallet = getOrdinalsWallet()
-  if (!userPaymentWallet || !userOrdinalsWallet)
-    throw new Error('Wallets not found')
+  if (!userPaymentWallet || !userOrdinalsWallet) throw new Error('Wallets not found')
 
   const payerWallet = new WalletInfo(
     false,
     null,
     userPaymentWallet.address,
     null,
-    userPaymentWallet.pubkey,
+    userPaymentWallet.pubkey
   )
   const inscriptionWallet = new WalletInfo(
     false,
     null,
     userOrdinalsWallet.address,
     null,
-    userOrdinalsWallet.pubkey,
+    userOrdinalsWallet.pubkey
   )
 
   if (postage == null || postage <= 0) {
@@ -1558,11 +1507,10 @@ export async function mintWithReclaimsAll(
     inscriptionDetails,
     feeRate,
     postage,
-    signFunc,
+    signFunc
   )
 
-  if (!dryRun)
-    await broadcastTxes([res.signedCommitTxHex, res.signedRevealTxHex])
+  if (!dryRun) await broadcastTxes([res.signedCommitTxHex, res.signedRevealTxHex])
 
   return res
 }
@@ -1576,7 +1524,7 @@ export async function mintWithReclaimsCheckFees(
   inscriptionDetails: InscriptionDetails,
   reclaimInputs: ReclaimInput[],
   feeRate: number,
-  postage: number | null,
+  postage: number | null
 ): Promise<{
   unsigned_commit_tx_hex: string
   signed_reveal_tx_hex: string
@@ -1586,22 +1534,21 @@ export async function mintWithReclaimsCheckFees(
 }> {
   const userPaymentWallet = getPaymentWallet()
   const userOrdinalsWallet = getOrdinalsWallet()
-  if (!userPaymentWallet || !userOrdinalsWallet)
-    throw new Error('Wallets not found')
+  if (!userPaymentWallet || !userOrdinalsWallet) throw new Error('Wallets not found')
 
   const payerWallet = new WalletInfo(
     false,
     null,
     userPaymentWallet.address,
     null,
-    userPaymentWallet.pubkey,
+    userPaymentWallet.pubkey
   )
   const inscriptionWallet = new WalletInfo(
     false,
     null,
     userOrdinalsWallet.address,
     null,
-    userOrdinalsWallet.pubkey,
+    userOrdinalsWallet.pubkey
   )
 
   if (postage == null || postage <= 0) {
@@ -1619,7 +1566,7 @@ export async function mintWithReclaimsCheckFees(
     secret,
     inscriptionDetails,
     feeRate,
-    postage,
+    postage
   )
 
   const dummyCommitTxId = commit.unsignedCommitTx.getId()
@@ -1633,7 +1580,7 @@ export async function mintWithReclaimsCheckFees(
     postage,
     null,
     null,
-    commit.commitVout,
+    commit.commitVout
   )
 
   return {
@@ -1655,8 +1602,8 @@ export async function mintWithReclaimsCheckFees(
  * commit tx assumes when self-sending the reclaim input.
  */
 export async function resolveReclaimInputs(
-  reclaimInscriptions: { inscriptionId: string, amount: bigint }[],
-  ordinalsAddress: string,
+  reclaimInscriptions: { inscriptionId: string; amount: bigint }[],
+  ordinalsAddress: string
 ): Promise<ReclaimInput[]> {
   const out: ReclaimInput[] = []
   const seenUtxos = new Set<string>()
@@ -1690,10 +1637,9 @@ async function buildCommitTxMultiple(
   feeRate: number,
   postage: number,
   paymentWallet: WalletInfo | null,
-  payment: number | null,
+  payment: number | null
 ): Promise<BuildCommitTxMultipleResult> {
-  if (!payment || payment < 0)
-    payment = 0
+  if (!payment || payment < 0) payment = 0
 
   const changeWallet = payerWallet
   const cardinalUtxos = await getCardinalUtxos(payerWallet.addr as string)
@@ -1741,7 +1687,7 @@ async function buildCommitTxMultiple(
   })
   dummyRevealTx.vin[0]!.witness = [
     Buff.hex(
-      '00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000',
+      '00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000'
     ),
     script,
     cblock,
@@ -1761,7 +1707,7 @@ async function buildCommitTxMultiple(
     feeRate,
     postage * inscriptionDetailsArray.length + revealFee + (payment || 0),
     null,
-    null,
+    null
   )
   const unsignedCommitTx = unsignedCommitTxResp.tx
   const commitFee = unsignedCommitTxResp.tx_fee
@@ -1789,16 +1735,14 @@ async function buildCommitTxWithParent(
   inscriptionDetails: InscriptionDetails,
   feeRate: number,
   postage: number,
-  parentInscriptionId: string,
+  parentInscriptionId: string
 ): Promise<BuildCommitTxWithParentResult> {
   const changeWallet = payerWallet
   const parentInscriptionIdBuff = convertInscriptionIdToBuffer(parentInscriptionId)
 
-  if (!payerWallet.addr)
-    throw new Error('Payer wallet address is not set.')
+  if (!payerWallet.addr) throw new Error('Payer wallet address is not set.')
 
-  if (!inscriptionWallet.addr)
-    throw new Error('Inscription wallet address is not set.')
+  if (!inscriptionWallet.addr) throw new Error('Inscription wallet address is not set.')
 
   const ordinalUtxos = await getOrdinalUtxos(inscriptionWallet.addr)
   let parentUtxo = null
@@ -1809,11 +1753,9 @@ async function buildCommitTxWithParent(
         break
       }
     }
-    if (parentUtxo)
-      break
+    if (parentUtxo) break
   }
-  if (!parentUtxo)
-    throw new Error('Parent inscription utxo not found in ordinal utxos')
+  if (!parentUtxo) throw new Error('Parent inscription utxo not found in ordinal utxos')
 
   const cardinalUtxos = await getCardinalUtxos(payerWallet.addr)
 
@@ -1844,7 +1786,7 @@ async function buildCommitTxWithParent(
     feeRate,
     postage,
     null,
-    null,
+    null
   )
   const unsignedCommitTx = unsignedCommitTxResp.tx
   const commitFee = unsignedCommitTxResp.tx_fee
@@ -1879,7 +1821,7 @@ export function buildTransactionMultiOutput(
   outputWallets: WalletInfo[],
   amounts: number[],
   changeWallet: WalletInfo,
-  feeRate: number,
+  feeRate: number
 ): BuildTransactionResult {
   if (outputWallets.length !== amounts.length)
     throw new Error('output_wallets and amounts must have the same length')
@@ -1920,8 +1862,7 @@ export function buildTransactionMultiOutput(
     let deficit = totalTargetAmount + fee - totalInputAmount
     // const additional_fee = Math.ceil(is_payer_p2sh ? bis.ADDITIONAL_INPUT_P2SH_VBYTES : bis.ADDITIONAL_INPUT_P2TR_VBYTES) * fee_rate // TODO: fix here!!
     while (deficit > 0) {
-      if (utxos.length === 0)
-        throw new Error('Not enough funds')
+      if (utxos.length === 0) throw new Error('Not enough funds')
 
       const lastUtxo = utxos[utxos.length - 1]!
       const requiredAmount = deficit + calculateAdditionalFee(lastUtxo.script_type, feeRate)
@@ -1952,11 +1893,10 @@ export function buildTransactionMultiOutput(
             }
           }
         }
-      }
-      else {
-        const benefit
-          = utxos[utxos.length - 1]!.value
-            - calculateAdditionalFee(utxos[utxos.length - 1]!.script_type, feeRate)
+      } else {
+        const benefit =
+          utxos[utxos.length - 1]!.value -
+          calculateAdditionalFee(utxos[utxos.length - 1]!.script_type, feeRate)
         deficit -= benefit
         inputs.push({ utxo: utxos.pop()!, wallet: payerWallet })
         totalInputAmount += inputs[inputs.length - 1]!.utxo.value
@@ -1992,11 +1932,10 @@ export function buildTransactionMultiOutput(
     if (totalInputAmount - totalTargetAmount < fee) {
       throw new Error('Not enough funds to pay fee')
     }
-  }
-  else {
+  } else {
     if (
-      outputs[feePayerOutputIdx]!.value - fee
-      < getDustValue(outputs[feePayerOutputIdx]!.wallet)
+      outputs[feePayerOutputIdx]!.value - fee <
+      getDustValue(outputs[feePayerOutputIdx]!.wallet)
     ) {
       throw new Error('Fee payer output cannot pay the fee')
     }
@@ -2035,13 +1974,12 @@ export async function sendMultiInscriptionWithBuffer(
   feeRate: number,
   paymentAddr: string | null,
   payment: number | null,
-  dryRun: boolean,
+  dryRun: boolean
 ): Promise<SendMultiInscriptionWithBufferResult> {
   // Get connected wallet
   const walletInfo = getWalletInfo()
 
-  if (!walletInfo || !walletInfo.wallets)
-    throw new Error('Wallets not found')
+  if (!walletInfo || !walletInfo.wallets) throw new Error('Wallets not found')
 
   // set to null if 0
   if (payment === 0) {
@@ -2049,10 +1987,8 @@ export async function sendMultiInscriptionWithBuffer(
     payment = null
   }
 
-  if (!Array.isArray(inscriptionIds))
-    throw new Error('inscription_ids must be an array')
-  if (!Array.isArray(targetPostages))
-    throw new Error('target_postages must be an array')
+  if (!Array.isArray(inscriptionIds)) throw new Error('inscription_ids must be an array')
+  if (!Array.isArray(targetPostages)) throw new Error('target_postages must be an array')
   if (inscriptionIds.length !== targetPostages.length)
     throw new Error('inscription_ids and target_postages must have the same length')
   for (const tp of targetPostages) {
@@ -2060,17 +1996,14 @@ export async function sendMultiInscriptionWithBuffer(
       throw new Error('target_postages must be an array of integers or null')
   }
   for (const inscrId of inscriptionIds) {
-    if (typeof inscrId != 'string')
-      throw new Error('inscription_ids must be an array of strings')
+    if (typeof inscrId != 'string') throw new Error('inscription_ids must be an array of strings')
   }
   if (typeof feeRate != 'number' || !Number.isInteger(feeRate))
     throw new Error('fee_rate must be an integer')
   if (typeof bufferValue != 'number' || !Number.isInteger(bufferValue))
     throw new Error('buffer_value must be an integer')
-  if (typeof targetAddr != 'string')
-    throw new Error('target_addr must be a string')
-  if (typeof dryRun != 'boolean')
-    throw new Error('dry_run must be a boolean')
+  if (typeof targetAddr != 'string') throw new Error('target_addr must be a string')
+  if (typeof dryRun != 'boolean') throw new Error('dry_run must be a boolean')
   if (payment != null && (typeof payment != 'number' || !Number.isInteger(payment)))
     throw new Error('payment must be an integer or null')
   if (paymentAddr != null && typeof paymentAddr != 'string')
@@ -2085,8 +2018,7 @@ export async function sendMultiInscriptionWithBuffer(
   let paymentWallet = null
   if (payment != null) {
     paymentWallet = new WalletInfo(false, null, paymentAddr, null, null)
-    if (payment < getDustValue(paymentWallet))
-      throw new Error('payment must be bigger than dust')
+    if (payment < getDustValue(paymentWallet)) throw new Error('payment must be bigger than dust')
   }
 
   // Sign function
@@ -2101,7 +2033,7 @@ export async function sendMultiInscriptionWithBuffer(
     paymentWallet,
     payment,
     dryRun,
-    signFn,
+    signFn
   )
 }
 
@@ -2114,7 +2046,7 @@ async function sendMultiInscriptionWithBufferAll(
   paymentWallet: WalletInfo | null,
   payment: number | null,
   dryRun: boolean,
-  signFunc: SignFunction,
+  signFunc: SignFunction
 ): Promise<SendMultiInscriptionWithBufferResult> {
   if (inscriptionIds.length !== targetPostages.length)
     throw new Error('inscription_ids and target_postages must have the same length')
@@ -2122,8 +2054,7 @@ async function sendMultiInscriptionWithBufferAll(
   // Get connected wallet
   const userPaymentWallet = getPaymentWallet()
   const userOrdinalsWallet = getOrdinalsWallet()
-  if (!userPaymentWallet || !userOrdinalsWallet)
-    throw new Error('Wallets not found')
+  if (!userPaymentWallet || !userOrdinalsWallet) throw new Error('Wallets not found')
 
   const paymentAddr = userPaymentWallet.address
   const paymentPublicKey = userPaymentWallet.pubkey
@@ -2136,7 +2067,7 @@ async function sendMultiInscriptionWithBufferAll(
     null,
     inscriptionAddress,
     null,
-    inscriptionPublicKey,
+    inscriptionPublicKey
   )
 
   const inputUtxos: UtxoInfoWithWallet[] = []
@@ -2144,13 +2075,12 @@ async function sendMultiInscriptionWithBufferAll(
   const amounts: number[] = []
   const inscrWalletSignIdxes: number[] = []
 
-  if (!inscriptionWallet.addr)
-    throw new Error('inscription_wallet is null')
+  if (!inscriptionWallet.addr) throw new Error('inscription_wallet is null')
 
   for (let i = 0; i < inscriptionIds.length; i++) {
     const inscriptionDetails = await getInscriptionDetails(
       inscriptionIds[i]!,
-      inscriptionWallet.addr,
+      inscriptionWallet.addr
     )
     if (inscriptionDetails == null) {
       throw new Error('Inscription cannot be found in wallet')
@@ -2192,8 +2122,7 @@ async function sendMultiInscriptionWithBufferAll(
     amounts.push(payment)
   }
 
-  if (!payerWallet.addr)
-    throw new Error('payer_wallet.addr is null')
+  if (!payerWallet.addr) throw new Error('payer_wallet.addr is null')
 
   const cardinalUtxos = await getCardinalUtxos(payerWallet.addr)
 
@@ -2204,7 +2133,7 @@ async function sendMultiInscriptionWithBufferAll(
     targetWallets,
     amounts,
     payerWallet,
-    feeRate,
+    feeRate
   )
   const unsignedTx = unsignedTxResp.tx
 
@@ -2215,12 +2144,14 @@ async function sendMultiInscriptionWithBufferAll(
     unsignedPsbtHex,
     payerWallet.addr,
     inscriptionWallet.addr,
-    inscrWalletSignIdxes,
+    inscrWalletSignIdxes
   )
 
   const isValid = await validateTxes([signedTx.signedTxHex])
   if (isValid == null)
-    throw new Error('Multi-inscription buffered send validation failed (testmempoolaccept request failed)')
+    throw new Error(
+      'Multi-inscription buffered send validation failed (testmempoolaccept request failed)'
+    )
   for (const entry of isValid) {
     if (!entry.allowed) {
       throw new Error(entry['reject-reason'])
@@ -2281,13 +2212,12 @@ export async function sendInscriptionAll(
   targetPostage: number | null,
   feeRate: number,
   dryRun: boolean,
-  signFunc: SignFunction,
+  signFunc: SignFunction
 ): Promise<SendInscriptionResult> {
   // Get connected wallet
   const userPaymentWallet = getPaymentWallet()
   const userOrdinalsWallet = getOrdinalsWallet()
-  if (!userPaymentWallet || !userOrdinalsWallet)
-    throw new Error('Wallets not found')
+  if (!userPaymentWallet || !userOrdinalsWallet) throw new Error('Wallets not found')
 
   const paymentAddr = userPaymentWallet.address
   const paymentPublicKey = userPaymentWallet.pubkey
@@ -2300,11 +2230,10 @@ export async function sendInscriptionAll(
     null,
     inscriptionAddress,
     null,
-    inscriptionPublicKey,
+    inscriptionPublicKey
   )
 
-  if (!inscriptionWallet.addr)
-    throw new Error('inscription_wallet is null')
+  if (!inscriptionWallet.addr) throw new Error('inscription_wallet is null')
 
   const inscriptionDetails = await getInscriptionDetails(inscriptionId, inscriptionWallet.addr)
   if (inscriptionDetails == null) {
@@ -2315,8 +2244,7 @@ export async function sendInscriptionAll(
     throw new Error('Inscription is at the first sat of utxo')
   }
 
-  if (!payerWallet.addr)
-    throw new Error('payer_wallet.addr is null')
+  if (!payerWallet.addr) throw new Error('payer_wallet.addr is null')
 
   const cardinalUtxos = await getCardinalUtxos(payerWallet.addr)
 
@@ -2341,7 +2269,7 @@ export async function sendInscriptionAll(
     feeRate,
     targetPostage,
     null,
-    null,
+    null
   )
   const unsignedTx = unsignedTxResp.tx
 
@@ -2400,13 +2328,12 @@ interface InscriptionUTXODetails {
 async function getInscriptionDetails(
   inscriptionId: string,
   inscriptionAddr: string,
-  ordinalUtxos?: APIOrdinalUtxoInfo[],
+  ordinalUtxos?: APIOrdinalUtxoInfo[]
 ): Promise<InscriptionUTXODetails | null> {
   let utxos = null
   if (ordinalUtxos) {
     utxos = ordinalUtxos
-  }
-  else {
+  } else {
     utxos = await getOrdinalUtxos(inscriptionAddr)
   }
 
@@ -2434,7 +2361,7 @@ async function sendMultiInscriptionWithBufferFeeRateAll(
   bufferValue: number,
   feeRate: number,
   paymentWallet: WalletInfo | null,
-  payment: number | null,
+  payment: number | null
 ): Promise<number> {
   if (inscriptionIds.length !== targetPostages.length)
     throw new Error('inscription_ids and target_postages must have the same length')
@@ -2442,8 +2369,7 @@ async function sendMultiInscriptionWithBufferFeeRateAll(
   // Get connected wallet
   const userPaymentWallet = getPaymentWallet()
   const userOrdinalsWallet = getOrdinalsWallet()
-  if (!userPaymentWallet || !userOrdinalsWallet)
-    throw new Error('Wallets not found')
+  if (!userPaymentWallet || !userOrdinalsWallet) throw new Error('Wallets not found')
 
   const paymentAddr = userPaymentWallet.address
   const paymentPublicKey = userPaymentWallet.pubkey
@@ -2456,7 +2382,7 @@ async function sendMultiInscriptionWithBufferFeeRateAll(
     null,
     inscriptionAddress,
     null,
-    inscriptionPublicKey,
+    inscriptionPublicKey
   )
 
   const inputUtxos: UtxoInfoWithWallet[] = []
@@ -2464,13 +2390,12 @@ async function sendMultiInscriptionWithBufferFeeRateAll(
   const amounts: number[] = []
   const inscrWalletSignIdxes: number[] = []
 
-  if (!inscriptionWallet.addr)
-    throw new Error('Inscription wallet address is not set.')
+  if (!inscriptionWallet.addr) throw new Error('Inscription wallet address is not set.')
 
   for (let i = 0; i < inscriptionIds.length; i++) {
     const inscriptionDetails = await getInscriptionDetails(
       inscriptionIds[i]!,
-      inscriptionWallet.addr,
+      inscriptionWallet.addr
     )
     if (inscriptionDetails == null) {
       throw new Error('Inscription cannot be found in wallet')
@@ -2512,8 +2437,7 @@ async function sendMultiInscriptionWithBufferFeeRateAll(
     amounts.push(payment)
   }
 
-  if (!payerWallet.addr)
-    throw new Error('payer_wallet.addr is null')
+  if (!payerWallet.addr) throw new Error('payer_wallet.addr is null')
 
   const cardinalUtxos = await getCardinalUtxos(payerWallet.addr)
 
@@ -2524,7 +2448,7 @@ async function sendMultiInscriptionWithBufferFeeRateAll(
     targetWallets,
     amounts,
     payerWallet,
-    feeRate,
+    feeRate
   )
   return unsignedTxResp.tx_fee
 }
@@ -2549,17 +2473,15 @@ export async function getMultiInscriptionWithBufferFeeRate(
   bufferValue: number,
   feeRate: number,
   paymentAddr: string | null,
-  payment: number | null,
+  payment: number | null
 ): Promise<number> {
   if (payment === 0) {
     paymentAddr = null
     payment = null
   }
 
-  if (!Array.isArray(inscriptionIds))
-    throw new Error('inscription_ids must be an array')
-  if (!Array.isArray(targetPostages))
-    throw new Error('target_postages must be an array')
+  if (!Array.isArray(inscriptionIds)) throw new Error('inscription_ids must be an array')
+  if (!Array.isArray(targetPostages)) throw new Error('target_postages must be an array')
   if (inscriptionIds.length !== targetPostages.length)
     throw new Error('inscription_ids and target_postages must have the same length')
   for (const tp of targetPostages) {
@@ -2567,15 +2489,13 @@ export async function getMultiInscriptionWithBufferFeeRate(
       throw new Error('target_postages must be an array of integers or null')
   }
   for (const inscrId of inscriptionIds) {
-    if (typeof inscrId != 'string')
-      throw new Error('inscription_ids must be an array of strings')
+    if (typeof inscrId != 'string') throw new Error('inscription_ids must be an array of strings')
   }
   if (typeof feeRate != 'number' || !Number.isInteger(feeRate))
     throw new Error('fee_rate must be an integer')
   if (typeof bufferValue != 'number' || !Number.isInteger(bufferValue))
     throw new Error('buffer_value must be an integer')
-  if (typeof targetAddr != 'string')
-    throw new Error('target_addr must be a string')
+  if (typeof targetAddr != 'string') throw new Error('target_addr must be a string')
   if (payment != null && (typeof payment != 'number' || !Number.isInteger(payment)))
     throw new Error('payment must be an integer or null')
   if (paymentAddr != null && typeof paymentAddr != 'string')
@@ -2590,8 +2510,7 @@ export async function getMultiInscriptionWithBufferFeeRate(
   let paymentWallet = null
   if (payment != null) {
     paymentWallet = new WalletInfo(false, null, paymentAddr, null, null)
-    if (payment < getDustValue(paymentWallet))
-      throw new Error('payment must be bigger than dust')
+    if (payment < getDustValue(paymentWallet)) throw new Error('payment must be bigger than dust')
   }
 
   return await sendMultiInscriptionWithBufferFeeRateAll(
@@ -2601,7 +2520,7 @@ export async function getMultiInscriptionWithBufferFeeRate(
     bufferValue,
     feeRate,
     paymentWallet,
-    payment,
+    payment
   )
 }
 
@@ -2615,10 +2534,9 @@ async function buildRevealTx(
   postage: number,
   paymentWallet: WalletInfo | null,
   payment: number | null,
-  commitVout: number = 0,
+  commitVout: number = 0
 ): Promise<SignResponse> {
-  if (payment == null || payment < 0)
-    payment = 0
+  if (payment == null || payment < 0) payment = 0
 
   const seckey = get_seckey(secret)
   const pubkey = get_pubkey(seckey, true)
@@ -2642,8 +2560,7 @@ async function buildRevealTx(
     },
   ]
   if (payment > 0) {
-    if (!paymentWallet)
-      throw new Error('Payment wallet is not available.')
+    if (!paymentWallet) throw new Error('Payment wallet is not available.')
 
     txdataVout.push({
       value: payment,
@@ -2673,8 +2590,7 @@ async function buildRevealTx(
   txdata.vin[0]!.witness = [sig, script, cblock]
 
   const isValid = Signer.taproot.verify(txdata, 0, { pubkey, throws: true })
-  if (!isValid)
-    throw new Error('Invalid signature')
+  if (!isValid) throw new Error('Invalid signature')
 
   return {
     txId: Tx.util.getTxid(txdata),
@@ -2696,17 +2612,14 @@ async function buildRevealTxWithParent(
   parentInscriptionId: string,
   feeRate: number,
   paymentWallet: WalletInfo | null,
-  payment: number | null,
+  payment: number | null
 ): Promise<BuildRevealTxWithParentResult> {
-  if (payment == null || payment < 0)
-    payment = 0
+  if (payment == null || payment < 0) payment = 0
   const changeWallet = payerWallet
   const parentInscriptionIdBuff = convertInscriptionIdToBuffer(parentInscriptionId)
 
-  if (!inscriptionWallet.addr)
-    throw new Error('Inscription wallet address is not set.')
-  if (!payerWallet.addr)
-    throw new Error('Payer wallet address is not set.')
+  if (!inscriptionWallet.addr) throw new Error('Inscription wallet address is not set.')
+  if (!payerWallet.addr) throw new Error('Payer wallet address is not set.')
 
   const ordinalUtxos = await getOrdinalUtxos(inscriptionWallet.addr)
   let parentUtxo = null
@@ -2717,11 +2630,9 @@ async function buildRevealTxWithParent(
         break
       }
     }
-    if (parentUtxo)
-      break
+    if (parentUtxo) break
   }
-  if (!parentUtxo)
-    throw new Error('Parent inscription utxo not found in ordinal utxos')
+  if (!parentUtxo) throw new Error('Parent inscription utxo not found in ordinal utxos')
 
   const cardinalUtxos = await getCardinalUtxos(payerWallet.addr)
 
@@ -2787,8 +2698,7 @@ async function buildRevealTxWithParent(
     },
   ]
   if (payment > 0) {
-    if (!paymentWallet)
-      throw new Error('Payment wallet is not available.')
+    if (!paymentWallet) throw new Error('Payment wallet is not available.')
 
     outputs.push({
       out_script: paymentWallet.outputScript,
@@ -2801,12 +2711,11 @@ async function buildRevealTxWithParent(
   while (currentMinerFee < fee) {
     let deficit = fee - currentMinerFee
     while (deficit > 0) {
-      if (utxos.length === 0)
-        throw new Error('Not enough funds')
+      if (utxos.length === 0) throw new Error('Not enough funds')
 
       if (
-        utxos[utxos.length - 1]!.value
-        >= deficit + calculateAdditionalFee(utxos[utxos.length - 1]!.script_type, feeRate)
+        utxos[utxos.length - 1]!.value >=
+        deficit + calculateAdditionalFee(utxos[utxos.length - 1]!.script_type, feeRate)
       ) {
         for (const utxo of utxos.filter(utxo => utxo.value > 10000)) {
           if (utxo.value >= deficit + calculateAdditionalFee(utxo.script_type, feeRate)) {
@@ -2828,11 +2737,10 @@ async function buildRevealTxWithParent(
             }
           }
         }
-      }
-      else {
-        const benefit
-          = utxos[utxos.length - 1]!.value
-            - calculateAdditionalFee(utxos[utxos.length - 1]!.script_type, feeRate)
+      } else {
+        const benefit =
+          utxos[utxos.length - 1]!.value -
+          calculateAdditionalFee(utxos[utxos.length - 1]!.script_type, feeRate)
         deficit -= benefit
         const utxo = utxos.pop()!
         inputs.push({ utxo, wallet: payerWallet })
@@ -2842,8 +2750,7 @@ async function buildRevealTxWithParent(
     fee = estimateFee(inputs, outputs, feeRate)
   }
 
-  if (!changeWallet.outputScript)
-    throw new Error('Change wallet output script is not set.')
+  if (!changeWallet.outputScript) throw new Error('Change wallet output script is not set.')
 
   const changeOutputFee = Math.ceil(changeWallet.outputScript.length + 9) * feeRate
   const minimumChange = getDustValue(changeWallet)
@@ -2896,10 +2803,8 @@ async function buildRevealTxWithParent(
     },
   ]
   if (payment > 0) {
-    if (!paymentWallet)
-      throw new Error('Payment wallet is not available.')
-    if (!paymentWallet.outputScript)
-      throw new Error('Payment wallet output script is not set.')
+    if (!paymentWallet) throw new Error('Payment wallet is not available.')
+    if (!paymentWallet.outputScript) throw new Error('Payment wallet output script is not set.')
 
     txdataVout.push({
       value: payment,
@@ -2914,8 +2819,7 @@ async function buildRevealTxWithParent(
     const vout = Number.parseInt(utxo.utxo.split(':')[1]!)
     const wallet = input.wallet
 
-    if (!wallet.outputScript)
-      throw new Error('Input wallet output script is not set.')
+    if (!wallet.outputScript) throw new Error('Input wallet output script is not set.')
 
     txdataVin.push({
       txid,
@@ -2931,8 +2835,7 @@ async function buildRevealTxWithParent(
     const scriptPubKey = output.out_script
     const value = output.value
 
-    if (!scriptPubKey)
-      throw new Error('Output script is not set.')
+    if (!scriptPubKey) throw new Error('Output script is not set.')
 
     txdataVout.push({
       value,
@@ -2949,8 +2852,7 @@ async function buildRevealTxWithParent(
   txdata.vin[0]!.witness = [sig, script, cblock]
 
   const isValid = Signer.taproot.verify(txdata, 0, { pubkey, throws: true })
-  if (!isValid)
-    throw new Error('Invalid signature')
+  if (!isValid) throw new Error('Invalid signature')
 
   const tx: TransactionInOuts = {
     ins: [],
@@ -3022,13 +2924,12 @@ export async function mintAll(
   paymentAddr: string | null,
   payment: number | null,
   dryRun: boolean,
-  signFunc: SignFunction,
+  signFunc: SignFunction
 ) {
   // Get connected wallet
   const userPaymentWallet = getPaymentWallet()
   const userOrdinalsWallet = getOrdinalsWallet()
-  if (!userPaymentWallet || !userOrdinalsWallet)
-    throw new Error('Wallets not found')
+  if (!userPaymentWallet || !userOrdinalsWallet) throw new Error('Wallets not found')
 
   const payerAddr = userPaymentWallet.address
   const payerPublicKey = userPaymentWallet.pubkey
@@ -3041,7 +2942,7 @@ export async function mintAll(
     null,
     inscriptionAddress,
     null,
-    inscriptionPublicKey,
+    inscriptionPublicKey
   )
   let paymentWallet = null
   if (paymentAddr != null) {
@@ -3062,13 +2963,13 @@ export async function mintAll(
     postage,
     paymentWallet,
     payment,
-    [],
+    []
   )
   const signedCommitTx = await signFunc(
     commitTx.unsigned_psbt_hex,
     payerAddr,
     inscriptionAddress,
-    [],
+    []
   )
 
   const commitTxid = signedCommitTx.txId
@@ -3081,7 +2982,7 @@ export async function mintAll(
     feeRate,
     postage,
     paymentWallet,
-    payment,
+    payment
   )
 
   const isValid = await validateTxes([signedCommitTx.signedTxHex, revealTx.signedTxHex])
@@ -3138,13 +3039,12 @@ export async function mintAllPaymentWallet(
   paymentAddr: string | null,
   payment: number | null,
   dryRun: boolean,
-  signFunc: SignFunction,
+  signFunc: SignFunction
 ): Promise<InscribeResult> {
   // Get connected wallet
   const userPaymentWallet = getPaymentWallet()
   const userOrdinalsWallet = getOrdinalsWallet()
-  if (!userPaymentWallet || !userOrdinalsWallet)
-    throw new Error('Wallets not found')
+  if (!userPaymentWallet || !userOrdinalsWallet) throw new Error('Wallets not found')
 
   const payerAddr = userPaymentWallet.address
   const payerPublicKey = userPaymentWallet.pubkey
@@ -3170,13 +3070,13 @@ export async function mintAllPaymentWallet(
     postage,
     paymentWallet,
     payment,
-    [],
+    []
   )
   const signedCommitTx = await signFunc(
     commitTx.unsigned_psbt_hex,
     payerAddr,
     inscriptionAddress,
-    [],
+    []
   )
 
   const commitTxid = signedCommitTx.txId
@@ -3189,12 +3089,14 @@ export async function mintAllPaymentWallet(
     feeRate,
     postage,
     paymentWallet,
-    payment,
+    payment
   )
 
   const isValid = await validateTxes([signedCommitTx.signedTxHex, revealTx.signedTxHex])
   if (isValid == null)
-    throw new Error('Payment-wallet mint commit/reveal validation failed (testmempoolaccept request failed)')
+    throw new Error(
+      'Payment-wallet mint commit/reveal validation failed (testmempoolaccept request failed)'
+    )
 
   for (const entry of isValid) {
     if (!entry.allowed) {
@@ -3251,13 +3153,12 @@ export async function mintAllCheckFees(
   feeRate: number,
   postage: number | null,
   paymentAddr: string | null,
-  payment: number | null,
+  payment: number | null
 ): Promise<InscribeCheckFeesResult> {
   // Get connected wallet
   const userPaymentWallet = getPaymentWallet()
   const userOrdinalsWallet = getOrdinalsWallet()
-  if (!userPaymentWallet || !userOrdinalsWallet)
-    throw new Error('Wallets not found')
+  if (!userPaymentWallet || !userOrdinalsWallet) throw new Error('Wallets not found')
 
   const payerAddr = userPaymentWallet.address
   const payerPublicKey = userPaymentWallet.pubkey
@@ -3270,7 +3171,7 @@ export async function mintAllCheckFees(
     null,
     inscriptionAddress,
     null,
-    inscriptionPublicKey,
+    inscriptionPublicKey
   )
   let paymentWallet = null
   if (paymentAddr != null) {
@@ -3291,7 +3192,7 @@ export async function mintAllCheckFees(
     postage,
     paymentWallet,
     payment,
-    [],
+    []
   )
   const dummyCommitTxid = commitTx.unsigned_commit_tx.getId()
   const revealTx = await buildRevealTx(
@@ -3303,7 +3204,7 @@ export async function mintAllCheckFees(
     feeRate,
     postage,
     paymentWallet,
-    payment,
+    payment
   )
 
   return {
@@ -3335,13 +3236,12 @@ export async function sendInscriptionToOpReturnAll(
   targetPostage: number | null,
   feeRate: number,
   dryRun: boolean,
-  signFunc: SignFunction,
+  signFunc: SignFunction
 ): Promise<SendInscriptionResult> {
   // Get connected wallet
   const userPaymentWallet = getPaymentWallet()
   const userOrdinalsWallet = getOrdinalsWallet()
-  if (!userPaymentWallet || !userOrdinalsWallet)
-    throw new Error('Wallets not found')
+  if (!userPaymentWallet || !userOrdinalsWallet) throw new Error('Wallets not found')
 
   if (targetPostage == null || targetPostage <= 0) {
     targetPostage = 1 // 1 sat for inscription
@@ -3358,11 +3258,10 @@ export async function sendInscriptionToOpReturnAll(
     null,
     inscriptionAddress,
     null,
-    inscriptionPublicKey,
+    inscriptionPublicKey
   )
 
-  if (!inscriptionWallet.addr)
-    throw new Error('Inscription wallet address is not set.')
+  if (!inscriptionWallet.addr) throw new Error('Inscription wallet address is not set.')
 
   const inscriptionDetails = await getInscriptionDetails(inscriptionId, inscriptionWallet.addr)
   if (inscriptionDetails == null) {
@@ -3373,8 +3272,7 @@ export async function sendInscriptionToOpReturnAll(
     throw new Error('Inscription is at the first sat of utxo')
   }
 
-  if (!payerWallet.addr)
-    throw new Error('Payer wallet address is not set.')
+  if (!payerWallet.addr) throw new Error('Payer wallet address is not set.')
 
   const cardinalUtxos = await getCardinalUtxos(payerWallet.addr)
 
@@ -3399,7 +3297,7 @@ export async function sendInscriptionToOpReturnAll(
     feeRate,
     targetPostage,
     null,
-    null,
+    null
   )
   const unsignedTx = unsignedTxResp.tx
 
@@ -3410,7 +3308,9 @@ export async function sendInscriptionToOpReturnAll(
 
   const isValid = await validateTxes([signedTx.signedTxHex])
   if (isValid == null)
-    throw new Error('OP_RETURN inscription send validation failed (testmempoolaccept request failed)')
+    throw new Error(
+      'OP_RETURN inscription send validation failed (testmempoolaccept request failed)'
+    )
 
   for (const entry of isValid) {
     if (!entry.allowed) {
@@ -3455,13 +3355,12 @@ export async function sendInscriptionInPaymentWalletToOpReturnAll(
   targetPostage: number | null,
   feeRate: number,
   dryRun: boolean,
-  signFunc: SignFunction,
+  signFunc: SignFunction
 ): Promise<SendInscriptionResult> {
   // Get connected wallet
   const userPaymentWallet = getPaymentWallet()
   const userOrdinalsWallet = getOrdinalsWallet()
-  if (!userPaymentWallet || !userOrdinalsWallet)
-    throw new Error('Wallets not found')
+  if (!userPaymentWallet || !userOrdinalsWallet) throw new Error('Wallets not found')
 
   if (targetPostage == null || targetPostage <= 0) {
     targetPostage = 1 // 1 sat for inscription
@@ -3475,10 +3374,8 @@ export async function sendInscriptionInPaymentWalletToOpReturnAll(
   const payerWallet = new WalletInfo(false, null, paymentAddr, null, paymentPublicKey)
   const inscriptionWallet = new WalletInfo(false, null, inscriptionAddr, null, inscriptionPublicKey)
 
-  if (!payerWallet.addr)
-    throw new Error('Payment wallet address is not set.')
-  if (!inscriptionWallet.addr)
-    throw new Error('Inscription wallet address is not set.')
+  if (!payerWallet.addr) throw new Error('Payment wallet address is not set.')
+  if (!inscriptionWallet.addr) throw new Error('Inscription wallet address is not set.')
 
   const inscriptionDetails = await getInscriptionDetails(inscriptionId, payerWallet.addr)
   if (inscriptionDetails == null) {
@@ -3489,8 +3386,7 @@ export async function sendInscriptionInPaymentWalletToOpReturnAll(
     throw new Error('Inscription is at the first sat of utxo')
   }
 
-  if (!payerWallet.addr)
-    throw new Error('Payer wallet address is not set.')
+  if (!payerWallet.addr) throw new Error('Payer wallet address is not set.')
 
   const cardinalUtxos = await getCardinalUtxos(payerWallet.addr)
 
@@ -3515,7 +3411,7 @@ export async function sendInscriptionInPaymentWalletToOpReturnAll(
     feeRate,
     targetPostage,
     null,
-    null,
+    null
   )
   const unsignedTx = unsignedTxResp.tx
 
@@ -3526,7 +3422,9 @@ export async function sendInscriptionInPaymentWalletToOpReturnAll(
 
   const isValid = await validateTxes([signedTx.signedTxHex])
   if (isValid == null)
-    throw new Error('Payment-wallet OP_RETURN inscription send validation failed (testmempoolaccept request failed)')
+    throw new Error(
+      'Payment-wallet OP_RETURN inscription send validation failed (testmempoolaccept request failed)'
+    )
 
   for (const entry of isValid) {
     if (!entry.allowed) {
@@ -3574,13 +3472,12 @@ export async function mintWithParentAll(
   paymentAddr: string | null,
   payment: number | null,
   dryRun: boolean,
-  signFunc: SignFunction,
+  signFunc: SignFunction
 ): Promise<InscribeResult> {
   // Get connected wallet
   const userPaymentWallet = getPaymentWallet()
   const userOrdinalsWallet = getOrdinalsWallet()
-  if (!userPaymentWallet || !userOrdinalsWallet)
-    throw new Error('Wallets not found')
+  if (!userPaymentWallet || !userOrdinalsWallet) throw new Error('Wallets not found')
 
   const payerAddr = userPaymentWallet.address
   const payerPublicKey = userPaymentWallet.pubkey
@@ -3593,7 +3490,7 @@ export async function mintWithParentAll(
     null,
     inscriptionAddress,
     null,
-    inscriptionPublicKey,
+    inscriptionPublicKey
   )
   let paymentWallet = null
   if (paymentAddr != null) {
@@ -3612,13 +3509,13 @@ export async function mintWithParentAll(
     inscriptionDetails,
     feeRate,
     postage,
-    parentInscriptionId,
+    parentInscriptionId
   )
   const signedCommitTx = await signFunc(
     commitTx.unsigned_psbt_hex,
     payerAddr,
     inscriptionAddress,
-    [],
+    []
   )
 
   const commitTxid = signedCommitTx.txId
@@ -3626,7 +3523,7 @@ export async function mintWithParentAll(
   try {
     saveExtraUtxos(
       [signedCommitTx.signedTxHex],
-      ['0000000000000000000000000000000000000000000000000000000000000000i0', `${commitTxid}:0:0`],
+      ['0000000000000000000000000000000000000000000000000000000000000000i0', `${commitTxid}:0:0`]
     )
     const revealTx = await buildRevealTxWithParent(
       payerWallet,
@@ -3638,7 +3535,7 @@ export async function mintWithParentAll(
       parentInscriptionId,
       feeRate,
       paymentWallet,
-      payment,
+      payment
     )
 
     signedRevealTx = await signFunc(
@@ -3647,16 +3544,17 @@ export async function mintWithParentAll(
       inscriptionAddress,
       [1],
       undefined,
-      [0],
+      [0]
     )
-  }
-  finally {
+  } finally {
     clearExtraUtxos()
   }
 
   const isValid = await validateTxes([signedCommitTx.signedTxHex, signedRevealTx.signedTxHex])
   if (isValid == null)
-    throw new Error('Mint-with-parent commit/reveal validation failed (testmempoolaccept request failed)')
+    throw new Error(
+      'Mint-with-parent commit/reveal validation failed (testmempoolaccept request failed)'
+    )
 
   for (const entry of isValid) {
     if (!entry.allowed) {
@@ -3713,13 +3611,12 @@ export async function sendInscriptionToOpReturnWithExtraInputsAndExtraOutputAll(
   extraOutputUtxos: OutputUtxoInfo[],
   feeRate: number,
   dryRun: boolean,
-  signFunc: SignFunction,
+  signFunc: SignFunction
 ): Promise<SignResponse> {
   // Get connected wallet
   const userPaymentWallet = getPaymentWallet()
   const userOrdinalsWallet = getOrdinalsWallet()
-  if (!userPaymentWallet || !userOrdinalsWallet)
-    throw new Error('Wallets not found')
+  if (!userPaymentWallet || !userOrdinalsWallet) throw new Error('Wallets not found')
 
   const payerAddr = userPaymentWallet.address
   const payerPublicKey = userPaymentWallet.pubkey
@@ -3732,11 +3629,10 @@ export async function sendInscriptionToOpReturnWithExtraInputsAndExtraOutputAll(
     null,
     inscriptionAddress,
     null,
-    inscriptionPublicKey,
+    inscriptionPublicKey
   )
 
-  if (!inscriptionWallet.addr)
-    throw new Error('Inscription wallet address is not set.')
+  if (!inscriptionWallet.addr) throw new Error('Inscription wallet address is not set.')
 
   const inscriptionDetails = await getInscriptionDetails(inscriptionId, inscriptionWallet.addr)
   if (inscriptionDetails == null) {
@@ -3746,8 +3642,7 @@ export async function sendInscriptionToOpReturnWithExtraInputsAndExtraOutputAll(
     throw new Error('Inscription is not at the first sat of utxo')
   }
 
-  if (!payerWallet.addr)
-    throw new Error('Payer wallet address is not set.')
+  if (!payerWallet.addr) throw new Error('Payer wallet address is not set.')
 
   const cardinalUtxos = await getCardinalUtxos(payerWallet.addr)
 
@@ -3780,7 +3675,7 @@ export async function sendInscriptionToOpReturnWithExtraInputsAndExtraOutputAll(
     outputWallets,
     amounts,
     payerWallet,
-    feeRate,
+    feeRate
   )
   const unsignedTx = unsignedTxResp.tx
 
@@ -3791,7 +3686,9 @@ export async function sendInscriptionToOpReturnWithExtraInputsAndExtraOutputAll(
 
   const isValid = await validateTxes([signedTx.signedTxHex])
   if (isValid == null)
-    throw new Error('OP_RETURN inscription send with extra inputs/output validation failed (testmempoolaccept request failed)')
+    throw new Error(
+      'OP_RETURN inscription send with extra inputs/output validation failed (testmempoolaccept request failed)'
+    )
 
   for (const entry of isValid) {
     if (!entry.allowed) {
@@ -3836,13 +3733,12 @@ export async function sendInscriptionToOpReturnWithExtraInputsAndExtraOutputFeeR
   targetWallet: WalletInfo,
   targetPostage: number,
   extraOutputUtxos: OutputUtxoInfo[],
-  feeRate: number,
+  feeRate: number
 ): Promise<SendInscriptionFeeRateResult> {
   // Get connected wallet
   const userPaymentWallet = getPaymentWallet()
   const userOrdinalsWallet = getOrdinalsWallet()
-  if (!userPaymentWallet || !userOrdinalsWallet)
-    throw new Error('Wallets not found')
+  if (!userPaymentWallet || !userOrdinalsWallet) throw new Error('Wallets not found')
 
   const payerAddr = userPaymentWallet.address
   const payerPublicKey = userPaymentWallet.pubkey
@@ -3855,11 +3751,10 @@ export async function sendInscriptionToOpReturnWithExtraInputsAndExtraOutputFeeR
     null,
     inscriptionAddress,
     null,
-    inscriptionPublicKey,
+    inscriptionPublicKey
   )
 
-  if (!inscriptionWallet.addr)
-    throw new Error('Inscription wallet address is not set.')
+  if (!inscriptionWallet.addr) throw new Error('Inscription wallet address is not set.')
 
   const inscriptionDetails = await getInscriptionDetails(inscriptionId, inscriptionWallet.addr)
   if (inscriptionDetails == null) {
@@ -3869,8 +3764,7 @@ export async function sendInscriptionToOpReturnWithExtraInputsAndExtraOutputFeeR
     throw new Error('Inscription is not at the first sat of utxo')
   }
 
-  if (!payerWallet.addr)
-    throw new Error('Payer wallet address is not set.')
+  if (!payerWallet.addr) throw new Error('Payer wallet address is not set.')
 
   const cardinalUtxos = await getCardinalUtxos(payerWallet.addr)
 
@@ -3903,7 +3797,7 @@ export async function sendInscriptionToOpReturnWithExtraInputsAndExtraOutputFeeR
     outputWallets,
     amounts,
     payerWallet,
-    feeRate,
+    feeRate
   )
   const unsignedTx = unsignedTxResp.tx
 
@@ -3936,13 +3830,12 @@ export async function mintWithExtraInputInCommitAll(
   paymentAddr: string | null,
   payment: number | null,
   dryRun: boolean,
-  signFunc: SignFunction,
+  signFunc: SignFunction
 ): Promise<InscribeResult> {
   // Get connected wallet
   const userPaymentWallet = getPaymentWallet()
   const userOrdinalsWallet = getOrdinalsWallet()
-  if (!userPaymentWallet || !userOrdinalsWallet)
-    throw new Error('Wallets not found')
+  if (!userPaymentWallet || !userOrdinalsWallet) throw new Error('Wallets not found')
 
   const payerAddr = userPaymentWallet.address
   const payerPublicKey = userPaymentWallet.pubkey
@@ -3955,7 +3848,7 @@ export async function mintWithExtraInputInCommitAll(
     null,
     inscriptionAddress,
     null,
-    inscriptionPublicKey,
+    inscriptionPublicKey
   )
   let paymentWallet = null
   if (paymentAddr != null) {
@@ -3976,13 +3869,13 @@ export async function mintWithExtraInputInCommitAll(
     postage,
     paymentWallet,
     payment,
-    extraInputUtxos,
+    extraInputUtxos
   )
   const signedCommitTx = await signFunc(
     commitTx.unsigned_psbt_hex,
     payerAddr,
     inscriptionAddress,
-    [],
+    []
   )
 
   const commitTxid = signedCommitTx.txId
@@ -3995,12 +3888,14 @@ export async function mintWithExtraInputInCommitAll(
     feeRate,
     postage,
     paymentWallet,
-    payment,
+    payment
   )
 
   const isValid = await validateTxes([signedCommitTx.signedTxHex, revealTx.signedTxHex])
   if (isValid == null)
-    throw new Error('Mint with extra commit input validation failed (testmempoolaccept request failed)')
+    throw new Error(
+      'Mint with extra commit input validation failed (testmempoolaccept request failed)'
+    )
 
   for (const entry of isValid) {
     if (!entry.allowed) {
@@ -4050,13 +3945,12 @@ export async function mintWithExtraInputInCommitFeeRate(
   feeRate: number,
   postage: number | null,
   paymentAddr: string | null,
-  payment: number | null,
+  payment: number | null
 ): Promise<InscribeCheckFeesResult> {
   // Get connected wallet
   const userPaymentWallet = getPaymentWallet()
   const userOrdinalsWallet = getOrdinalsWallet()
-  if (!userPaymentWallet || !userOrdinalsWallet)
-    throw new Error('Wallets not found')
+  if (!userPaymentWallet || !userOrdinalsWallet) throw new Error('Wallets not found')
 
   const payerAddr = userPaymentWallet.address
   const payerPublicKey = userPaymentWallet.pubkey
@@ -4069,7 +3963,7 @@ export async function mintWithExtraInputInCommitFeeRate(
     null,
     inscriptionAddress,
     null,
-    inscriptionPublicKey,
+    inscriptionPublicKey
   )
   let paymentWallet = null
   if (paymentAddr != null) {
@@ -4090,7 +3984,7 @@ export async function mintWithExtraInputInCommitFeeRate(
     postage,
     paymentWallet,
     payment,
-    extraInputUtxos,
+    extraInputUtxos
   )
   const dummyCommitTxId = commitTx.unsigned_commit_tx.getId()
   const revealTx = await buildRevealTx(
@@ -4102,7 +3996,7 @@ export async function mintWithExtraInputInCommitFeeRate(
     feeRate,
     postage,
     paymentWallet,
-    payment,
+    payment
   )
 
   return {

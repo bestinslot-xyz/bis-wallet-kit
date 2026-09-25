@@ -9,8 +9,7 @@ export function App() {
     try {
       await modal.connect()
       refresh()
-    }
-    catch (e) {
+    } catch (e) {
       console.error('Connection failed:', e)
     }
   }

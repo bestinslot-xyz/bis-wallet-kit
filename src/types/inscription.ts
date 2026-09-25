@@ -50,7 +50,7 @@ export class InscriptionDetails {
     metaprotocol: Buff | null,
     contentEncoding: Buff | null,
     delegate: Buff | null,
-    data: Buff | null,
+    data: Buff | null
   ) {
     if (mimeType != null && !(mimeType instanceof Buff)) {
       throw new Error('mimeType must be of type Buff or null')
@@ -95,7 +95,7 @@ export function jsonInscription(jsonData: any): InscriptionDetails {
     null,
     null,
     null,
-    Buff.str(JSON.stringify(jsonData)),
+    Buff.str(JSON.stringify(jsonData))
   )
 }
 

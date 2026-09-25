@@ -22,10 +22,9 @@ Full guides and an API reference live in [`docs/`](./docs/README.md):
   [Balances](./docs/balances.md)
 - [Testing](./docs/testing.md)
 
-The full **API reference** is published at
-<https://bestinslot-xyz.github.io/bis-wallet-kit/> (regenerated from source on
-every push to `main`). To build it locally, run `pnpm docs:api` (output in
-`docs/api/`).
+The full **API reference** is published at <https://bestinslot-xyz.github.io/bis-wallet-kit/>
+(regenerated from source on every push to `main`). To build it locally, run `pnpm docs:api` (output
+in `docs/api/`).
 
 ## 📦 Entry points
 
@@ -82,8 +81,7 @@ try {
   const data = await modal.connect()
 
   console.warn('Connected to wallet: ', data)
-}
-catch (e) {
+} catch (e) {
   console.error('Connection failed: ', e)
 }
 

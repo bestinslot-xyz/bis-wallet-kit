@@ -137,8 +137,7 @@ function buildType(def: any): string {
   if (def.type.startsWith('tuple')) {
     const componentTypes = def.components.map(buildType).join(',')
     const base = `tuple(${componentTypes})`
-    if (def.type.endsWith('[]'))
-      return `${base}[]`
+    if (def.type.endsWith('[]')) return `${base}[]`
     return base
   }
 
@@ -156,7 +155,7 @@ function buildType(def: any): string {
  * @param decodedValue - The decoded value to be mapped.
  * @returns An object containing the type and value of the decoded parameter.
  */
-function decodeValue(typeDef: any, decodedValue: any): { type: string, value: any } {
+function decodeValue(typeDef: any, decodedValue: any): { type: string; value: any } {
   const baseType = typeDef.type
 
   if (baseType.startsWith('tuple')) {
@@ -195,7 +194,7 @@ function decodeValue(typeDef: any, decodedValue: any): { type: string, value: an
  * @returns An object mapping component names to their type and decoded value. If a component does not have a name, it will be assigned a default name like "component0", "component1", etc.
  */
 function decodeTupleComponents(components: any[], decoded: any) {
-  const result: { [name: string]: { type: string, value: any } } = {}
+  const result: { [name: string]: { type: string; value: any } } = {}
   components.forEach((comp, idx) => {
     const name = comp.name || `component${idx}`
     result[name] = decodeValue(comp, decoded[idx])
@@ -226,16 +225,14 @@ export async function deploySmartContract(
   postage: number | null,
   paymentAddr: string | null,
   payment: number | null,
-  dryRun: boolean,
+  dryRun: boolean
 ) {
   // Get connected wallet
   const walletInfo = getWalletInfo()
 
-  if (!walletInfo || !walletInfo.wallets)
-    throw new Error('Wallets not found')
+  if (!walletInfo || !walletInfo.wallets) throw new Error('Wallets not found')
 
-  if (typeof inputHex != 'string')
-    throw new Error('input_hex must be a string')
+  if (typeof inputHex != 'string') throw new Error('input_hex must be a string')
   if (typeof feeRate != 'number' || !Number.isInteger(feeRate))
     throw new Error('fee_rate must be an integer')
   if (postage != null && (typeof postage != 'number' || !Number.isInteger(postage)))
@@ -244,8 +241,7 @@ export async function deploySmartContract(
     throw new Error('payment_addr must be a string')
   if (payment != null && (typeof payment != 'number' || !Number.isInteger(payment)))
     throw new Error('payment must be an integer')
-  if (typeof dryRun != 'boolean')
-    throw new Error('dry_run must be a boolean')
+  if (typeof dryRun != 'boolean') throw new Error('dry_run must be a boolean')
 
   // Compress
   const inputB64 = await compressSmartContractData(inputHex)
@@ -264,7 +260,7 @@ export async function deploySmartContract(
     null,
     null,
     null,
-    content,
+    content
   )
 
   // Sign function
@@ -277,7 +273,7 @@ export async function deploySmartContract(
     paymentAddr,
     payment,
     true,
-    signFn,
+    signFn
   )
   const inscriptionId = res.inscription_id
   const satpoint = `${inscriptionId.split('i')[0]}:0:0`
@@ -290,7 +286,7 @@ export async function deploySmartContract(
       Buffer.from(Script.encode(['OP_RETURN', Buff.str('BRC20PROG')], false)),
       null,
       null,
-      null,
+      null
     )
     sendInscriptionTx = await sendInscriptionToOpReturnAll(
       inscriptionId,
@@ -298,10 +294,9 @@ export async function deploySmartContract(
       1,
       feeRate,
       true,
-      signFn,
+      signFn
     )
-  }
-  finally {
+  } finally {
     clearExtraUtxos()
   }
   if (sendInscriptionTx == null) {
@@ -363,14 +358,11 @@ export async function deploySmartContractAbi(
   postage: number | null,
   paymentAddr: string | null,
   payment: number | null,
-  dryRun: boolean,
+  dryRun: boolean
 ) {
-  if (typeof abi != 'object')
-    throw new Error('abi must be an object')
-  if (typeof bytecode != 'string')
-    throw new Error('bytecode must be a string')
-  if (!Array.isArray(params))
-    throw new Error('params must be an array')
+  if (typeof abi != 'object') throw new Error('abi must be an object')
+  if (typeof bytecode != 'string') throw new Error('bytecode must be a string')
+  if (!Array.isArray(params)) throw new Error('params must be an array')
 
   const encodedDeploy = evmEncodeDeploy(bytecode, abi, params)
   return await deploySmartContract(
@@ -381,7 +373,7 @@ export async function deploySmartContractAbi(
     postage,
     paymentAddr,
     payment,
-    dryRun,
+    dryRun
   )
 }
 
@@ -409,18 +401,16 @@ export async function callSmartContract(
   postage: number | null,
   paymentAddr: string | null,
   payment: number | null,
-  dryRun: boolean,
+  dryRun: boolean
 ) {
   // Get connected wallet
   const walletInfo = getWalletInfo()
 
-  if (!walletInfo || !walletInfo.wallets)
-    throw new Error('Wallets not found')
+  if (!walletInfo || !walletInfo.wallets) throw new Error('Wallets not found')
 
   if (typeof smartContractContractAddr != 'string')
     throw new Error('smart_contract_contract_addr must be a string')
-  if (typeof inputHex != 'string')
-    throw new Error('input_hex must be a string')
+  if (typeof inputHex != 'string') throw new Error('input_hex must be a string')
   if (typeof feeRate != 'number' || !Number.isInteger(feeRate))
     throw new Error('fee_rate must be an integer')
   if (postage != null && (typeof postage != 'number' || !Number.isInteger(postage)))
@@ -429,14 +419,13 @@ export async function callSmartContract(
     throw new Error('payment_addr must be a string')
   if (payment != null && (typeof payment != 'number' || !Number.isInteger(payment)))
     throw new Error('payment must be an integer')
-  if (typeof dryRun != 'boolean')
-    throw new Error('dry_run must be a boolean')
+  if (typeof dryRun != 'boolean') throw new Error('dry_run must be a boolean')
 
   // Compress
   const inputB64 = await compressSmartContractData(inputHex)
 
   let content = Buff.str(
-    `{"p":"brc20-prog","op":"c","c":"${smartContractContractAddr}","b":"${inputB64}"}`,
+    `{"p":"brc20-prog","op":"c","c":"${smartContractContractAddr}","b":"${inputB64}"}`
   )
   if (content.length * gasPerVbyte < estimatedGas) {
     const gasDeficit = estimatedGas - content.length * gasPerVbyte
@@ -451,7 +440,7 @@ export async function callSmartContract(
     null,
     null,
     null,
-    content,
+    content
   )
 
   // Sign function
@@ -464,7 +453,7 @@ export async function callSmartContract(
     paymentAddr,
     payment,
     true,
-    signFn,
+    signFn
   )
   const inscriptionId = res.inscription_id
   const satpoint = `${inscriptionId.split('i')[0]}:0:0`
@@ -477,7 +466,7 @@ export async function callSmartContract(
       Buffer.from(Script.encode(['OP_RETURN', Buff.str('BRC20PROG')], false)),
       null,
       null,
-      null,
+      null
     )
     sendInscriptionTx = await sendInscriptionToOpReturnAll(
       inscriptionId,
@@ -485,10 +474,9 @@ export async function callSmartContract(
       1,
       feeRate,
       true,
-      signFn,
+      signFn
     )
-  }
-  finally {
+  } finally {
     clearExtraUtxos()
   }
   if (sendInscriptionTx == null) {
@@ -552,14 +540,11 @@ export async function callSmartContractAbi(
   postage: number | null,
   paymentAddr: string | null,
   payment: number | null,
-  dryRun: boolean,
+  dryRun: boolean
 ) {
-  if (typeof abi != 'object')
-    throw new Error('abi must be an object')
-  if (typeof funcName != 'string')
-    throw new Error('func_name must be a string')
-  if (!Array.isArray(params))
-    throw new Error('params must be an array')
+  if (typeof abi != 'object') throw new Error('abi must be an object')
+  if (typeof funcName != 'string') throw new Error('func_name must be a string')
+  if (!Array.isArray(params)) throw new Error('params must be an array')
 
   const encodedFuncCall = evmEncodeFunctionCall(abi, funcName, params)
   return await callSmartContract(
@@ -571,7 +556,7 @@ export async function callSmartContractAbi(
     postage,
     paymentAddr,
     payment,
-    dryRun,
+    dryRun
   )
 }
 
@@ -600,18 +585,16 @@ export async function callSmartContractFromPaymentWallet(
   postage: number | null,
   paymentAddr: string | null,
   payment: number | null,
-  dryRun: boolean,
+  dryRun: boolean
 ) {
   // Get connected wallet
   const walletInfo = getWalletInfo()
 
-  if (!walletInfo || !walletInfo.wallets)
-    throw new Error('Wallets not found')
+  if (!walletInfo || !walletInfo.wallets) throw new Error('Wallets not found')
 
   if (typeof smartContractContractAddr != 'string')
     throw new Error('smart_contract_contract_addr must be a string')
-  if (typeof inputHex != 'string')
-    throw new Error('input_hex must be a string')
+  if (typeof inputHex != 'string') throw new Error('input_hex must be a string')
   if (typeof feeRate != 'number' || !Number.isInteger(feeRate))
     throw new Error('fee_rate must be an integer')
   if (postage != null && (typeof postage != 'number' || !Number.isInteger(postage)))
@@ -620,14 +603,13 @@ export async function callSmartContractFromPaymentWallet(
     throw new Error('payment_addr must be a string')
   if (payment != null && (typeof payment != 'number' || !Number.isInteger(payment)))
     throw new Error('payment must be an integer')
-  if (typeof dryRun != 'boolean')
-    throw new Error('dry_run must be a boolean')
+  if (typeof dryRun != 'boolean') throw new Error('dry_run must be a boolean')
 
   // Compress
   const inputB64 = await compressSmartContractData(inputHex)
 
   let content = Buff.str(
-    `{"p":"brc20-prog","op":"c","c":"${smartContractContractAddr}","b":"${inputB64}"}`,
+    `{"p":"brc20-prog","op":"c","c":"${smartContractContractAddr}","b":"${inputB64}"}`
   )
   if (content.length * gasPerVbyte < estimatedGas) {
     const gasDeficit = estimatedGas - content.length * gasPerVbyte
@@ -642,7 +624,7 @@ export async function callSmartContractFromPaymentWallet(
     null,
     null,
     null,
-    content,
+    content
   )
 
   // Sign function
@@ -655,7 +637,7 @@ export async function callSmartContractFromPaymentWallet(
     paymentAddr,
     payment,
     true,
-    signFn,
+    signFn
   )
   const inscriptionId = mintResult.inscriptionId
   const satpoint = `${inscriptionId.split('i')[0]}:0:0`
@@ -663,7 +645,7 @@ export async function callSmartContractFromPaymentWallet(
   try {
     saveExtraUtxos(
       [mintResult.signedCommitTxHex, mintResult.signedRevealTxHex],
-      [inscriptionId, satpoint],
+      [inscriptionId, satpoint]
     )
 
     const targetWallet = new WalletInfo(
@@ -671,7 +653,7 @@ export async function callSmartContractFromPaymentWallet(
       Buffer.from(Script.encode(['OP_RETURN', Buff.str('BRC20PROG')], false)),
       null,
       null,
-      null,
+      null
     )
     sendInscriptionTx = await sendInscriptionInPaymentWalletToOpReturnAll(
       inscriptionId,
@@ -679,10 +661,9 @@ export async function callSmartContractFromPaymentWallet(
       1,
       feeRate,
       true,
-      signFn,
+      signFn
     )
-  }
-  finally {
+  } finally {
     clearExtraUtxos()
   }
   if (sendInscriptionTx == null) {
@@ -750,14 +731,11 @@ export async function callSmartContractAbiFromPaymentWallet(
   postage: number | null,
   paymentAddr: string | null,
   payment: number | null,
-  dryRun: boolean,
+  dryRun: boolean
 ) {
-  if (typeof abi != 'object')
-    throw new Error('abi must be an object')
-  if (typeof funcName != 'string')
-    throw new Error('func_name must be a string')
-  if (!Array.isArray(params))
-    throw new Error('params must be an array')
+  if (typeof abi != 'object') throw new Error('abi must be an object')
+  if (typeof funcName != 'string') throw new Error('func_name must be a string')
+  if (!Array.isArray(params)) throw new Error('params must be an array')
 
   const encodedFuncCall = evmEncodeFunctionCall(abi, funcName, params)
   return await callSmartContractFromPaymentWallet(
@@ -769,7 +747,7 @@ export async function callSmartContractAbiFromPaymentWallet(
     postage,
     paymentAddr,
     payment,
-    dryRun,
+    dryRun
   )
 }
 
@@ -793,17 +771,14 @@ export async function depositToBrc20Prog(
   postage: number | null,
   paymentAddr: string | null,
   payment: number | null,
-  dryRun: boolean,
+  dryRun: boolean
 ) {
   // Get connected wallet
   const walletInfo = getWalletInfo()
-  if (!walletInfo || !walletInfo.wallets)
-    throw new Error('Wallets not found')
+  if (!walletInfo || !walletInfo.wallets) throw new Error('Wallets not found')
 
-  if (typeof tick != 'string')
-    throw new Error('tick must be a string')
-  if (typeof amount != 'string')
-    throw new Error('amount must be a string')
+  if (typeof tick != 'string') throw new Error('tick must be a string')
+  if (typeof amount != 'string') throw new Error('amount must be a string')
   if (typeof feeRate != 'number' || !Number.isInteger(feeRate))
     throw new Error('fee_rate must be an integer')
   if (postage != null && (typeof postage != 'number' || !Number.isInteger(postage)))
@@ -812,8 +787,7 @@ export async function depositToBrc20Prog(
     throw new Error('payment_addr must be a string')
   if (payment != null && (typeof payment != 'number' || !Number.isInteger(payment)))
     throw new Error('payment must be an integer')
-  if (typeof dryRun != 'boolean')
-    throw new Error('dry_run must be a boolean')
+  if (typeof dryRun != 'boolean') throw new Error('dry_run must be a boolean')
 
   const content = Buff.str(`{"p":"brc-20","op":"transfer","tick":"${tick}","amt":"${amount}"}`)
   const inscriptionDetails = new InscriptionDetails(
@@ -822,7 +796,7 @@ export async function depositToBrc20Prog(
     null,
     null,
     null,
-    content,
+    content
   )
 
   // Sign function
@@ -835,7 +809,7 @@ export async function depositToBrc20Prog(
     paymentAddr,
     payment,
     true,
-    signFn,
+    signFn
   )
   const inscriptionId = mintResult.inscription_id
   const satpoint = `${inscriptionId.split('i')[0]}:0:0`
@@ -843,7 +817,7 @@ export async function depositToBrc20Prog(
   try {
     saveExtraUtxos(
       [mintResult.signed_commit_tx_hex, mintResult.signed_reveal_tx_hex],
-      [inscriptionId, satpoint],
+      [inscriptionId, satpoint]
     )
 
     const targetWallet = new WalletInfo(
@@ -851,7 +825,7 @@ export async function depositToBrc20Prog(
       Buffer.from(Script.encode(['OP_RETURN', Buff.str('BRC20PROG')], false)),
       null,
       null,
-      null,
+      null
     )
     sendInscriptionTx = await sendInscriptionToOpReturnAll(
       inscriptionId,
@@ -859,10 +833,9 @@ export async function depositToBrc20Prog(
       1,
       feeRate,
       true,
-      signFn,
+      signFn
     )
-  }
-  finally {
+  } finally {
     clearExtraUtxos()
   }
   if (sendInscriptionTx == null) {
@@ -924,19 +897,15 @@ export async function withdrawFromBrc20Prog(
   postage: number | null,
   paymentAddr: string | null,
   payment: number | null,
-  dryRun: boolean,
+  dryRun: boolean
 ) {
   // Get connected wallet
   const walletInfo = getWalletInfo()
-  if (!walletInfo || !walletInfo.wallets)
-    throw new Error('Wallets not found')
+  if (!walletInfo || !walletInfo.wallets) throw new Error('Wallets not found')
 
-  if (typeof tick != 'string')
-    throw new Error('tick must be a string')
-  if (typeof amount != 'string')
-    throw new Error('amount must be a string')
-  if (typeof targetAddr != 'string')
-    throw new Error('target_addr must be a string')
+  if (typeof tick != 'string') throw new Error('tick must be a string')
+  if (typeof amount != 'string') throw new Error('amount must be a string')
+  if (typeof targetAddr != 'string') throw new Error('target_addr must be a string')
   if (typeof feeRate != 'number' || !Number.isInteger(feeRate))
     throw new Error('fee_rate must be an integer')
   if (postage != null && (typeof postage != 'number' || !Number.isInteger(postage)))
@@ -945,11 +914,10 @@ export async function withdrawFromBrc20Prog(
     throw new Error('payment_addr must be a string')
   if (payment != null && (typeof payment != 'number' || !Number.isInteger(payment)))
     throw new Error('payment must be an integer')
-  if (typeof dryRun != 'boolean')
-    throw new Error('dry_run must be a boolean')
+  if (typeof dryRun != 'boolean') throw new Error('dry_run must be a boolean')
 
   const content = Buff.str(
-    `{"p":"brc20-module","op":"withdraw","tick":"${tick}","amt":"${amount}","module":"BRC20PROG"}`,
+    `{"p":"brc20-module","op":"withdraw","tick":"${tick}","amt":"${amount}","module":"BRC20PROG"}`
   )
   const inscriptionDetails = new InscriptionDetails(
     Buff.str('text/plain'),
@@ -957,7 +925,7 @@ export async function withdrawFromBrc20Prog(
     null,
     null,
     null,
-    content,
+    content
   )
 
   // Sign function
@@ -970,7 +938,7 @@ export async function withdrawFromBrc20Prog(
     paymentAddr,
     payment,
     true,
-    signFn,
+    signFn
   )
   const inscriptionId = mintResult.inscription_id
   const satpoint = `${inscriptionId.split('i')[0]}:0:0`
@@ -978,7 +946,7 @@ export async function withdrawFromBrc20Prog(
   try {
     saveExtraUtxos(
       [mintResult.signed_commit_tx_hex, mintResult.signed_reveal_tx_hex],
-      [inscriptionId, satpoint],
+      [inscriptionId, satpoint]
     )
 
     const targetWallet = new WalletInfo(false, null, targetAddr, null, null)
@@ -988,10 +956,9 @@ export async function withdrawFromBrc20Prog(
       null,
       feeRate,
       true,
-      signFn,
+      signFn
     )
-  }
-  finally {
+  } finally {
     clearExtraUtxos()
   }
   if (sendInscriptionTx == null) {

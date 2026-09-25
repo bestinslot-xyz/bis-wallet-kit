@@ -21,7 +21,7 @@ describe('tests for balances (signet)', () => {
       process.env.PRIVATE_KEY_WIF!,
       'signet',
       'p2tr',
-      'unisat',
+      'unisat'
     )
     walletAddress = localWallet.address
   })

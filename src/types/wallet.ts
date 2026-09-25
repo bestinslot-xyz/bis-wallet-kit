@@ -36,7 +36,7 @@ export class WalletInfo {
     outputScript: Buffer | null,
     addr: string | null | undefined,
     redeemScript: Buffer | null,
-    publicKey: string | null,
+    publicKey: string | null
   ) {
     this.addr = addr
     this.redeemScript = redeemScript
@@ -46,8 +46,7 @@ export class WalletInfo {
     // Set outputScript based on conditions
     if (addr != null && outputScript == null) {
       this.outputScript = Buffer.from(Script.encode(Address.toScriptPubKey(addr), false))
-    }
-    else {
+    } else {
       if (outputScript == null) {
         throw new Error('outputScript and addr cannot be null')
       }

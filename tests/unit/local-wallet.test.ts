@@ -29,13 +29,13 @@ describe('local wallet provider', () => {
 
   it('rejects an unsupported wallet type', async () => {
     await expect(
-      wallet.connectLocalWallet(WIF, 'testnet', 'p2sh' as any, 'unisat'),
+      wallet.connectLocalWallet(WIF, 'testnet', 'p2sh' as any, 'unisat')
     ).rejects.toThrow(/Invalid wallet type/)
   })
 
   it('rejects an unsupported wallet source', async () => {
     await expect(
-      wallet.connectLocalWallet(WIF, 'testnet', 'p2tr', 'phantom' as any),
+      wallet.connectLocalWallet(WIF, 'testnet', 'p2tr', 'phantom' as any)
     ).rejects.toThrow(/Invalid wallet source/)
   })
 
@@ -91,17 +91,17 @@ describe('createWallet (local key generation)', () => {
 
   it('rejects an invalid wallet type without mutating network state', async () => {
     await wallet.connectLocalWallet(WIF, 'testnet', 'p2wpkh', 'unisat')
-    await expect(
-      wallet.createWallet('mainnet', 'p2sh' as any),
-    ).rejects.toThrow(/Invalid wallet type/)
+    await expect(wallet.createWallet('mainnet', 'p2sh' as any)).rejects.toThrow(
+      /Invalid wallet type/
+    )
     assert.equal(wallet.getNetwork(), 'testnet')
   })
 
   it('rejects an invalid wallet source without mutating network state', async () => {
     await wallet.connectLocalWallet(WIF, 'testnet', 'p2wpkh', 'unisat')
-    await expect(
-      wallet.createWallet('mainnet', 'p2tr', 'phantom' as any),
-    ).rejects.toThrow(/Invalid wallet source/)
+    await expect(wallet.createWallet('mainnet', 'p2tr', 'phantom' as any)).rejects.toThrow(
+      /Invalid wallet source/
+    )
     assert.equal(wallet.getNetwork(), 'testnet')
   })
 })

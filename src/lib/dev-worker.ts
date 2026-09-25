@@ -2,7 +2,7 @@ import wrapper from 'solc/wrapper'
 
 let compiler: any = null
 
-globalThis.addEventListener('message', async (e) => {
+globalThis.addEventListener('message', async e => {
   const { compilerVersion, sourceCode } = e.data
 
   if (!compiler) {
@@ -25,8 +25,7 @@ globalThis.addEventListener('message', async (e) => {
     // eslint-disable-next-line no-new-func
     const runCompiler = new Function('module', `return ${wrappedCode}`)()
     runCompiler(module)
-  }
-  else {
+  } else {
     const output = JSON.parse(compiler.compile(JSON.stringify(sourceCode)))
     globalThis.postMessage({ output })
   }

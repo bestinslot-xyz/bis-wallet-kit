@@ -13,17 +13,15 @@ function isInstalled() {
 
 async function getWallets(): Promise<BISWallet[]> {
   // Check if Leather is available
-  if (!window.LeatherProvider)
-    throw new Error('Leather extension not found.')
+  if (!window.LeatherProvider) throw new Error('Leather extension not found.')
 
   const response = await window.LeatherProvider.request('getAddresses')
 
-  if (!response)
-    throw new Error('Failed to get wallets.')
+  if (!response) throw new Error('Failed to get wallets.')
 
   const wallets = (
-    response.result.addresses as Array<{ address: string, publicKey: string, type: string }>
-  ).map((address: { address: string, publicKey: string, type: string }): BISWallet => {
+    response.result.addresses as Array<{ address: string; publicKey: string; type: string }>
+  ).map((address: { address: string; publicKey: string; type: string }): BISWallet => {
     return {
       address: address.address,
       pubkey: address.publicKey || null,
@@ -36,11 +34,9 @@ async function getWallets(): Promise<BISWallet[]> {
 
 async function signMessage(message: string, walletType: BISWalletPurpose): Promise<string> {
   // Check if Leather is available
-  if (!window.LeatherProvider)
-    throw new Error('Leather extension not found.')
+  if (!window.LeatherProvider) throw new Error('Leather extension not found.')
 
-  if (!walletType)
-    throw new Error('Wallet type is required for signing messages with Leather.')
+  if (!walletType) throw new Error('Wallet type is required for signing messages with Leather.')
 
   try {
     // Request signature
@@ -51,17 +47,15 @@ async function signMessage(message: string, walletType: BISWalletPurpose): Promi
     })
 
     return Buffer.from(response.result.signature, 'base64').toString('hex')
-  }
-  catch (error: any) {
+  } catch (error: any) {
     throw new Error(`Failed to sign message: ${error.message}`)
   }
 }
 async function signMessageDeterministic(
-  message: string,
-): Promise<{ signature: string, address: string }> {
+  message: string
+): Promise<{ signature: string; address: string }> {
   // Check if Leather is available
-  if (!window.LeatherProvider)
-    throw new Error('Leather extension not found.')
+  if (!window.LeatherProvider) throw new Error('Leather extension not found.')
 
   try {
     // Request signature
@@ -75,16 +69,14 @@ async function signMessageDeterministic(
       signature: Buffer.from(response.result.signature, 'base64').toString('hex'),
       address: response.result.address,
     }
-  }
-  catch (error: any) {
+  } catch (error: any) {
     throw new Error(`Failed to sign message: ${error.message}`)
   }
 }
 
 async function sendBTC(amountSats: number, toAddress: string): Promise<string> {
   // Check if Leather is available
-  if (!window.LeatherProvider)
-    throw new Error('Leather extension not found.')
+  if (!window.LeatherProvider) throw new Error('Leather extension not found.')
 
   try {
     const response = await window.LeatherProvider.request('sendTransfer', {
@@ -98,16 +90,14 @@ async function sendBTC(amountSats: number, toAddress: string): Promise<string> {
     })
 
     return response.result.txid
-  }
-  catch (error: any) {
+  } catch (error: any) {
     throw new Error(`Failed to send BTC: ${error.message}`)
   }
 }
 
 async function signPSBT(psbtBase64: string, broadcast: boolean, inputsToSign: any[]) {
   // Check if Leather is available
-  if (!window.LeatherProvider)
-    throw new Error('Leather extension not found.')
+  if (!window.LeatherProvider) throw new Error('Leather extension not found.')
 
   const inscriptionToSign = []
   for (let i = 0; i < inputsToSign.length; i++) {
@@ -131,15 +121,13 @@ async function sign(
   ordAddr: string,
   ordAddrIdxes: number[],
   _useTweakSignerIdxes: number[] | undefined, // not used in Leather
-  noSignIdxes?: number[],
+  noSignIdxes?: number[]
 ): Promise<SignResponse> {
   const psbt = bitcoinjs.Psbt.fromHex(unsignedPsbtHex)
   const inscriptionToSign = []
   for (let i = 0; i < psbt.inputCount; i++) {
-    if (noSignIdxes && noSignIdxes.includes(i))
-      continue
-    if (ordAddrIdxes.includes(i))
-      continue
+    if (noSignIdxes && noSignIdxes.includes(i)) continue
+    if (ordAddrIdxes.includes(i)) continue
     inscriptionToSign.push(i)
   }
   const signed = await signPSBT(hexToBase64(unsignedPsbtHex), false, [

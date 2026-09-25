@@ -28,14 +28,14 @@ export async function inscribe(
   feeRate: number,
   postage: number | null,
   dryRun: boolean,
-  paymentOpts?: PaymentOpts,
+  paymentOpts?: PaymentOpts
 ): Promise<InscribeResult> {
   const result = await inscribeMultipleCore(
     [inscriptionDetails],
     feeRate,
     postage,
     dryRun,
-    paymentOpts,
+    paymentOpts
   )
   return {
     commitTxId: result.commitTxId,
@@ -63,7 +63,7 @@ export async function inscribeMultiple(
   feeRate: number,
   postage: number | null,
   dryRun: boolean,
-  paymentOpts?: PaymentOpts,
+  paymentOpts?: PaymentOpts
 ): Promise<InscribeMultipleResult> {
   return await inscribeMultipleCore(inscriptionDetailsArray, feeRate, postage, dryRun, paymentOpts)
 }
@@ -86,7 +86,7 @@ export async function inscribeWithParent(
   feeRate: number,
   postage: number | null,
   dryRun: boolean,
-  paymentOpts?: PaymentOpts,
+  paymentOpts?: PaymentOpts
 ): Promise<InscribeResult> {
   return await inscribeWithParentCore(
     inscriptionDetails,
@@ -94,7 +94,7 @@ export async function inscribeWithParent(
     feeRate,
     postage,
     dryRun,
-    paymentOpts,
+    paymentOpts
   )
 }
 
@@ -110,7 +110,7 @@ export async function getInscribeFee(
   inscriptionDetails: InscriptionDetails,
   feeRate: number,
   postage: number | null,
-  paymentOpts?: PaymentOpts,
+  paymentOpts?: PaymentOpts
 ): Promise<InscribeFees> {
   return await getInscribeMultipleFeeCore([inscriptionDetails], feeRate, postage, paymentOpts)
 }
@@ -128,7 +128,7 @@ export async function getInscribeMultipleFee(
   inscriptionDetailsArray: InscriptionDetails[],
   feeRate: number,
   postage: number | null,
-  paymentOpts?: PaymentOpts,
+  paymentOpts?: PaymentOpts
 ): Promise<InscribeFees> {
   return await getInscribeMultipleFeeCore(inscriptionDetailsArray, feeRate, postage, paymentOpts)
 }

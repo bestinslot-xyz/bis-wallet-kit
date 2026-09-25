@@ -15,11 +15,9 @@ let modalInstance: BisModalView | null = null
  */
 export function create() {
   // SSR-SAFU
-  if (typeof window === 'undefined')
-    return
+  if (typeof window === 'undefined') return
 
-  if (modalInstance)
-    return
+  if (modalInstance) return
 
   // Remove if already exists
   const existingContainer = document.getElementById('bis-cw-shadow-host')
@@ -62,8 +60,7 @@ export function showError(msg: string | null | undefined = null) {
 
 export function hide() {
   // SSR-SAFU
-  if (typeof window === 'undefined')
-    return
+  if (typeof window === 'undefined') return
 
   modalInstance?.hide()
 }

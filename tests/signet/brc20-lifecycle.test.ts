@@ -39,13 +39,12 @@ const ENABLED = process.env.SIGNET_E2E === '1' && !!WIF && !!TICKER && !!TOKEN &
 async function pollUntil<T>(
   fn: () => Promise<T>,
   done: (v: T) => boolean,
-  { label = 'condition', timeoutMs = 30 * 60_000, intervalMs = 20_000 } = {},
+  { label = 'condition', timeoutMs = 30 * 60_000, intervalMs = 20_000 } = {}
 ): Promise<T> {
   const start = Date.now()
   for (let attempt = 1; ; attempt++) {
     const value = await fn()
-    if (done(value))
-      return value
+    if (done(value)) return value
     const elapsed = Math.round((Date.now() - start) / 1000)
     if (Date.now() - start > timeoutMs)
       throw new Error(`Timed out waiting for ${label} after ${elapsed}s`)
@@ -93,7 +92,7 @@ describe('lifecycle: BRC-20 → swap (signet, end-to-end)', () => {
       const after = await pollUntil(
         () => balances.getBaseBRC20BalanceOfAddress(address, TOKEN!),
         b => b.availableBalanceIn18Decimals > startBase,
-        { label: 'mint to be indexed' },
+        { label: 'mint to be indexed' }
       )
       const mintedDelta = after.availableBalanceIn18Decimals - startBase
       assert.ok(mintedDelta > 0n)
@@ -110,7 +109,7 @@ describe('lifecycle: BRC-20 → swap (signet, end-to-end)', () => {
       await pollUntil(
         () => swap.getSwapBalance(TOKEN!),
         bal => bal >= tokenBeforeDeposit + depositAmt,
-        { label: 'token deposit to settle' },
+        { label: 'token deposit to settle' }
       )
 
       // 5. Wrap a little BTC into the smart wallet as WBTC.
@@ -120,7 +119,7 @@ describe('lifecycle: BRC-20 → swap (signet, end-to-end)', () => {
       const wbtcAfter = await pollUntil(
         () => swap.getSwapBalance(WBTC!),
         bal => bal > wbtcBefore,
-        { label: 'BTC wrap to settle' },
+        { label: 'BTC wrap to settle' }
       )
       const wrappedWbtc = wbtcAfter - wbtcBefore
 
@@ -130,7 +129,7 @@ describe('lifecycle: BRC-20 → swap (signet, end-to-end)', () => {
         WBTC!,
         depositAmt / 2n,
         wrappedWbtc / 2n,
-        SLIPPAGE_BPS,
+        SLIPPAGE_BPS
       )
       assert.equal(added, true)
 
@@ -139,14 +138,14 @@ describe('lifecycle: BRC-20 → swap (signet, end-to-end)', () => {
       const q1 = await swap.getSwapExactInputResult(TOKEN!, WBTC!, tokenIn)
       assert.equal(
         await swap.swapExactInput(TOKEN!, WBTC!, tokenIn, q1.amount_out, SLIPPAGE_BPS),
-        true,
+        true
       )
 
       const wbtcIn = wrappedWbtc / 10n
       const q2 = await swap.getSwapExactInputResult(WBTC!, TOKEN!, wbtcIn)
       assert.equal(
         await swap.swapExactInput(WBTC!, TOKEN!, wbtcIn, q2.amount_out, SLIPPAGE_BPS),
-        true,
+        true
       )
 
       // 8. Withdraw the remaining token balance back to the ordinals wallet.
@@ -158,7 +157,7 @@ describe('lifecycle: BRC-20 → swap (signet, end-to-end)', () => {
       await pollUntil(
         () => swap.getSwapBalance(TOKEN!),
         bal => bal < remaining,
-        { label: 'withdraw to settle' },
+        { label: 'withdraw to settle' }
       )
 
       // 10. Cleanup (best-effort): undo this run's smart-wallet changes so a re-run
@@ -178,7 +177,7 @@ describe('lifecycle: BRC-20 → swap (signet, end-to-end)', () => {
           await pollUntil(
             () => swap.getSwapBalance(pair),
             bal => bal < lpNow,
-            { label: 'remove-liquidity to settle' },
+            { label: 'remove-liquidity to settle' }
           )
         }
         const tokenNow = await swap.getSwapBalance(TOKEN!)
@@ -187,7 +186,7 @@ describe('lifecycle: BRC-20 → swap (signet, end-to-end)', () => {
           await pollUntil(
             () => swap.getSwapBalance(TOKEN!),
             bal => bal < tokenNow,
-            { label: 'cleanup withdraw to settle' },
+            { label: 'cleanup withdraw to settle' }
           )
         }
         const wbtcNow = await swap.getSwapBalance(WBTC!)
@@ -202,13 +201,12 @@ describe('lifecycle: BRC-20 → swap (signet, end-to-end)', () => {
           await pollUntil(
             () => swap.getSwapBalance(WBTC!),
             bal => bal < wbtcNow,
-            { label: 'unwrap to settle' },
+            { label: 'unwrap to settle' }
           )
         }
-      }
-      catch (e) {
+      } catch (e) {
         console.warn(`cleanup did not fully revert (recoverable manually): ${(e as Error).message}`)
       }
-    },
+    }
   )
 })

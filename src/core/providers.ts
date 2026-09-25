@@ -47,8 +47,7 @@ export async function getWallets(provider: BISWalletProvider): Promise<BISSessio
       throw new Error(err?.message || 'Failed to get wallets.')
     })
 
-  if (!wallets)
-    throw new Error('Failed to get wallets.')
+  if (!wallets) throw new Error('Failed to get wallets.')
 
   const resp: BISSession = {
     provider,
@@ -161,7 +160,7 @@ export async function signMessage(message: string, walletType: BISWalletPurpose)
  */
 export async function signMessageLocalVerify(
   message: string,
-  walletType: BISWalletPurpose,
+  walletType: BISWalletPurpose
 ): Promise<string> {
   const wallet = getWallet(walletType)
   if (!wallet) {
@@ -215,7 +214,7 @@ export async function signMessageLocalVerifyDeterministic(message: string): Prom
 export async function sendBTC(
   amountSats: number,
   toAddress: string,
-  feeRate?: number,
+  feeRate?: number
 ): Promise<string> {
   if (!Number.isInteger(amountSats) || amountSats <= 0) {
     throw new Error('amountSats must be a positive integer (satoshis).')
@@ -244,12 +243,11 @@ export async function signPSBT(
   psbtBase64: string,
   broadcast: boolean,
   inputsToSign: any[],
-  message?: string,
+  message?: string
 ) {
   const walletInfo = getWalletInfo()
 
-  if (!walletInfo || !walletInfo.wallets)
-    throw new Error('Wallets not found')
+  if (!walletInfo || !walletInfo.wallets) throw new Error('Wallets not found')
 
   const provider = requireProvider(walletInfo.provider)
   await provider.signPSBT(psbtBase64, broadcast, inputsToSign, message)

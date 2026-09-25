@@ -85,12 +85,11 @@ for (const entry of ['browser.js', 'core.js', 'react.js']) {
 // `vue.js` is required up front (see the existence check above), so this can
 // never be silently skipped.
 const vueAdapterUsesVue = [...reachable('vue.js')].some(file =>
-  VUE.test(readFileSync(`${DIST}/${file}`, 'utf8')),
+  VUE.test(readFileSync(`${DIST}/${file}`, 'utf8'))
 )
 if (vueAdapterUsesVue) {
   ok('vue adapter build references Vue (as expected)')
-}
-else {
+} else {
   fail('vue adapter build does not reference Vue — the Vue-free checks would be vacuous')
 }
 

@@ -6,7 +6,7 @@ import { finalizePsbtInputs } from '../../src/core/helpers.ts'
 // A p2wpkh output script to attach as the (fake) prevout for a PSBT input.
 const SCRIPT = bitcoinjs.address.toOutputScript(
   'tb1ql3e9pgs3mmwuwrh95fecme0s0qtn28804khrk8',
-  bitcoinjs.networks.testnet,
+  bitcoinjs.networks.testnet
 )
 
 function psbtWithUnsignedInputs(count: number): bitcoinjs.Psbt {

@@ -21,7 +21,7 @@ export function init() {
 export async function connect(): Promise<BISSession> {
   if (typeof window === 'undefined' || typeof document === 'undefined') {
     throw new TypeError(
-      'Modal connect is only available in the browser. Use connectLocalWallet in a Node environment.',
+      'Modal connect is only available in the browser. Use connectLocalWallet in a Node environment.'
     )
   }
 

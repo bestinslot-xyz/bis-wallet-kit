@@ -14,8 +14,7 @@ bitcoinjs.initEccLib(ecc)
 export function getBitcoinNetwork(): bitcoinjs.Network {
   const network = getNetwork()
 
-  if (network === 'mainnet')
-    return bitcoinjs.networks.bitcoin
+  if (network === 'mainnet') return bitcoinjs.networks.bitcoin
 
   return bitcoinjs.networks.testnet
 }

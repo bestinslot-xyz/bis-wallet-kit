@@ -17,8 +17,7 @@ modal.setTheme('dark') // 'light' | 'dark' | 'system' (default 'system')
 Lower-level modal controls are also exported: `modal.create`, `modal.showConnect`,
 `modal.showConnectConfirmation`, `modal.showError`, `modal.hide`.
 
-Supported providers: `okx`, `unisat`, `xverse`, `leather`, and `local` (Node only
-— see below).
+Supported providers: `okx`, `unisat`, `xverse`, `leather`, and `local` (Node only — see below).
 
 ## Sessions
 

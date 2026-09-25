@@ -17,7 +17,7 @@ export function useNetwork(): Ref<BISNetwork> {
 
   // Store -> ref (external setNetwork updates the component). Tie the
   // unsubscribe to the effect scope so the listener is removed on unmount.
-  const unsubscribe = subscribeToNetwork((next) => {
+  const unsubscribe = subscribeToNetwork(next => {
     if (network.value !== next) {
       network.value = next
     }
@@ -25,7 +25,7 @@ export function useNetwork(): Ref<BISNetwork> {
   onScopeDispose(unsubscribe, true)
 
   // Ref -> store (v-model writes propagate to the shared store).
-  watch(network, (next) => {
+  watch(network, next => {
     if (next !== getNetwork()) {
       setNetwork(next)
     }

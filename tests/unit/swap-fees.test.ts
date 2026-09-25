@@ -71,7 +71,7 @@ describe('buildSwapFees reconciles with swapRequest (exact input)', () => {
       0n,
       TOKEN_IN_FEE_BPS,
       TOKEN_OUT_FEE_BPS,
-      MINER_FEE,
+      MINER_FEE
     )
     assert.equal(result.success, true)
     const amountOut = result.amounts![1]!
@@ -80,13 +80,7 @@ describe('buildSwapFees reconciles with swapRequest (exact input)', () => {
     // applying pool_fee_bps to the input and pricing the remainder lands on it.
     assert.equal(amountOut, refAmountOut(AMOUNT_IN, RESERVE_TOKEN, RESERVE_WBTC))
 
-    const fees = buildSwapFees(
-      AMOUNT_IN,
-      amountOut,
-      TOKEN_IN_FEE_BPS,
-      TOKEN_OUT_FEE_BPS,
-      MINER_FEE,
-    )
+    const fees = buildSwapFees(AMOUNT_IN, amountOut, TOKEN_IN_FEE_BPS, TOKEN_OUT_FEE_BPS, MINER_FEE)
     assert.equal(fees.pool_fee_bps, 30n)
 
     // Worked example, in whole numbers: 1,000,000,000 TOKEN in against reserves of
@@ -112,16 +106,10 @@ describe('buildSwapFees reconciles with swapRequest (exact input)', () => {
       0n,
       TOKEN_IN_FEE_BPS,
       TOKEN_OUT_FEE_BPS,
-      MINER_FEE,
+      MINER_FEE
     )
     const amountOut = result.amounts![1]!
-    const fees = buildSwapFees(
-      AMOUNT_IN,
-      amountOut,
-      TOKEN_IN_FEE_BPS,
-      TOKEN_OUT_FEE_BPS,
-      MINER_FEE,
-    )
+    const fees = buildSwapFees(AMOUNT_IN, amountOut, TOKEN_IN_FEE_BPS, TOKEN_OUT_FEE_BPS, MINER_FEE)
 
     // swapRequest debits (inAmt * token1FeeBps) / 10000 and (amounts[1] * token2FeeBps)
     // / 10000, floored. The reported amounts must be those exact figures.
@@ -133,7 +121,19 @@ describe('buildSwapFees reconciles with swapRequest (exact input)', () => {
   it('carries a non-zero input-leg fee when WBTC is the input', async () => {
     // Buying TOKEN with WBTC flips which leg the protocol fee sits on.
     const wbtcIn = 1_000_000n
-    const result = await swapRequest(proxy, PUBKEY, WBTC, TOKEN, wbtcIn, 0n, '', 0n, 25n, 0n, MINER_FEE)
+    const result = await swapRequest(
+      proxy,
+      PUBKEY,
+      WBTC,
+      TOKEN,
+      wbtcIn,
+      0n,
+      '',
+      0n,
+      25n,
+      0n,
+      MINER_FEE
+    )
     assert.equal(result.success, true)
 
     const fees = buildSwapFees(wbtcIn, result.amounts![1]!, 25n, 0n, MINER_FEE)
@@ -158,7 +158,7 @@ describe('buildSwapFees reconciles with swap2Request (exact output)', () => {
       0n,
       0n,
       25n,
-      MINER_FEE,
+      MINER_FEE
     )
     assert.equal(result.success, true)
     const amountIn = result.amounts![0]!
@@ -183,20 +183,56 @@ describe('swapRequest / swap2Request surface the pre-swap reserves', () => {
   // getPairReserves round-trip. They must come back oriented to the in/out
   // tokens (reserve_in = the input token's reserve), not in address-sorted order.
   it('reports reserve_in / reserve_out for exact input, in in/out order', async () => {
-    const sell = await swapRequest(proxy, PUBKEY, TOKEN, WBTC, 1_000_000_000n, 0n, '', 0n, 0n, 25n, MINER_FEE)
+    const sell = await swapRequest(
+      proxy,
+      PUBKEY,
+      TOKEN,
+      WBTC,
+      1_000_000_000n,
+      0n,
+      '',
+      0n,
+      0n,
+      25n,
+      MINER_FEE
+    )
     assert.equal(sell.success, true)
     assert.equal(sell.reserve_in, RESERVE_TOKEN)
     assert.equal(sell.reserve_out, RESERVE_WBTC)
 
     // Flipping the input token flips the orientation.
-    const buy = await swapRequest(proxy, PUBKEY, WBTC, TOKEN, 1_000_000n, 0n, '', 0n, 25n, 0n, MINER_FEE)
+    const buy = await swapRequest(
+      proxy,
+      PUBKEY,
+      WBTC,
+      TOKEN,
+      1_000_000n,
+      0n,
+      '',
+      0n,
+      25n,
+      0n,
+      MINER_FEE
+    )
     assert.equal(buy.success, true)
     assert.equal(buy.reserve_in, RESERVE_WBTC)
     assert.equal(buy.reserve_out, RESERVE_TOKEN)
   })
 
   it('reports reserve_in / reserve_out for exact output, in in/out order', async () => {
-    const result = await swap2Request(proxy, PUBKEY, TOKEN, WBTC, 2n ** 256n - 1n, 1_000_000n, '', 0n, 0n, 25n, MINER_FEE)
+    const result = await swap2Request(
+      proxy,
+      PUBKEY,
+      TOKEN,
+      WBTC,
+      2n ** 256n - 1n,
+      1_000_000n,
+      '',
+      0n,
+      0n,
+      25n,
+      MINER_FEE
+    )
     assert.equal(result.success, true)
     assert.equal(result.reserve_in, RESERVE_TOKEN)
     assert.equal(result.reserve_out, RESERVE_WBTC)

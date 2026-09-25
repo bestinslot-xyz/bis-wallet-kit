@@ -100,7 +100,7 @@ export async function callSmartContract(
   postage: number | null,
   dryRun: boolean,
   paymentOpts?: PaymentOpts,
-  walletType?: BISWalletPurpose,
+  walletType?: BISWalletPurpose
 ): Promise<InscribeAndSendToOpReturn> {
   if (!walletType || walletType === 'ordinals') {
     return await callSmartContractFromOrdinalsWallet(
@@ -112,10 +112,9 @@ export async function callSmartContract(
       postage,
       paymentOpts?.paymentAddress || null,
       paymentOpts?.paymentAmount || null,
-      dryRun,
+      dryRun
     )
-  }
-  else if (walletType === 'payment') {
+  } else if (walletType === 'payment') {
     return await callSmartContractFromPaymentWallet(
       contractAddress,
       calldataHex,
@@ -125,10 +124,9 @@ export async function callSmartContract(
       postage,
       paymentOpts?.paymentAddress || null,
       paymentOpts?.paymentAmount || null,
-      dryRun,
+      dryRun
     )
-  }
-  else {
+  } else {
     throw new Error(`Unsupported wallet type: ${walletType}`)
   }
 }
@@ -161,14 +159,11 @@ export async function callSmartContractAbi(
   postage: number | null,
   dryRun: boolean,
   paymentOpts?: PaymentOpts,
-  walletType?: BISWalletPurpose,
+  walletType?: BISWalletPurpose
 ): Promise<InscribeAndSendToOpReturn> {
-  if (typeof abi != 'object')
-    throw new Error('abi must be an object')
-  if (typeof funcName != 'string')
-    throw new Error('func_name must be a string')
-  if (!Array.isArray(params))
-    throw new Error('params must be an array')
+  if (typeof abi != 'object') throw new Error('abi must be an object')
+  if (typeof funcName != 'string') throw new Error('func_name must be a string')
+  if (!Array.isArray(params)) throw new Error('params must be an array')
 
   const walletTypeString = walletType || 'payment'
 
@@ -182,7 +177,7 @@ export async function callSmartContractAbi(
     postage,
     dryRun,
     paymentOpts,
-    walletTypeString,
+    walletTypeString
   )
 }
 
@@ -204,7 +199,7 @@ export async function depositToBrc20Prog(
   feeRate: number,
   postage: number | null,
   dryRun: boolean,
-  paymentOpts?: PaymentOpts,
+  paymentOpts?: PaymentOpts
 ): Promise<InscribeAndSendToOpReturn> {
   return await depositToBrc20ProgCore(
     tick,
@@ -213,7 +208,7 @@ export async function depositToBrc20Prog(
     postage,
     paymentOpts?.paymentAddress || null,
     paymentOpts?.paymentAmount || null,
-    dryRun,
+    dryRun
   )
 }
 
@@ -237,7 +232,7 @@ export async function withdrawFromBrc20Prog(
   feeRate: number,
   postage: number | null,
   dryRun: boolean,
-  paymentOpts?: PaymentOpts,
+  paymentOpts?: PaymentOpts
 ): Promise<InscribeAndSendToAddress> {
   return await withdrawFromBrc20ProgCore(
     tick,
@@ -247,6 +242,6 @@ export async function withdrawFromBrc20Prog(
     postage,
     paymentOpts?.paymentAddress || null,
     paymentOpts?.paymentAmount || null,
-    dryRun,
+    dryRun
   )
 }

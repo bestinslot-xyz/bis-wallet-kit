@@ -18,7 +18,7 @@ describe('tests for BRC2.0 programmable module (signet)', () => {
       process.env.PRIVATE_KEY_WIF!,
       'signet',
       'p2tr',
-      'unisat',
+      'unisat'
     )
     walletAddress = localWallet.address
     console.log('Connected, address:', walletAddress)
@@ -30,7 +30,7 @@ describe('tests for BRC2.0 programmable module (signet)', () => {
       '1',
       2,
       null,
-      true, // dryRun
+      true // dryRun
     )
     assert.ok(typeof result.commitTxId === 'string')
     assert.ok(typeof result.revealTxId === 'string')
@@ -47,7 +47,7 @@ describe('tests for BRC2.0 programmable module (signet)', () => {
       walletAddress,
       2,
       null,
-      true, // dryRun
+      true // dryRun
     )
     assert.ok(typeof result.commitTxId === 'string')
     assert.ok(typeof result.revealTxId === 'string')
@@ -81,10 +81,10 @@ describe('tests for BRC2.0 programmable module (signet)', () => {
         2, // gasPerVbyte
         2, // feeRate
         null, // postage
-        true, // dryRun
+        true // dryRun
       )
       assert.ok(typeof result.commitTxId === 'string')
       assert.ok(typeof result.revealTxId === 'string')
-    },
+    }
   )
 })

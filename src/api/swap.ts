@@ -115,7 +115,7 @@ export async function addLiquidity(
   token2Address: string,
   amount1Desired: bigint,
   amount2Desired: bigint,
-  slippageBPS: bigint,
+  slippageBPS: bigint
 ) {
   return (
     await prepareAndSendAddLiquidityOrder(
@@ -123,7 +123,7 @@ export async function addLiquidity(
       token2Address,
       amount1Desired,
       amount2Desired,
-      slippageBPS,
+      slippageBPS
     )
   ).success
 }
@@ -148,7 +148,7 @@ export async function removeLiquidity(
   liquidity: bigint,
   amount1: bigint,
   amount2: bigint,
-  slippageBPS: bigint,
+  slippageBPS: bigint
 ) {
   return (
     await prepareAndSendRemoveLiquidityOrder(
@@ -157,7 +157,7 @@ export async function removeLiquidity(
       liquidity,
       amount1,
       amount2,
-      slippageBPS,
+      slippageBPS
     )
   ).success
 }
@@ -181,7 +181,7 @@ export async function swapExactInput(
   amountIn: bigint,
   amountOutMin: bigint,
   slippageBPS: bigint,
-  referrerId?: string,
+  referrerId?: string
 ) {
   return (
     await prepareAndSendSwapOrder(
@@ -190,7 +190,7 @@ export async function swapExactInput(
       amountIn,
       amountOutMin,
       slippageBPS,
-      referrerId,
+      referrerId
     )
   ).success
 }
@@ -214,7 +214,7 @@ export async function swapExactOutput(
   amountIn: bigint,
   amountOut: bigint,
   slippageBPS: bigint,
-  referrerId?: string,
+  referrerId?: string
 ) {
   return (
     await prepareAndSendSwap2Order(
@@ -223,7 +223,7 @@ export async function swapExactOutput(
       amountIn,
       amountOut,
       slippageBPS,
-      referrerId,
+      referrerId
     )
   ).success
 }
@@ -257,14 +257,14 @@ export async function deposit(
   amount: bigint,
   feeRate: number,
   createAllowanceIfNeeded: boolean = true,
-  reclaimInscriptions?: { inscriptionId: string, amount: bigint }[],
+  reclaimInscriptions?: { inscriptionId: string; amount: bigint }[]
 ): Promise<string[]> {
   return await createAndBroadcastDepositOrder(
     tokenAddress,
     amount,
     feeRate,
     createAllowanceIfNeeded,
-    reclaimInscriptions,
+    reclaimInscriptions
   )
 }
 
@@ -291,13 +291,12 @@ export async function wrapBtc(btcAmount: bigint, feeRate: number): Promise<strin
 export async function withdraw(
   tokenAddress: string,
   amount: bigint,
-  targetAddress?: string,
+  targetAddress?: string
 ): Promise<boolean> {
   if (targetAddress) {
     return (await prepareAndSendWithdrawOrderToOrdinalWallet(tokenAddress, targetAddress, amount))
       .success
-  }
-  else {
+  } else {
     return (await prepareAndSendWithdrawOrderToSelfOrdinalWallet(tokenAddress, amount)).success
   }
 }

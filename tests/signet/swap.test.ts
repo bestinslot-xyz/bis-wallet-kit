@@ -31,11 +31,11 @@ describe('swap (signet)', () => {
 
   it.each(['swap', 'add_liquidity', 'remove_liquidity', 'withdraw', 'unwrap'] as const)(
     'returns a miner fee for %s',
-    async (type) => {
+    async type => {
       const fee = await swap.getMinerFee(type)
       assert.ok(typeof fee === 'bigint')
       assert.ok(fee >= 0n)
-    },
+    }
   )
 
   it('returns the wrap order miner fee', async () => {
@@ -94,7 +94,7 @@ describe('swap (signet)', () => {
     const quote = await swap.getSwapExactInputResult(
       env.swapToken!,
       env.wbtcToken!,
-      swapTokenAmount,
+      swapTokenAmount
     )
     assert.ok(typeof quote.amount_out === 'bigint')
     assert.ok(typeof quote.price_impact_bps === 'bigint')
@@ -104,7 +104,7 @@ describe('swap (signet)', () => {
     const quote = await swap.getSwapExactOutputResult(
       env.swapToken!,
       env.wbtcToken!,
-      env.swapAmount,
+      env.swapAmount
     )
     assert.ok(typeof quote.amount_in === 'bigint')
     assert.ok(typeof quote.price_impact_bps === 'bigint')
@@ -115,7 +115,7 @@ describe('swap (signet)', () => {
       env.swapToken!,
       env.wbtcToken!,
       swapTokenAmount,
-      swapTokenAmount,
+      swapTokenAmount
     )
     assert.ok(typeof result.amountA === 'bigint')
     assert.ok(typeof result.amountB === 'bigint')
@@ -175,14 +175,14 @@ describe('swap (signet)', () => {
       const quote = await swap.getSwapExactInputResult(
         env.swapToken!,
         env.wbtcToken!,
-        swapTokenAmount,
+        swapTokenAmount
       )
       const ok = await swap.swapExactInput(
         env.swapToken!,
         env.wbtcToken!,
         swapTokenAmount,
         quote.amount_out,
-        env.slippageBps,
+        env.slippageBps
       )
       assert.equal(ok, true)
     })
@@ -193,7 +193,7 @@ describe('swap (signet)', () => {
         const quote = await swap.getSwapExactInputResult(
           env.swapToken!,
           env.wbtcToken!,
-          swapTokenAmount,
+          swapTokenAmount
         )
         const ok = await swap.swapExactInput(
           env.swapToken!,
@@ -201,24 +201,24 @@ describe('swap (signet)', () => {
           swapTokenAmount,
           quote.amount_out,
           env.slippageBps,
-          env.referrerId!,
+          env.referrerId!
         )
         assert.equal(ok, true)
-      },
+      }
     )
 
     it.skipIf(!canExecute)('executes an exact-output swap', async () => {
       const quote = await swap.getSwapExactOutputResult(
         env.swapToken!,
         env.wbtcToken!,
-        env.swapAmount,
+        env.swapAmount
       )
       const ok = await swap.swapExactOutput(
         env.swapToken!,
         env.wbtcToken!,
         quote.amount_in,
         env.swapAmount,
-        env.slippageBps,
+        env.slippageBps
       )
       assert.equal(ok, true)
     })
@@ -232,14 +232,14 @@ describe('swap (signet)', () => {
         env.swapToken!,
         env.wbtcToken!,
         liquidityTokenAmount,
-        liquidityTokenAmount,
+        liquidityTokenAmount
       )
       const added = await swap.addLiquidity(
         env.swapToken!,
         env.wbtcToken!,
         quote.amountA,
         quote.amountB,
-        env.slippageBps,
+        env.slippageBps
       )
       assert.equal(added, true)
     })

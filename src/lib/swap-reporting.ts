@@ -22,7 +22,7 @@ import { POOL_FEE_BPS } from './swap-constants'
 export function swapSide(
   tokenInAddress: string,
   tokenOutAddress: string,
-  wbtcAddress: string,
+  wbtcAddress: string
 ): 'buy' | 'sell' | null {
   const wbtc = wbtcAddress.toLowerCase()
   if (tokenInAddress.toLowerCase() === wbtc) {
@@ -114,7 +114,7 @@ export function buildSwapFees(
   amountOut: bigint,
   token1FeeBps: bigint,
   token2FeeBps: bigint,
-  btcFee: bigint,
+  btcFee: bigint
 ): SwapFees {
   return {
     pool_fee_bps: POOL_FEE_BPS,

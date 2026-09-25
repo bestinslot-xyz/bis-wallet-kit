@@ -88,7 +88,7 @@ describe('importSwapWallet validates before storing', () => {
       const stored = await generateAndStoreSwapWallet()
 
       await expect(importSwapWallet(code, { overwrite: true })).rejects.toThrow(
-        /Invalid security code/,
+        /Invalid security code/
       )
       assert.deepEqual(await getSwapWalletFromDB(), stored)
     })
