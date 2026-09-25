@@ -58,7 +58,7 @@ function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION)
 
-    request.onupgradeneeded = (event) => {
+    request.onupgradeneeded = event => {
       if (!event.target) {
         return
       }
@@ -82,7 +82,7 @@ async function saveWalletToDB(
   iv: Uint8Array<ArrayBuffer>,
   key: CryptoKey,
   swapPubkey: string,
-  bitcoinAddress: string,
+  bitcoinAddress: string
 ): Promise<void> {
   if (!hasIndexedDb) {
     memorySwapWalletDb.set(bitcoinAddress, { ciphertext, iv, key, swapPubkey, bitcoinAddress })
@@ -175,7 +175,7 @@ export async function saveSwapWalletInfo(data: BISSwapWalletInfo) {
   const key = await crypto.subtle.generateKey(
     { name: 'AES-GCM', length: 256 },
     /* extractable: */ false,
-    ['encrypt', 'decrypt'],
+    ['encrypt', 'decrypt']
   )
 
   function bufFromHex(hex: string): Uint8Array<ArrayBuffer> {
@@ -203,7 +203,7 @@ export async function saveSwapWalletInfo(data: BISSwapWalletInfo) {
  * @returns A promise that resolves to a SwapWalletInfo object containing the swap public key, decrypted private key, and associated Bitcoin address if the information is successfully retrieved and decrypted, or null if no matching record is found or if decryption fails. This allows for secure access to wallet information while maintaining the confidentiality of sensitive data.
  */
 export async function readSwapWalletInfo(
-  bitcoinAddressToRead: string,
+  bitcoinAddressToRead: string
 ): Promise<BISSwapWalletInfo | null> {
   // Requires WebCrypto; works in the browser and in Node/Bun (with the in-memory
   // store fallback). Bails only where WebCrypto is unavailable.

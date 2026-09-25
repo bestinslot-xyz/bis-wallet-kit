@@ -27,7 +27,7 @@ const bump = args.find(a => !a.startsWith('--'))
 const ALLOWED = ['major', 'minor', 'patch']
 // Fully-anchored semver (with optional prerelease) so only the documented
 // `x.y.z` form is accepted, e.g. `1.2.3foo` is rejected.
-const SEMVER = /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/
+const SEMVER = /^\d+\.\d+\.\d+(-[0-9A-Z.-]+)?$/i
 
 const die = msg => {
   console.error(msg)
@@ -85,7 +85,7 @@ if (!tagOnly && (bump === undefined || (!ALLOWED.includes(bump) && !SEMVER.test(
 
 // Shared precondition: clean working tree.
 const status = capture('git', ['status', '--porcelain'])
-if (status) die('Working tree is not clean. Commit or stash first:\n' + status)
+if (status) die(`Working tree is not clean. Commit or stash first:\n${status}`)
 
 run('git', ['fetch', 'origin', 'main', '--tags'])
 

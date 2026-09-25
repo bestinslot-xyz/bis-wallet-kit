@@ -3,9 +3,15 @@ import antfu from '@antfu/eslint-config'
 export default antfu(
   // Configures for antfu's config
   {
+    // Prettier owns formatting; ESLint checks code quality only.
+    stylistic: false,
     ignores: ['dist', 'node_modules'],
     rules: {
       'no-console': 'off',
+      // Formatting rules that conflict with Prettier's output.
+      'unicorn/number-literal-case': 'off',
+      'vue/html-self-closing': 'off',
+      'vue/singleline-html-element-content-newline': 'off',
     },
   },
   {
@@ -64,5 +70,5 @@ export default antfu(
       'jsdoc/require-param': 'warn',
       'jsdoc/require-returns': 'warn',
     },
-  },
+  }
 )

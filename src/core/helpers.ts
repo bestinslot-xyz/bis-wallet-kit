@@ -94,8 +94,7 @@ export function finalizePsbtInputs(psbt: bitcoinjs.Psbt, noSignIdxes?: number[])
     }
     try {
       psbt.finalizeInput(i)
-    }
-    catch (e) {
+    } catch (e) {
       // Preserve the underlying reason in the message (Error `cause` needs a
       // newer TS lib target than this project uses).
       const reason = e instanceof Error ? e.message : String(e)
@@ -120,8 +119,7 @@ export function saveExtraUtxos(txHexes: string[], inscription: string[] | null) 
   }
   if (inscription != null) {
     currentExtraInscriptions = inscription.slice()
-  }
-  else {
+  } else {
     currentExtraInscriptions = null
   }
 }
@@ -151,8 +149,7 @@ function checkIfUtxoUsedInExtras(txid: string, vout: number) {
 }
 
 function checkIfUtxoIsExtraOrdinal(txid: string, vout: number) {
-  if (currentExtraInscriptions == null)
-    return false
+  if (currentExtraInscriptions == null) return false
 
   const inscriptionTxId = currentExtraInscriptions[1]!.split(':')[0]
   const inscriptionVout = Number.parseInt(currentExtraInscriptions[1]!.split(':')[1]!)
@@ -169,26 +166,21 @@ function bitcoinjsWalletFromOutputScript(output: any, network: any) {
 
   try {
     return bitcoinjs.payments.p2pkh({ output, network })
-  }
-  catch {
+  } catch {
     // continue
   }
   try {
     return bitcoinjs.payments.p2sh({ output, network })
-  }
-  catch {}
+  } catch {}
   try {
     return bitcoinjs.payments.p2wpkh({ output, network })
-  }
-  catch {}
+  } catch {}
   try {
     return bitcoinjs.payments.p2wsh({ output, network })
-  }
-  catch {}
+  } catch {}
   try {
     return bitcoinjs.payments.p2tr({ output, network })
-  }
-  catch {}
+  } catch {}
 
   throw new Error(`${bitcoinjs.script.toASM(output)} has no matching Address`)
 }
@@ -202,7 +194,7 @@ function bitcoinjsWalletFromOutputScript(output: any, network: any) {
  */
 export function utxoOutputTypeFromOutputScript(
   output: any,
-  network: any,
+  network: any
 ):
   | 'pubkeyhash'
   | 'scripthash'
@@ -219,17 +211,13 @@ export function utxoOutputTypeFromOutputScript(
 
   if (wallet.name === 'p2pkh') {
     return 'pubkeyhash'
-  }
-  else if (wallet.name === 'p2sh') {
+  } else if (wallet.name === 'p2sh') {
     return 'scripthash'
-  }
-  else if (wallet.name === 'p2wpkh') {
+  } else if (wallet.name === 'p2wpkh') {
     return 'witness_v0_keyhash'
-  }
-  else if (wallet.name === 'p2wsh') {
+  } else if (wallet.name === 'p2wsh') {
     return 'witness_v0_scripthash'
-  }
-  else if (wallet.name === 'p2tr') {
+  } else if (wallet.name === 'p2tr') {
     return 'witness_v1_taproot'
   }
 
@@ -237,8 +225,7 @@ export function utxoOutputTypeFromOutputScript(
 }
 
 function fixCardinalUtxos(utxos: APIUtxoInfo[], addr: string): APIUtxoInfo[] {
-  if (currentExtraTxHexes.length === 0)
-    return utxos
+  if (currentExtraTxHexes.length === 0) return utxos
 
   const network = getBitcoinNetwork()
 
@@ -247,8 +234,7 @@ function fixCardinalUtxos(utxos: APIUtxoInfo[], addr: string): APIUtxoInfo[] {
     const utxoInner = utxo.utxo
     const txid = utxoInner.split(':')[0]!
     const vout = Number.parseInt(utxoInner.split(':')[1]!)
-    if (checkIfUtxoUsedInExtras(txid, vout))
-      continue
+    if (checkIfUtxoUsedInExtras(txid, vout)) continue
     newUtxos.push(utxo)
   }
   for (const txhex of currentExtraTxHexes) {
@@ -256,10 +242,8 @@ function fixCardinalUtxos(utxos: APIUtxoInfo[], addr: string): APIUtxoInfo[] {
     const txid = tx.getId()
     for (let i = 0; i < tx.outs.length; i++) {
       const vout = tx.outs[i]!
-      if (checkIfUtxoIsExtraOrdinal(txid, i))
-        continue
-      if (checkIfUtxoUsedInExtras(txid, i))
-        continue
+      if (checkIfUtxoIsExtraOrdinal(txid, i)) continue
+      if (checkIfUtxoUsedInExtras(txid, i)) continue
 
       try {
         // vout.script might be an OP_RETURN or a script without wallet address so this part may fail which is ok
@@ -283,8 +267,7 @@ function fixCardinalUtxos(utxos: APIUtxoInfo[], addr: string): APIUtxoInfo[] {
           }
           newUtxos.push(utxo)
         }
-      }
-      catch (e) {
+      } catch (e) {
         console.error(`Error processing output script for txid ${txid}, vout ${i}`)
         console.error(e)
       }
@@ -295,8 +278,7 @@ function fixCardinalUtxos(utxos: APIUtxoInfo[], addr: string): APIUtxoInfo[] {
 }
 
 function fixOrdinalUtxos(utxos: APIOrdinalUtxoInfo[], addr: string): APIOrdinalUtxoInfo[] {
-  if (currentExtraTxHexes.length === 0)
-    return utxos
+  if (currentExtraTxHexes.length === 0) return utxos
 
   const network = getBitcoinNetwork()
 
@@ -305,8 +287,7 @@ function fixOrdinalUtxos(utxos: APIOrdinalUtxoInfo[], addr: string): APIOrdinalU
     const utxoInner = utxo.utxo
     const txid = utxoInner.split(':')[0]!
     const vout = Number.parseInt(utxoInner.split(':')[1]!)
-    if (checkIfUtxoUsedInExtras(txid, vout))
-      continue
+    if (checkIfUtxoUsedInExtras(txid, vout)) continue
     newUtxos.push(utxo)
   }
   for (const txhex of currentExtraTxHexes) {
@@ -315,15 +296,12 @@ function fixOrdinalUtxos(utxos: APIOrdinalUtxoInfo[], addr: string): APIOrdinalU
 
     for (let i = 0; i < tx.outs.length; i++) {
       const vout = tx.outs[i]!
-      if (!checkIfUtxoIsExtraOrdinal(txid, i))
-        continue
-      if (checkIfUtxoUsedInExtras(txid, i))
-        continue
+      if (!checkIfUtxoIsExtraOrdinal(txid, i)) continue
+      if (checkIfUtxoUsedInExtras(txid, i)) continue
 
       const inscriptionId = currentExtraInscriptions ? currentExtraInscriptions[0] : null
       const satpoint = currentExtraInscriptions ? currentExtraInscriptions[1] : null
-      if (!inscriptionId || !satpoint)
-        continue
+      if (!inscriptionId || !satpoint) continue
 
       try {
         // vout.script might be an OP_RETURN or a script without wallet address so this part may fail which is ok
@@ -348,8 +326,7 @@ function fixOrdinalUtxos(utxos: APIOrdinalUtxoInfo[], addr: string): APIOrdinalU
 
           newUtxos.push(utxo)
         }
-      }
-      catch (e) {
+      } catch (e) {
         console.error(`Error processing output script for txid ${txid}, vout ${i}`)
         console.error(e)
       }
@@ -537,8 +514,7 @@ export async function validateTxes(txHexes: string[]) {
       body: JSON.stringify({ txhexes: currentExtraTxHexes.concat(txHexes) }),
     })
     return await response1.json()
-  }
-  catch {
+  } catch {
     return null
   }
 }
@@ -565,8 +541,7 @@ export async function broadcastTxes(txHexes: string[]) {
       body: JSON.stringify({ txhexes: txHexes }),
     })
     return await response1.json()
-  }
-  catch {
+  } catch {
     return null
   }
 }
@@ -583,7 +558,7 @@ export async function broadcastTxes(txHexes: string[]) {
 export async function verifySignature(
   message: string,
   signatureHex: string,
-  address: string,
+  address: string
 ): Promise<boolean> {
   try {
     const url = getBackendUrl(`brc20_verify_bip322`)
@@ -601,8 +576,7 @@ export async function verifySignature(
     })
     const result = await response1.json()
     return result.verified
-  }
-  catch {
+  } catch {
     throw new Error('Failed to verify signature.')
   }
 }
@@ -618,17 +592,16 @@ export async function verifySignature(
 export function verifySignatureLocal(
   message: string,
   signatureHex: string,
-  address: string,
+  address: string
 ): boolean {
   try {
     const validity = Verifier.verifySignature(
       address,
       message,
-      Buffer.from(signatureHex, 'hex').toString('base64'),
+      Buffer.from(signatureHex, 'hex').toString('base64')
     )
     return validity
-  }
-  catch {
+  } catch {
     throw new Error('Failed to verify signature.')
   }
 }
@@ -645,8 +618,7 @@ export async function getChainTip(): Promise<number> {
     const response1 = await fetch(url)
     const result = await response1.json()
     return result
-  }
-  catch {
+  } catch {
     throw new Error('Failed to get chain tip.')
   }
 }
@@ -673,8 +645,7 @@ export async function fetchWithErrors<T>(url: string, options: RequestInit): Pro
         // Attempt to get a more specific error message from the response body
         const errorBody = await response.json()
         errorDetails = errorBody.error || JSON.stringify(errorBody)
-      }
-      catch {
+      } catch {
         // Body is not JSON or is empty, fall back to the status text
       }
       throw new Error(errorDetails)
@@ -688,8 +659,7 @@ export async function fetchWithErrors<T>(url: string, options: RequestInit): Pro
     }
 
     return data as T
-  }
-  catch (error) {
+  } catch (error) {
     // Re-throw with a consistent prefix to identify the source of the error
     const errorMessage = error instanceof Error ? error.message : String(error)
     throw new Error(`API Request Failed: ${errorMessage}`)
@@ -705,11 +675,9 @@ export function getPublicRpcUrl(): string {
   const network = getNetwork()
   if (network === 'signet') {
     return 'https://rpc-signet.brc20.build'
-  }
-  else if (network === 'mainnet') {
+  } else if (network === 'mainnet') {
     return 'https://rpc.brc20.build'
-  }
-  else {
+  } else {
     throw new Error('Unsupported network for public RPC URL')
   }
 }
@@ -727,7 +695,7 @@ export async function ethCallOnPublicRpc(
   to: string,
   abi: any,
   functionName: string,
-  params: any,
+  params: any
 ): Promise<string> {
   const url = getPublicRpcUrl()
   const data = evmEncodeFunctionCall(abi, functionName, params)
@@ -762,11 +730,9 @@ export function getSwapBackendUrl(path: string): string {
   const network = getNetwork()
   if (network === 'signet') {
     return `https://sas-proxy.bestinslot.xyz/${path}`
-  }
-  else if (network === 'mainnet') {
+  } else if (network === 'mainnet') {
     return `https://sa-proxy.bestinslot.xyz/${path}`
-  }
-  else {
+  } else {
     throw new Error('Unsupported network for orderbook backend URL')
   }
 }

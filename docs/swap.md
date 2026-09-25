@@ -78,8 +78,8 @@ quote.fees
 ```
 
 **Only `pool_fee_bps` is already reflected in the quoted amount.** The pool takes it on the way
-through, so `amount_out` is net of it — don't subtract it again. The other three are charged *on
-top* of the quoted amounts:
+through, so `amount_out` is net of it — don't subtract it again. The other three are charged _on
+top_ of the quoted amounts:
 
 ```ts
 // What the swap really costs and really pays out:
@@ -144,8 +144,9 @@ await swap.removeLiquidity(token1, token2, liquidity, amountA, amountB, slippage
 ```
 
 Quote first with `getAddLiquidityResult` / `getRemoveLiquidityResult`. The amounts you pass are the
-**expected** ones from the quote — `slippageBPS` derives the enforced on-chain minimums from them, so
-passing an already slippage-adjusted floor applies slippage twice and silently weakens your protection.
+**expected** ones from the quote — `slippageBPS` derives the enforced on-chain minimums from them,
+so passing an already slippage-adjusted floor applies slippage twice and silently weakens your
+protection.
 
 ## Move funds in and out
 
@@ -160,9 +161,8 @@ await swap.withdraw(tokenAddress, amount /* , targetAddress? */) // omit target 
 the wallet's depositable balance is locked in transfer inscriptions (`transferrable_balance`), pass
 those inscriptions to reclaim; the kit sends them back to self inside the same deposit package (no
 extra transaction — the reclaim inputs are signed as part of the existing deposit commit) so their
-balance funds the deposit. `amount` is the
-inscription's BRC-20 transfer amount in 18-dec fixed point — caller-supplied, the kit does not read
-it on-chain.
+balance funds the deposit. `amount` is the inscription's BRC-20 transfer amount in 18-dec fixed
+point — caller-supplied, the kit does not read it on-chain.
 
 ```ts
 // BTC: wrapBtc deposits BTC into the smart wallet as WBTC; unwrapBtc is the reverse and
@@ -173,8 +173,8 @@ await swap.wrapBtc(btcSats, feeRate)
 // The network must match btcAddress, or you derive a valid-looking script that pays
 // somewhere else. Deriving it from the kit's selected network keeps the two in step.
 // (Signet uses bitcoinjs' testnet params.)
-const network
-  = wallet.getNetwork() === 'mainnet' ? bitcoinjs.networks.bitcoin : bitcoinjs.networks.testnet
+const network =
+  wallet.getNetwork() === 'mainnet' ? bitcoinjs.networks.bitcoin : bitcoinjs.networks.testnet
 
 const pkscript = bitcoinjs.address.toOutputScript(btcAddress, network).toString('hex')
 await swap.unwrapBtc(pkscript, amountSats)
@@ -183,9 +183,7 @@ await swap.unwrapBtc(pkscript, amountSats)
 ## Market data
 
 ```ts
-await swap.getKlines({
-  /* GetKlinesRequest */
-})
+await swap.getKlines({/* GetKlinesRequest */})
 await swap.getPairVolumeOverDays(/* … */)
 await swap.getTvlHistory(/* GetTvlHistoryRequest — daily TVL series in WBTC sats */)
 await swap.getActivityOfPair(pairAddress, limit, offset)

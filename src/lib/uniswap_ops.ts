@@ -5,8 +5,8 @@ import * as ethers from 'ethers'
 export interface UniswapInfoProxy {
   balanceOf: (pubkey: string, token_address: string) => Promise<bigint | null>
   reservesOf: (
-    pair_address: string,
-  ) => Promise<{ reserveA: bigint, reserveB: bigint, total_supply: bigint } | null>
+    pair_address: string
+  ) => Promise<{ reserveA: bigint; reserveB: bigint; total_supply: bigint } | null>
 }
 
 let wbtcAddress = ''
@@ -58,11 +58,11 @@ export function calculatePairAddress(tokenAAddr: string, tokenBAddr: string) {
   const packed = ethers.solidityPacked(
     ['uint8', 'address', 'bytes32', 'bytes32'],
     [
-      0xFF,
+      0xff,
       factoryAddr,
       ethers.keccak256(ethers.solidityPacked(['address', 'address'], [tokenAAddr, tokenBAddr])),
       '0xc3cb93660fbd444d3f741950f68d962ba5a881cc5e37a5eedd40ba8e2127da33',
-    ],
+    ]
   )
   const pairAddress = `0x${ethers.keccak256(packed).slice(-40)}`
   return pairAddress
@@ -71,7 +71,7 @@ export function calculatePairAddress(tokenAAddr: string, tokenBAddr: string) {
 async function getCurrentPubkeyBalance(
   proxy: UniswapInfoProxy,
   pubkey: string, // hex string bls pubkey
-  tokenAddr: string, // hex string token address
+  tokenAddr: string // hex string token address
 ): Promise<bigint> {
   pubkey = pubkey.startsWith('0x') ? pubkey.slice(2) : pubkey
   const balance = await proxy.balanceOf(pubkey, tokenAddr)
@@ -86,7 +86,7 @@ async function getCurrentPubkeyBalance(
 async function getPairReserves(
   proxy: UniswapInfoProxy,
   tokenAAddr: string, // hex string token1 address
-  tokenBAddr: string, // hex string token2 address
+  tokenBAddr: string // hex string token2 address
 ) {
   if (tokenAAddr.toLowerCase() > tokenBAddr.toLowerCase()) {
     ;[tokenAAddr, tokenBAddr] = [tokenBAddr, tokenAAddr]
@@ -128,8 +128,7 @@ class BalanceMap {
       const val = await getCurrentPubkeyBalance(this.proxy, pubkey, tokenAddr)
       this.map[key] = val
       return val
-    }
-    else {
+    } else {
       // lp token
       const tokenAAddr = `0x${tokenAddr.slice(2, 42)}`
       const tokenBAddr = `0x${tokenAddr.slice(44, 84)}`
@@ -150,7 +149,7 @@ class BalanceMap {
   }
 }
 class ReserveMap {
-  map: { [key: string]: { reserveA: bigint, reserveB: bigint, total_supply: bigint } }
+  map: { [key: string]: { reserveA: bigint; reserveB: bigint; total_supply: bigint } }
   proxy: UniswapInfoProxy | null
 
   constructor() {
@@ -169,8 +168,8 @@ class ReserveMap {
 
   async get(
     tokenAAddr: string,
-    tokenBAddr: string,
-  ): Promise<{ reserveA: bigint, reserveB: bigint, total_supply: bigint }> {
+    tokenBAddr: string
+  ): Promise<{ reserveA: bigint; reserveB: bigint; total_supply: bigint }> {
     if (this.proxy === null) {
       throw new Error('Proxy not set')
     }
@@ -189,7 +188,7 @@ class ReserveMap {
   set(
     tokenAAddr: string,
     tokenBAddr: string,
-    val: { reserveA: bigint, reserveB: bigint, total_supply: bigint },
+    val: { reserveA: bigint; reserveB: bigint; total_supply: bigint }
   ) {
     // throw an error if any of the reserves exceed 112 bits
     if (val.reserveA > 2n ** 112n || val.reserveB > 2n ** 112n) {
@@ -291,8 +290,7 @@ async function getReserves(tokenA: string, tokenB: string) {
       reserveB: response.reserveB,
       total_supply: response.total_supply,
     }
-  }
-  else {
+  } else {
     return {
       reserveA: response.reserveB,
       reserveB: response.reserveA,
@@ -322,8 +320,7 @@ async function mint(tokenA: string, tokenB: string, amountA: bigint, amountB: bi
       reserveB: oldReserve.reserveB,
       total_supply: oldReserve.total_supply + 1000n,
     })
-  }
-  else {
+  } else {
     liquidity = BIG_INT_MIN((amountA * totalSupply) / reserveA, (amountB * totalSupply) / reserveB)
   }
 
@@ -346,22 +343,20 @@ async function addLiquidity(
   amountADesired: bigint,
   amountBDesired: bigint,
   amountAMin: bigint,
-  amountBMin: bigint,
+  amountBMin: bigint
 ) {
   let amountA, amountB
 
   try {
     await RESERVES.get(tokenA, tokenB)
-  }
-  catch {
+  } catch {
     RESERVES.set(tokenA, tokenB, { reserveA: 0n, reserveB: 0n, total_supply: 0n })
   }
   const { reserveA, reserveB } = await getReserves(tokenA, tokenB)
   if (reserveA === 0n && reserveB === 0n) {
     amountA = amountADesired
     amountB = amountBDesired
-  }
-  else {
+  } else {
     const amountBOptimal = quote(amountADesired, reserveA, reserveB)
     if (amountBOptimal <= amountBDesired) {
       if (amountBOptimal < amountBMin) {
@@ -369,8 +364,7 @@ async function addLiquidity(
       }
       amountA = amountADesired
       amountB = amountBOptimal
-    }
-    else {
+    } else {
       const amountAOptimal = quote(amountBDesired, reserveB, reserveA)
       if (amountAOptimal > amountADesired || amountAOptimal < amountAMin) {
         throw new Error('Insufficient A amount')
@@ -389,7 +383,7 @@ async function innerAddLiquidity(
   amountADesired: bigint,
   amountBDesired: bigint,
   amountAMin: bigint,
-  amountBMin: bigint,
+  amountBMin: bigint
 ) {
   const { amountA, amountB } = await addLiquidity(
     tokenA,
@@ -397,7 +391,7 @@ async function innerAddLiquidity(
     amountADesired,
     amountBDesired,
     amountAMin,
-    amountBMin,
+    amountBMin
   )
   const oldReserve = await RESERVES.get(tokenA, tokenB)
   if (tokenA < tokenB) {
@@ -406,8 +400,7 @@ async function innerAddLiquidity(
       reserveB: oldReserve.reserveB + amountB,
       total_supply: oldReserve.total_supply,
     })
-  }
-  else {
+  } else {
     RESERVES.set(tokenB, tokenA, {
       reserveA: oldReserve.reserveA + amountB,
       reserveB: oldReserve.reserveB + amountA,
@@ -439,8 +432,7 @@ async function burn(tokenA: string, tokenB: string, liquidity: bigint) {
   if (tokenA < tokenB) {
     newReserveA -= amountA
     newReserveB -= amountB
-  }
-  else {
+  } else {
     newReserveA -= amountB
     newReserveB -= amountA
   }
@@ -460,7 +452,7 @@ async function swap(
   amount0Out: bigint,
   amount1Out: bigint,
   to: [string, string] | null,
-  toFlipped: boolean | null,
+  toFlipped: boolean | null
 ) {
   if (amount0Out <= 0n && amount1Out <= 0n) {
     throw new Error('Insufficient output amount')
@@ -489,8 +481,7 @@ async function swap(
         reserveB: oldReserveTo.reserveB + amount0Out,
         total_supply: oldReserveTo.total_supply,
       })
-    }
-    else {
+    } else {
       RESERVES.set(toTkn1, toTkn2, {
         reserveA: oldReserveTo.reserveA + amount0Out,
         reserveB: oldReserveTo.reserveB + amount1Out,
@@ -501,10 +492,10 @@ async function swap(
   const balance0 = (await RESERVES.get(token0, token1)).reserveA
   const balance1 = (await RESERVES.get(token0, token1)).reserveB
 
-  const amount0In
-    = balance0 > reserveAAfter - amount0Out ? balance0 - (reserveAAfter - amount0Out) : 0n
-  const amount1In
-    = balance1 > reserveBAfter - amount1Out ? balance1 - (reserveBAfter - amount1Out) : 0n
+  const amount0In =
+    balance0 > reserveAAfter - amount0Out ? balance0 - (reserveAAfter - amount0Out) : 0n
+  const amount1In =
+    balance1 > reserveBAfter - amount1Out ? balance1 - (reserveBAfter - amount1Out) : 0n
 
   if (amount0In <= 0n && amount1In <= 0n) {
     throw new Error('Insufficient input amount')
@@ -513,8 +504,8 @@ async function swap(
   const balance0Adjusted = balance0 * 1000n - amount0In * 3n
   const balance1Adjusted = balance1 * 1000n - amount1In * 3n
   if (
-    balance0Adjusted * balance1Adjusted
-    < BigInt(reserveAAfter) * BigInt(reserveBAfter) * 1000n * 1000n
+    balance0Adjusted * balance1Adjusted <
+    BigInt(reserveAAfter) * BigInt(reserveBAfter) * 1000n * 1000n
   ) {
     throw new Error('K')
   }
@@ -534,8 +525,7 @@ async function swapInner(amounts: bigint[], path: string[]) {
       reserveB: oldReserve.reserveB,
       total_supply: oldReserve.total_supply,
     })
-  }
-  else {
+  } else {
     RESERVES.set(path[0]!, path[1]!, {
       reserveA: oldReserve.reserveA,
       reserveB: oldReserve.reserveB + amounts[0]!,
@@ -549,10 +539,10 @@ async function swapInner(amounts: bigint[], path: string[]) {
     const amountIn = amounts[i]
     const amountOut = amounts[i + 1]
     if (
-      input === undefined
-      || output === undefined
-      || amountIn === undefined
-      || amountOut === undefined
+      input === undefined ||
+      output === undefined ||
+      amountIn === undefined ||
+      amountOut === undefined
     ) {
       throw new Error('Undefined value in swap path or amounts')
     }
@@ -601,7 +591,7 @@ async function innerRemoveLiquidity(
   tokenB: string,
   liquidity: bigint,
   amountAMin: bigint,
-  amountBMin: bigint,
+  amountBMin: bigint
 ) {
   const { amountA, amountB } = await burn(tokenA, tokenB, liquidity)
   if (amountA < amountAMin) {
@@ -625,7 +615,7 @@ function checkAddLiquiditySignature(
   token1FeeBps: bigint,
   token2FeeBps: bigint,
   fee: bigint,
-  blsSignature: string, // no 0x
+  blsSignature: string // no 0x
 ) {
   if (blsSignature === '') {
     return true // skip signature verification if empty
@@ -660,7 +650,7 @@ function checkAddLiquiditySignature(
   const pubkeyPoint = new bls12_381.G2.Point(
     bls12_381.fields.Fp2.create({ c0: pubkeyXC0, c1: pubkeyXC1 }),
     bls12_381.fields.Fp2.create({ c0: pubkeyYC0, c1: pubkeyYC1 }),
-    bls12_381.fields.Fp2.ONE,
+    bls12_381.fields.Fp2.ONE
   )
 
   const res = bls12_381.shortSignatures.verify(signaturePoint, P, pubkeyPoint)
@@ -698,10 +688,10 @@ export async function addLiquidityRequest(
   nonce: bigint, // unique request nonce
   token1FeeBps: bigint, // bigint token1 fee in bps
   token2FeeBps: bigint, // bigint token2 fee in bps
-  btcFee: bigint, // bigint BTC fee in bps
+  btcFee: bigint // bigint BTC fee in bps
 ): Promise<{
   success: boolean
-  data?: { amountA: bigint, amountB: bigint, liquidity: bigint }
+  data?: { amountA: bigint; amountB: bigint; liquidity: bigint }
   error_message?: string
 }> {
   token1Addr = token1Addr.toLowerCase()
@@ -725,7 +715,7 @@ export async function addLiquidityRequest(
         token1FeeBps,
         token2FeeBps,
         btcFee,
-        blsSignature,
+        blsSignature
       )
     ) {
       throw new Error('Invalid BLS signature')
@@ -737,45 +727,44 @@ export async function addLiquidityRequest(
       amt1,
       amt2,
       minamt1,
-      minamt2,
+      minamt2
     )
 
     const pairKey = keyFor(token1Addr, token2Addr)
     BALANCES.setCheckPositive(
       pubkey,
       token1Addr,
-      ((await BALANCES.get(pubkey, token1Addr)) || 0n) - amountA,
+      ((await BALANCES.get(pubkey, token1Addr)) || 0n) - amountA
     )
     BALANCES.setCheckPositive(
       pubkey,
       token2Addr,
-      ((await BALANCES.get(pubkey, token2Addr)) || 0n) - amountB,
+      ((await BALANCES.get(pubkey, token2Addr)) || 0n) - amountB
     )
     BALANCES.setCheckPositive(
       pubkey,
       pairKey,
-      ((await BALANCES.get(pubkey, pairKey)) || 0n) + liquidity,
+      ((await BALANCES.get(pubkey, pairKey)) || 0n) + liquidity
     )
 
     BALANCES.setCheckPositive(
       pubkey,
       wbtcAddress,
-      ((await BALANCES.get(pubkey, wbtcAddress)) || 0n) - btcFee,
+      ((await BALANCES.get(pubkey, wbtcAddress)) || 0n) - btcFee
     )
     BALANCES.setCheckPositive(
       pubkey,
       token1Addr,
-      ((await BALANCES.get(pubkey, token1Addr)) || 0n) - (amountA * token1FeeBps) / 10000n,
+      ((await BALANCES.get(pubkey, token1Addr)) || 0n) - (amountA * token1FeeBps) / 10000n
     )
     BALANCES.setCheckPositive(
       pubkey,
       token2Addr,
-      ((await BALANCES.get(pubkey, token2Addr)) || 0n) - (amountB * token2FeeBps) / 10000n,
+      ((await BALANCES.get(pubkey, token2Addr)) || 0n) - (amountB * token2FeeBps) / 10000n
     )
 
     return { success: true, data: { amountA, amountB, liquidity } }
-  }
-  catch (e: any) {
+  } catch (e: any) {
     console.error('Error in add_liquidity_request:', e)
     return { success: false, error_message: e.message }
   }
@@ -792,7 +781,7 @@ function checkRemoveLiquiditySignature(
   token1FeeBps: bigint,
   token2FeeBps: bigint,
   fee: bigint,
-  blsSignature: string, // no 0x
+  blsSignature: string // no 0x
 ) {
   if (blsSignature === '') {
     return true // skip signature verification if empty
@@ -826,7 +815,7 @@ function checkRemoveLiquiditySignature(
   const pubkeyPoint = new bls12_381.G2.Point(
     bls12_381.fields.Fp2.create({ c0: pubkeyXC0, c1: pubkeyXC1 }),
     bls12_381.fields.Fp2.create({ c0: pubkeyYC0, c1: pubkeyYC1 }),
-    bls12_381.fields.Fp2.ONE,
+    bls12_381.fields.Fp2.ONE
   )
 
   const res = bls12_381.shortSignatures.verify(signaturePoint, P, pubkeyPoint)
@@ -862,7 +851,7 @@ export async function removeLiquidityRequest(
   nonce: bigint, // unique request nonce
   token1FeeBps: bigint, // bigint token1 fee in bps
   token2FeeBps: bigint, // bigint token2 fee in bps
-  btcFee: bigint, // bigint BTC fee in bps
+  btcFee: bigint // bigint BTC fee in bps
 ) {
   token1Addr = token1Addr.toLowerCase()
   token2Addr = token2Addr.toLowerCase()
@@ -884,7 +873,7 @@ export async function removeLiquidityRequest(
         token1FeeBps,
         token2FeeBps,
         btcFee,
-        blsSignature,
+        blsSignature
       )
     ) {
       throw new Error('Invalid BLS signature')
@@ -900,44 +889,43 @@ export async function removeLiquidityRequest(
       token2Addr,
       liquidity,
       minamt1,
-      minamt2,
+      minamt2
     )
 
     BALANCES.setCheckPositive(
       pubkey,
       pairKey,
-      ((await BALANCES.get(pubkey, pairKey)) || 0n) - liquidity,
+      ((await BALANCES.get(pubkey, pairKey)) || 0n) - liquidity
     )
     BALANCES.setCheckPositive(
       pubkey,
       token1Addr,
-      ((await BALANCES.get(pubkey, token1Addr)) || 0n) + amountA,
+      ((await BALANCES.get(pubkey, token1Addr)) || 0n) + amountA
     )
     BALANCES.setCheckPositive(
       pubkey,
       token2Addr,
-      ((await BALANCES.get(pubkey, token2Addr)) || 0n) + amountB,
+      ((await BALANCES.get(pubkey, token2Addr)) || 0n) + amountB
     )
 
     BALANCES.setCheckPositive(
       pubkey,
       wbtcAddress,
-      ((await BALANCES.get(pubkey, wbtcAddress)) || 0n) - btcFee,
+      ((await BALANCES.get(pubkey, wbtcAddress)) || 0n) - btcFee
     )
     BALANCES.setCheckPositive(
       pubkey,
       token1Addr,
-      ((await BALANCES.get(pubkey, token1Addr)) || 0n) - (amountA * token1FeeBps) / 10000n,
+      ((await BALANCES.get(pubkey, token1Addr)) || 0n) - (amountA * token1FeeBps) / 10000n
     )
     BALANCES.setCheckPositive(
       pubkey,
       token2Addr,
-      ((await BALANCES.get(pubkey, token2Addr)) || 0n) - (amountB * token2FeeBps) / 10000n,
+      ((await BALANCES.get(pubkey, token2Addr)) || 0n) - (amountB * token2FeeBps) / 10000n
     )
 
     return { success: true, data: { amountA, amountB, liquidity } }
-  }
-  catch (e: any) {
+  } catch (e: any) {
     console.error('Error in remove_liquidity_request:', e)
     return { success: false, error_message: e.message }
   }
@@ -953,7 +941,7 @@ function checkSwapSignature(
   token1FeeBps: bigint,
   token2FeeBps: bigint,
   fee: bigint,
-  blsSignature: string, // no 0x
+  blsSignature: string // no 0x
 ) {
   if (blsSignature === '') {
     return true // skip signature verification if empty
@@ -986,7 +974,7 @@ function checkSwapSignature(
   const pubkeyPoint = new bls12_381.G2.Point(
     bls12_381.fields.Fp2.create({ c0: pubkeyXC0, c1: pubkeyXC1 }),
     bls12_381.fields.Fp2.create({ c0: pubkeyYC0, c1: pubkeyYC1 }),
-    bls12_381.fields.Fp2.ONE,
+    bls12_381.fields.Fp2.ONE
   )
 
   const res = bls12_381.shortSignatures.verify(signaturePoint, P, pubkeyPoint)
@@ -1020,7 +1008,7 @@ export async function swapRequest(
   nonce: bigint, // unique request nonce
   token1FeeBps: bigint, // bigint token1 fee in bps
   token2FeeBps: bigint, // bigint token2 fee in bps
-  btcFee: bigint, // bigint BTC fee in bps
+  btcFee: bigint // bigint BTC fee in bps
 ) {
   token1Addr = token1Addr.toLowerCase()
   token2Addr = token2Addr.toLowerCase()
@@ -1041,7 +1029,7 @@ export async function swapRequest(
         token1FeeBps,
         token2FeeBps,
         btcFee,
-        blsSignature,
+        blsSignature
       )
     ) {
       throw new Error('Invalid BLS signature')
@@ -1054,7 +1042,7 @@ export async function swapRequest(
     // get current reserves
     const { reserveA: currentReserveA, reserveB: currentReserveB } = await getReserves(
       token1Addr,
-      token2Addr,
+      token2Addr
     )
 
     const amounts = await innerSwap1Op(inAmt, minOutAmt, [token1Addr, token2Addr])
@@ -1066,47 +1054,47 @@ export async function swapRequest(
     BALANCES.setCheckPositive(
       pubkey,
       token1Addr,
-      ((await BALANCES.get(pubkey, token1Addr)) || 0n) - inAmt,
+      ((await BALANCES.get(pubkey, token1Addr)) || 0n) - inAmt
     )
     BALANCES.setCheckPositive(
       pubkey,
       token2Addr,
-      ((await BALANCES.get(pubkey, token2Addr)) || 0n) + amounts[1]!,
+      ((await BALANCES.get(pubkey, token2Addr)) || 0n) + amounts[1]!
     )
 
     BALANCES.setCheckPositive(
       pubkey,
       wbtcAddress,
-      ((await BALANCES.get(pubkey, wbtcAddress)) || 0n) - btcFee,
+      ((await BALANCES.get(pubkey, wbtcAddress)) || 0n) - btcFee
     )
     BALANCES.setCheckPositive(
       pubkey,
       token1Addr,
-      ((await BALANCES.get(pubkey, token1Addr)) || 0n) - (inAmt * token1FeeBps) / 10000n,
+      ((await BALANCES.get(pubkey, token1Addr)) || 0n) - (inAmt * token1FeeBps) / 10000n
     )
     BALANCES.setCheckPositive(
       pubkey,
       token2Addr,
-      ((await BALANCES.get(pubkey, token2Addr)) || 0n) - (amounts[1]! * token2FeeBps) / 10000n,
+      ((await BALANCES.get(pubkey, token2Addr)) || 0n) - (amounts[1]! * token2FeeBps) / 10000n
     )
 
     // get new reserves
     const { reserveA: afterReserveA, reserveB: afterReserveB } = await getReserves(
       token1Addr,
-      token2Addr,
+      token2Addr
     )
 
     // get the price impact
-    const priceBefore
-      = token1Addr === wbtcAddress
+    const priceBefore =
+      token1Addr === wbtcAddress
         ? (currentReserveA * 1000000000000000000n * 10000n) / currentReserveB
         : (currentReserveB * 1000000000000000000n * 10000n) / currentReserveA
-    const priceAfter
-      = token1Addr === wbtcAddress
+    const priceAfter =
+      token1Addr === wbtcAddress
         ? (afterReserveA * 1000000000000000000n * 10000n) / afterReserveB
         : (afterReserveB * 1000000000000000000n * 10000n) / afterReserveA
-    const priceImpact
-      = priceBefore > priceAfter ? priceBefore - priceAfter : priceAfter - priceBefore
+    const priceImpact =
+      priceBefore > priceAfter ? priceBefore - priceAfter : priceAfter - priceBefore
     const priceImpactBps = priceBefore !== 0n ? (priceImpact * 10000n) / priceBefore : 0n
 
     // reserve_in / reserve_out are the PRE-swap pool reserves, oriented to the
@@ -1120,8 +1108,7 @@ export async function swapRequest(
       reserve_in: currentReserveA,
       reserve_out: currentReserveB,
     }
-  }
-  catch (e: any) {
+  } catch (e: any) {
     console.error('Error in swap_request:', e)
     return { success: false, error_message: e.message }
   }
@@ -1137,7 +1124,7 @@ function checkSwap2Signature(
   token1FeeBps: bigint,
   token2FeeBps: bigint,
   fee: bigint,
-  blsSignature: string, // no 0x
+  blsSignature: string // no 0x
 ) {
   if (blsSignature === '') {
     return true // skip signature verification if empty
@@ -1170,7 +1157,7 @@ function checkSwap2Signature(
   const pubkeyPoint = new bls12_381.G2.Point(
     bls12_381.fields.Fp2.create({ c0: pubkeyXC0, c1: pubkeyXC1 }),
     bls12_381.fields.Fp2.create({ c0: pubkeyYC0, c1: pubkeyYC1 }),
-    bls12_381.fields.Fp2.ONE,
+    bls12_381.fields.Fp2.ONE
   )
 
   const res = bls12_381.shortSignatures.verify(signaturePoint, P, pubkeyPoint)
@@ -1204,7 +1191,7 @@ export async function swap2Request(
   nonce: bigint, // unique request nonce
   token1FeeBps: bigint, // bigint token1 fee in bps
   token2FeeBps: bigint, // bigint token2 fee in bps
-  btcFee: bigint, // bigint BTC fee in bps
+  btcFee: bigint // bigint BTC fee in bps
 ) {
   token1Addr = token1Addr.toLowerCase()
   token2Addr = token2Addr.toLowerCase()
@@ -1225,7 +1212,7 @@ export async function swap2Request(
         token1FeeBps,
         token2FeeBps,
         btcFee,
-        blsSignature,
+        blsSignature
       )
     ) {
       throw new Error('Invalid BLS signature')
@@ -1234,7 +1221,7 @@ export async function swap2Request(
     // get current reserves
     const { reserveA: currentReserveA, reserveB: currentReserveB } = await getReserves(
       token1Addr,
-      token2Addr,
+      token2Addr
     )
 
     const amounts = await innerSwap2Op(maxInAmt, outAmt, [token1Addr, token2Addr])
@@ -1246,47 +1233,47 @@ export async function swap2Request(
     BALANCES.setCheckPositive(
       pubkey,
       token1Addr,
-      ((await BALANCES.get(pubkey, token1Addr)) || 0n) - amounts[0]!,
+      ((await BALANCES.get(pubkey, token1Addr)) || 0n) - amounts[0]!
     )
     BALANCES.setCheckPositive(
       pubkey,
       token2Addr,
-      ((await BALANCES.get(pubkey, token2Addr)) || 0n) + outAmt,
+      ((await BALANCES.get(pubkey, token2Addr)) || 0n) + outAmt
     )
 
     BALANCES.setCheckPositive(
       pubkey,
       wbtcAddress,
-      ((await BALANCES.get(pubkey, wbtcAddress)) || 0n) - btcFee,
+      ((await BALANCES.get(pubkey, wbtcAddress)) || 0n) - btcFee
     )
     BALANCES.setCheckPositive(
       pubkey,
       token1Addr,
-      ((await BALANCES.get(pubkey, token1Addr)) || 0n) - (amounts[0]! * token1FeeBps) / 10000n,
+      ((await BALANCES.get(pubkey, token1Addr)) || 0n) - (amounts[0]! * token1FeeBps) / 10000n
     )
     BALANCES.setCheckPositive(
       pubkey,
       token2Addr,
-      ((await BALANCES.get(pubkey, token2Addr)) || 0n) - (outAmt * token2FeeBps) / 10000n,
+      ((await BALANCES.get(pubkey, token2Addr)) || 0n) - (outAmt * token2FeeBps) / 10000n
     )
 
     // get new reserves
     const { reserveA: afterReserveA, reserveB: afterReserveB } = await getReserves(
       token1Addr,
-      token2Addr,
+      token2Addr
     )
 
     // get the price impact
-    const priceBefore
-      = token1Addr === wbtcAddress
+    const priceBefore =
+      token1Addr === wbtcAddress
         ? (currentReserveA * 1000000000000000000n * 10000n) / currentReserveB
         : (currentReserveB * 1000000000000000000n * 10000n) / currentReserveA
-    const priceAfter
-      = token1Addr === wbtcAddress
+    const priceAfter =
+      token1Addr === wbtcAddress
         ? (afterReserveA * 1000000000000000000n * 10000n) / afterReserveB
         : (afterReserveB * 1000000000000000000n * 10000n) / afterReserveA
-    const priceImpact
-      = priceBefore > priceAfter ? priceBefore - priceAfter : priceAfter - priceBefore
+    const priceImpact =
+      priceBefore > priceAfter ? priceBefore - priceAfter : priceAfter - priceBefore
     const priceImpactBps = priceBefore !== 0n ? (priceImpact * 10000n) / priceBefore : 0n
 
     // reserve_in / reserve_out are the PRE-swap pool reserves, oriented to the
@@ -1300,8 +1287,7 @@ export async function swap2Request(
       reserve_in: currentReserveA,
       reserve_out: currentReserveB,
     }
-  }
-  catch (e: any) {
+  } catch (e: any) {
     console.error('Error in swap2_request:', e)
     return { success: false, error_message: e.message }
   }
@@ -1314,7 +1300,7 @@ function checkWithdrawSignature(
   targetAddr: string,
   amt: bigint,
   fee: bigint,
-  blsSignature: string, // no 0x
+  blsSignature: string // no 0x
 ) {
   if (blsSignature === '') {
     return true // skip signature verification if empty
@@ -1344,7 +1330,7 @@ function checkWithdrawSignature(
   const pubkeyPoint = new bls12_381.G2.Point(
     bls12_381.fields.Fp2.create({ c0: pubkeyXC0, c1: pubkeyXC1 }),
     bls12_381.fields.Fp2.create({ c0: pubkeyYC0, c1: pubkeyYC1 }),
-    bls12_381.fields.Fp2.ONE,
+    bls12_381.fields.Fp2.ONE
   )
 
   const res = bls12_381.shortSignatures.verify(signaturePoint, P, pubkeyPoint)
@@ -1372,7 +1358,7 @@ export async function withdrawRequest(
   amt: bigint, // bigint token amount
   blsSignature: string, // hex string BLS signature
   nonce: bigint, // unique request nonce
-  btcFee: bigint, // bigint BTC fee in bps
+  btcFee: bigint // bigint BTC fee in bps
 ) {
   tokenAddr = tokenAddr.toLowerCase()
   targetAddr = targetAddr.toLowerCase()
@@ -1392,18 +1378,17 @@ export async function withdrawRequest(
     BALANCES.setCheckPositive(
       pubkey,
       tokenAddr,
-      ((await BALANCES.get(pubkey, tokenAddr)) || 0n) - amt,
+      ((await BALANCES.get(pubkey, tokenAddr)) || 0n) - amt
     )
 
     BALANCES.setCheckPositive(
       pubkey,
       wbtcAddress,
-      ((await BALANCES.get(pubkey, wbtcAddress)) || 0n) - btcFee,
+      ((await BALANCES.get(pubkey, wbtcAddress)) || 0n) - btcFee
     )
 
     return { success: true, data: { amt } }
-  }
-  catch (e: any) {
+  } catch (e: any) {
     console.error('Error in withdraw_request:', e)
     return { success: false, error_message: e.message }
   }
@@ -1415,7 +1400,7 @@ function checkUnwrapSignature(
   pkscript: string,
   amt: bigint,
   fee: bigint,
-  blsSignature: string, // no 0x
+  blsSignature: string // no 0x
 ) {
   if (blsSignature === '') {
     return true // skip signature verification if empty
@@ -1444,7 +1429,7 @@ function checkUnwrapSignature(
   const pubkeyPoint = new bls12_381.G2.Point(
     bls12_381.fields.Fp2.create({ c0: pubkeyXC0, c1: pubkeyXC1 }),
     bls12_381.fields.Fp2.create({ c0: pubkeyYC0, c1: pubkeyYC1 }),
-    bls12_381.fields.Fp2.ONE,
+    bls12_381.fields.Fp2.ONE
   )
 
   const res = bls12_381.shortSignatures.verify(signaturePoint, P, pubkeyPoint)
@@ -1470,7 +1455,7 @@ export async function unwrapRequest(
   amt: bigint, // bigint token amount
   blsSignature: string, // hex string BLS signature
   nonce: bigint, // unique request nonce
-  btcFee: bigint, // bigint BTC fee in bps
+  btcFee: bigint // bigint BTC fee in bps
 ) {
   pkscript = pkscript.toLowerCase()
   pkscript = pkscript.startsWith('0x') ? pkscript.slice(2) : pkscript
@@ -1493,18 +1478,17 @@ export async function unwrapRequest(
     BALANCES.setCheckPositive(
       pubkey,
       wbtcAddress,
-      ((await BALANCES.get(pubkey, wbtcAddress)) || 0n) - amt,
+      ((await BALANCES.get(pubkey, wbtcAddress)) || 0n) - amt
     )
 
     BALANCES.setCheckPositive(
       pubkey,
       wbtcAddress,
-      ((await BALANCES.get(pubkey, wbtcAddress)) || 0n) - btcFee,
+      ((await BALANCES.get(pubkey, wbtcAddress)) || 0n) - btcFee
     )
 
     return { success: true, data: { amt } }
-  }
-  catch (e: any) {
+  } catch (e: any) {
     console.error('Error in withdraw_request:', e)
     return { success: false, error_message: e.message }
   }

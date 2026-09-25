@@ -29,7 +29,7 @@ describe('evm address derivation', () => {
   it('agrees between the two derivation paths', () => {
     assert.equal(
       getEvmAddressFromBitcoinAddress(BTC_ADDR).toLowerCase(),
-      getEvmAddressFromPkScript(PKSCRIPT).toLowerCase(),
+      getEvmAddressFromPkScript(PKSCRIPT).toLowerCase()
     )
   })
 })
@@ -49,7 +49,7 @@ describe('uniswap pair address', () => {
   it('is order-independent in its inputs', () => {
     assert.equal(
       swap.getPairAddress(TOKEN_A, TOKEN_B).toLowerCase(),
-      swap.getPairAddress(TOKEN_B, TOKEN_A).toLowerCase(),
+      swap.getPairAddress(TOKEN_B, TOKEN_A).toLowerCase()
     )
   })
 })

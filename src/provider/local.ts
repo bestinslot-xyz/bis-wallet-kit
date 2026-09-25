@@ -67,7 +67,7 @@ export async function saveWallet(
   privKeyWIF: string,
   network: BISNetwork,
   walletType: LocalWalletType = 'p2wpkh',
-  sourceWallet: LocalWalletSource = 'unisat',
+  sourceWallet: LocalWalletSource = 'unisat'
 ): Promise<BISWallet> {
   if (walletType !== 'p2wpkh' && walletType !== 'p2tr') {
     throw new Error('Invalid wallet type. Supported types are p2wpkh and p2tr.')
@@ -127,7 +127,7 @@ export async function saveWallet(
 export async function createWallet(
   network: BISNetwork,
   walletType: LocalWalletType = 'p2wpkh',
-  sourceWallet: LocalWalletSource = 'unisat',
+  sourceWallet: LocalWalletSource = 'unisat'
 ): Promise<BISWallet & { wif: string }> {
   if (walletType !== 'p2wpkh' && walletType !== 'p2tr') {
     throw new Error('Invalid wallet type. Supported types are p2wpkh and p2tr.')
@@ -170,15 +170,13 @@ async function getWalletInfo(): Promise<LocalWalletInfo | null> {
         pubkey: Buffer.from(keyPair.publicKey),
         network: getBitcoinNetwork(),
       }).address
-    }
-    else if (walletType === 'p2tr') {
+    } else if (walletType === 'p2tr') {
       address = bitcoinjs.payments.p2tr({
         internalPubkey: Buffer.from(xOnly),
         network: getBitcoinNetwork(),
       }).address
     }
-  }
-  catch (e) {
+  } catch (e) {
     console.error('Failed to derive address from pubkey', e)
     throw new Error('Failed to derive address from pubkey.')
   }
@@ -220,8 +218,7 @@ async function getWalletInfo(): Promise<LocalWalletInfo | null> {
 
 async function getWalletNetwork(): Promise<string> {
   const network = LOCAL_WALLET_STORAGE.get(NETWORK_KEY)
-  if (network)
-    return network as string
+  if (network) return network as string
   return 'mainnet'
 }
 
@@ -229,8 +226,7 @@ async function getWallets(): Promise<BISWallet[]> {
   await checkNetwork()
 
   const walletInfo = await getWalletInfo()
-  if (!walletInfo)
-    throw new Error('No private key found.')
+  if (!walletInfo) throw new Error('No private key found.')
 
   const wallets = [
     {
@@ -248,21 +244,19 @@ async function signMessage(message: string): Promise<string> {
 
   try {
     const walletInfo = await getWalletInfo()
-    if (!walletInfo)
-      throw new Error('No private key found.')
+    if (!walletInfo) throw new Error('No private key found.')
 
     if (walletInfo.walletType === 'p2wpkh' || walletInfo.walletType === 'p2tr') {
       const signature = Buffer.from(
         BIP322Signer.sign(walletInfo.keyPair.toWIF(), walletInfo.address, message),
-        'base64',
+        'base64'
       ).toString('hex')
 
       return signature
     }
 
     throw new Error('Unsupported wallet type.')
-  }
-  catch (e) {
+  } catch (e) {
     // Log
     console.error('Failed to sign message', e)
 
@@ -271,13 +265,12 @@ async function signMessage(message: string): Promise<string> {
 }
 
 async function signMessageDeterministic(
-  message: string,
-): Promise<{ signature: string, address: string }> {
+  message: string
+): Promise<{ signature: string; address: string }> {
   await checkNetwork()
 
   const walletInfo = await getWalletInfo()
-  if (!walletInfo)
-    throw new Error('No payment wallet found.')
+  if (!walletInfo) throw new Error('No payment wallet found.')
   const address = walletInfo.address
 
   try {
@@ -293,8 +286,7 @@ async function signMessageDeterministic(
     }
 
     throw new Error('Unsupported wallet type.')
-  }
-  catch (e) {
+  } catch (e) {
     // Log
     console.error('Failed to sign message', e)
 
@@ -306,8 +298,7 @@ async function signPSBT(psbtBase64: string, broadcast: boolean, inputsToSign: an
   await checkNetwork()
 
   const walletInfo = await getWalletInfo()
-  if (!walletInfo)
-    throw new Error('No private key found.')
+  if (!walletInfo) throw new Error('No private key found.')
 
   // convert psbtBase64 to hex
   const psbt = bitcoinjs.Psbt.fromBase64(psbtBase64)
@@ -315,15 +306,12 @@ async function signPSBT(psbtBase64: string, broadcast: boolean, inputsToSign: an
   if (inputsToSign.length === 0) {
     if (walletInfo.walletType === 'p2wpkh') {
       signedPsbt = psbt.signAllInputs(walletInfo.signer)
-    }
-    else if (walletInfo.walletType === 'p2tr') {
+    } else if (walletInfo.walletType === 'p2tr') {
       signedPsbt = psbt.signAllInputs(walletInfo.tweakedSigner!)
-    }
-    else {
+    } else {
       throw new Error('Unsupported wallet type.')
     }
-  }
-  else {
+  } else {
     for (const input of inputsToSign) {
       for (let i = 0; i < input.signingIndexes.length; i++) {
         if (input.useTweakedSigner && walletInfo.walletType === 'p2tr') {
@@ -331,8 +319,7 @@ async function signPSBT(psbtBase64: string, broadcast: boolean, inputsToSign: an
             throw new Error('Tweaked signer not found for taproot wallet.')
           }
           psbt.signInput(input.signingIndexes[i], walletInfo.tweakedSigner!)
-        }
-        else {
+        } else {
           psbt.signInput(input.signingIndexes[i], walletInfo.signer)
         }
       }
@@ -353,26 +340,23 @@ async function sign(
   ordAddr: string,
   ordAddrIdxes: number[],
   useTweakSignerIdxes?: number[],
-  noSignIdxes?: number[],
+  noSignIdxes?: number[]
 ): Promise<SignResponse> {
   let signed = null
 
   if (!paymentAddr) {
     signed = await signPSBT(hexToBase64(unsignedPsbtHex), false, [])
-  }
-  else {
+  } else {
     const psbt = bitcoinjs.Psbt.fromHex(unsignedPsbtHex)
     const insToSign = []
     const useTweakSignerPayment = []
     const useTweakSignerOrd = []
     for (let i = 0; i < psbt.inputCount; i++) {
-      if (noSignIdxes && noSignIdxes.includes(i))
-        continue
+      if (noSignIdxes && noSignIdxes.includes(i)) continue
       if (ordAddrIdxes.includes(i)) {
         if (useTweakSignerIdxes && useTweakSignerIdxes.includes(i)) {
           useTweakSignerOrd.push(true)
-        }
-        else if (useTweakSignerIdxes) {
+        } else if (useTweakSignerIdxes) {
           useTweakSignerOrd.push(false)
         }
         continue
@@ -380,8 +364,7 @@ async function sign(
       insToSign.push(i)
       if (useTweakSignerIdxes && useTweakSignerIdxes.includes(i)) {
         useTweakSignerPayment.push(true)
-      }
-      else if (useTweakSignerIdxes) {
+      } else if (useTweakSignerIdxes) {
         useTweakSignerPayment.push(false)
       }
     }
@@ -458,7 +441,7 @@ async function sendBTC(amountSats: number, toAddress: string, feeRate?: number):
     feeRate,
     amountSats,
     null,
-    null,
+    null
   )
 
   const unsignedPsbt = await buildPsbtFromTx(unsignedTxResp.tx, cardinalUtxos, payerWallet, [])

@@ -17,7 +17,7 @@ export class WalletAccountChangedError extends Error {
    */
   constructor(
     readonly expectedAddress: string,
-    readonly accounts: string[],
+    readonly accounts: string[]
   ) {
     super('Connected wallet account changed. Please reconnect.')
     this.name = 'WalletAccountChangedError'
@@ -35,7 +35,7 @@ export interface AccountChangeEvent {
 }
 
 const accountListeners = new Set<(event: AccountChangeEvent) => void>()
-let accountWatch: { provider: BISWalletProvider, unsubscribe: () => void } | null = null
+let accountWatch: { provider: BISWalletProvider; unsubscribe: () => void } | null = null
 
 /**
  * Registry of wallet providers, populated per build via `registerProvider`. The
@@ -81,8 +81,7 @@ export async function getWallets(provider: BISWalletProvider): Promise<BISSessio
       throw new Error(err?.message || 'Failed to get wallets.')
     })
 
-  if (!wallets)
-    throw new Error('Failed to get wallets.')
+  if (!wallets) throw new Error('Failed to get wallets.')
 
   const resp: BISSession = {
     provider,
@@ -105,7 +104,9 @@ export async function getWallets(provider: BISWalletProvider): Promise<BISSessio
  * @param listener Called with the provider, the session's previous addresses and the wallet's new accounts.
  * @returns An unsubscribe function that removes the listener.
  */
-export function subscribeToAccountChanges(listener: (event: AccountChangeEvent) => void): () => void {
+export function subscribeToAccountChanges(
+  listener: (event: AccountChangeEvent) => void
+): () => void {
   accountListeners.add(listener)
   watchAccounts()
   return () => {
@@ -118,15 +119,13 @@ export function subscribeToAccountChanges(listener: (event: AccountChangeEvent) 
 // from storage after a page reload.
 function watchAccounts() {
   const providerName = getWalletInfo()?.provider
-  if (accountWatch && accountWatch.provider === providerName)
-    return
+  if (accountWatch && accountWatch.provider === providerName) return
 
   accountWatch?.unsubscribe()
   accountWatch = null
 
   const impl = providerName ? PROVIDERS[providerName] : undefined
-  if (!providerName || !impl?.onAccountsChanged)
-    return
+  if (!providerName || !impl?.onAccountsChanged) return
 
   accountWatch = {
     provider: providerName,
@@ -137,10 +136,8 @@ function watchAccounts() {
 // An empty account list means the wallet cannot tell (e.g. it is locked), which is not a switch.
 function handleAccountsChanged(provider: BISWalletProvider, accounts: string[]) {
   const session = getWalletInfo()
-  if (!session || session.provider !== provider || accounts.length === 0)
-    return
-  if (session.wallets.some(wallet => accounts.includes(wallet.address)))
-    return
+  if (!session || session.provider !== provider || accounts.length === 0) return
+  if (session.wallets.some(wallet => accounts.includes(wallet.address))) return
 
   clearWalletInfo()
   accountWatch?.unsubscribe()
@@ -154,8 +151,7 @@ function handleAccountsChanged(provider: BISWalletProvider, accounts: string[]) 
   for (const listener of accountListeners) {
     try {
       listener(event)
-    }
-    catch (err) {
+    } catch (err) {
       console.error('Account change listener failed.', err)
     }
   }
@@ -170,14 +166,12 @@ async function assertActiveAccount(providerName: BISWalletProvider, address: str
   watchAccounts()
 
   const impl = requireProvider(providerName)
-  if (!impl.getAccounts)
-    return
+  if (!impl.getAccounts) return
 
   let accounts: string[]
   try {
     accounts = await impl.getAccounts()
-  }
-  catch {
+  } catch {
     return
   }
 
@@ -289,7 +283,7 @@ export async function signMessage(message: string, walletType: BISWalletPurpose)
  */
 export async function signMessageLocalVerify(
   message: string,
-  walletType: BISWalletPurpose,
+  walletType: BISWalletPurpose
 ): Promise<string> {
   const wallet = getWallet(walletType)
   if (!wallet) {
@@ -321,8 +315,7 @@ export async function signMessageLocalVerify(
 export async function signMessageLocalVerifyDeterministic(message: string): Promise<string> {
   const providerName = getWalletInfo()?.provider
   const paymentWallet = getWallet('payment')
-  if (providerName && paymentWallet)
-    await assertActiveAccount(providerName, paymentWallet.address)
+  if (providerName && paymentWallet) await assertActiveAccount(providerName, paymentWallet.address)
 
   const provider = requireProvider(providerName)
   const signatureRes = await provider.signMessageDeterministic(message)
@@ -351,7 +344,7 @@ export async function signMessageLocalVerifyDeterministic(message: string): Prom
 export async function sendBTC(
   amountSats: number,
   toAddress: string,
-  feeRate?: number,
+  feeRate?: number
 ): Promise<string> {
   if (!Number.isInteger(amountSats) || amountSats <= 0) {
     throw new Error('amountSats must be a positive integer (satoshis).')
@@ -380,12 +373,11 @@ export async function signPSBT(
   psbtBase64: string,
   broadcast: boolean,
   inputsToSign: any[],
-  message?: string,
+  message?: string
 ) {
   const walletInfo = getWalletInfo()
 
-  if (!walletInfo || !walletInfo.wallets)
-    throw new Error('Wallets not found')
+  if (!walletInfo || !walletInfo.wallets) throw new Error('Wallets not found')
 
   const provider = requireProvider(walletInfo.provider)
   await provider.signPSBT(psbtBase64, broadcast, inputsToSign, message)

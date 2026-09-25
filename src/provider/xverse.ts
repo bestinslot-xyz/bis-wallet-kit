@@ -20,19 +20,15 @@ function isInstalled() {
 function getNetworkType() {
   const bisNetwork = getNetwork()
 
-  if (bisNetwork === 'mainnet')
-    return 'Mainnet'
-  else if (bisNetwork === 'testnet')
-    return 'Testnet4'
-  else if (bisNetwork === 'signet')
-    return 'Signet'
+  if (bisNetwork === 'mainnet') return 'Mainnet'
+  else if (bisNetwork === 'testnet') return 'Testnet4'
+  else if (bisNetwork === 'signet') return 'Signet'
 
   throw new Error('Unknown BTC network type.')
 }
 
 async function getWallets(): Promise<BISWallet[]> {
-  if (!window.XverseProviders?.BitcoinProvider)
-    throw new Error('Xverse extension not found.')
+  if (!window.XverseProviders?.BitcoinProvider) throw new Error('Xverse extension not found.')
 
   const request = createUnsecuredToken({
     purposes: ['ordinals', 'payment'],
@@ -44,8 +40,7 @@ async function getWallets(): Promise<BISWallet[]> {
 
   const data = await window.XverseProviders.BitcoinProvider?.connect(request)
 
-  if (!data)
-    throw new Error('Error fetching wallet data.')
+  if (!data) throw new Error('Error fetching wallet data.')
 
   const wallets = data.addresses.map((addr: any) => {
     return {
@@ -61,10 +56,9 @@ async function getWallets(): Promise<BISWallet[]> {
 async function signMessage(
   message: string,
   _walletType: BISWalletPurpose,
-  address: string,
+  address: string
 ): Promise<string> {
-  if (!window.XverseProviders?.BitcoinProvider)
-    throw new Error('Xverse extension not found.')
+  if (!window.XverseProviders?.BitcoinProvider) throw new Error('Xverse extension not found.')
 
   const request = createUnsecuredToken({
     address,
@@ -80,21 +74,19 @@ async function signMessage(
       console.error('Failed to sign message.', e)
 
       throw new Error('Failed to sign message.')
-    },
+    }
   )
 
   return Buffer.from(response, 'base64').toString('hex')
 }
 
 async function signMessageDeterministic(
-  message: string,
-): Promise<{ signature: string, address: string }> {
-  if (!window.XverseProviders?.BitcoinProvider)
-    throw new Error('Xverse extension not found.')
+  message: string
+): Promise<{ signature: string; address: string }> {
+  if (!window.XverseProviders?.BitcoinProvider) throw new Error('Xverse extension not found.')
 
   const wallet = getPaymentWallet()
-  if (!wallet)
-    throw new Error('No payment wallet found.')
+  if (!wallet) throw new Error('No payment wallet found.')
   const address = wallet.address
 
   const request = createUnsecuredToken({
@@ -111,7 +103,7 @@ async function signMessageDeterministic(
       console.error('Failed to sign message.', e)
 
       throw new Error('Failed to sign message.')
-    },
+    }
   )
 
   return {
@@ -121,8 +113,7 @@ async function signMessageDeterministic(
 }
 
 async function sendBTC(amountSats: number, toAddress: string): Promise<string> {
-  if (!window.XverseProviders?.BitcoinProvider)
-    throw new Error('Xverse extension not found.')
+  if (!window.XverseProviders?.BitcoinProvider) throw new Error('Xverse extension not found.')
 
   const response = await window.XverseProviders.BitcoinProvider.request('sendTransfer', {
     recipients: [
@@ -140,10 +131,9 @@ async function signPSBT(
   psbtBase64: string,
   broadcast: boolean,
   inputsToSign: any[],
-  message?: string,
+  message?: string
 ) {
-  if (!window.XverseProviders?.BitcoinProvider)
-    throw new Error('Xverse extension not found.')
+  if (!window.XverseProviders?.BitcoinProvider) throw new Error('Xverse extension not found.')
 
   const request = createUnsecuredToken({
     network: {
@@ -166,16 +156,14 @@ async function sign(
   ordAddr: string,
   ordAddrIndexes: number[],
   _useTweakedSignerIndexes?: number[], // not used in Xverse
-  noSignIndexes?: number[],
+  noSignIndexes?: number[]
 ): Promise<SignResponse> {
   const psbt = bitcoinjs.Psbt.fromHex(unsignedPsbtHex)
   const inscriptionsToSign = []
 
   for (let i = 0; i < psbt.inputCount; i++) {
-    if (noSignIndexes && noSignIndexes.includes(i))
-      continue
-    if (ordAddrIndexes.includes(i))
-      continue
+    if (noSignIndexes && noSignIndexes.includes(i)) continue
+    if (ordAddrIndexes.includes(i)) continue
     inscriptionsToSign.push(i)
   }
 
@@ -194,7 +182,7 @@ async function sign(
         sigHash: bitcoinjs.Transaction.SIGHASH_DEFAULT,
       },
     ],
-    'sign this pls',
+    'sign this pls'
   )
 
   const signedPsbt = bitcoinjs.Psbt.fromBase64(signed.psbtBase64)

@@ -17,8 +17,7 @@ modal.setTheme('dark') // 'light' | 'dark' | 'system' (default 'system')
 Lower-level modal controls are also exported: `modal.create`, `modal.showConnect`,
 `modal.showConnectConfirmation`, `modal.showError`, `modal.hide`.
 
-Supported providers: `okx`, `unisat`, `xverse`, `leather`, and `local` (Node only
-— see below).
+Supported providers: `okx`, `unisat`, `xverse`, `leather`, and `local` (Node only — see below).
 
 ## Sessions
 
@@ -84,14 +83,15 @@ Please reconnect.") without prompting for a signature.
 To react as soon as the switch happens, subscribe:
 
 ```ts
-const unsubscribe = wallet.subscribeToAccountChanges(({ provider, previousAddresses, accounts }) => {
-  // The session is already cleared: prompt the user to reconnect.
-})
+const unsubscribe = wallet.subscribeToAccountChanges(
+  ({ provider, previousAddresses, accounts }) => {
+    // The session is already cleared: prompt the user to reconnect.
+  }
+)
 
 try {
   await wallet.signMessageLocalVerify('hello', 'payment')
-}
-catch (e) {
+} catch (e) {
   if (e instanceof wallet.WalletAccountChangedError) {
     // prompt reconnect
   }

@@ -9,8 +9,8 @@ pnpm add @bestinslot/wallet-kit
 
 The package ships as ESM only, in two flavours resolved automatically by your environment:
 
-- **browser** — extension wallets (OKX, Unisat, Xverse, Leather) + the framework-free
-  connect modal, plus all the feature APIs.
+- **browser** — extension wallets (OKX, Unisat, Xverse, Leather) + the framework-free connect modal,
+  plus all the feature APIs.
 - **server** (Node/Bun) — the same feature APIs (swap, inscriptions, BRC-2.0, balances) connected
   via a local WIF wallet (`wallet.connectLocalWallet`), with no Vue or modal. Ideal for
   headless/automated use.
@@ -41,8 +41,7 @@ modal.init() // mount the modal once, e.g. at app start
 try {
   const session = await modal.connect()
   console.log('Connected:', session)
-}
-catch (e) {
+} catch (e) {
   console.error('Connection failed:', e)
 }
 ```

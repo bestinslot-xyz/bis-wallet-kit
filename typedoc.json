@@ -1,12 +1,6 @@
 {
   "$schema": "https://typedoc.org/schema.json",
-  "entryPoints": [
-    "src/browser.ts",
-    "src/node.ts",
-    "src/core.ts",
-    "src/react.ts",
-    "src/vue.ts"
-  ],
+  "entryPoints": ["src/browser.ts", "src/node.ts", "src/core.ts", "src/react.ts", "src/vue.ts"],
   "entryPointStrategy": "resolve",
   "tsconfig": "tsconfig.app.json",
   "out": "docs/api",

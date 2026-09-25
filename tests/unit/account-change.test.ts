@@ -34,7 +34,7 @@ const fake = {
     }
   }),
   signMessage: vi.fn(async (message: string) =>
-    Buffer.from(Signer.sign(WIF, ADDRESS, message) as string, 'base64').toString('hex'),
+    Buffer.from(Signer.sign(WIF, ADDRESS, message) as string, 'base64').toString('hex')
   ),
   signMessageDeterministic: vi.fn(),
   sendBTC: vi.fn(),
@@ -97,7 +97,7 @@ describe('pre-sign account check', () => {
 
     await getWallets('unisat')
     await expect(signMessageLocalVerifyDeterministic('gm')).rejects.toBeInstanceOf(
-      WalletAccountChangedError,
+      WalletAccountChangedError
     )
     expect(fake.signMessage).not.toHaveBeenCalled()
     expect(fake.signMessageDeterministic).not.toHaveBeenCalled()
@@ -106,7 +106,10 @@ describe('pre-sign account check', () => {
 
 describe('signMessage backend verification', () => {
   function stubVerify(verified: boolean) {
-    vi.stubGlobal('fetch', vi.fn(async () => ({ json: async () => ({ verified }) })))
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ json: async () => ({ verified }) }))
+    )
   }
 
   it('rejects when the backend reports the signature invalid', async () => {

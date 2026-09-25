@@ -40,7 +40,7 @@ export type SignFunction = (
   ordAddr: string,
   ordAddrIdxes: number[],
   useTweakSignerIdxes?: number[],
-  noSignIdxes?: number[],
+  noSignIdxes?: number[]
 ) => Promise<SignResponse>
 
 /**
@@ -88,7 +88,7 @@ export interface BISProvider {
   signMessage: (
     message: string,
     walletType: BISWalletPurpose,
-    walletAddress: string,
+    walletAddress: string
   ) => Promise<string>
 
   /**
@@ -121,7 +121,7 @@ export interface BISProvider {
     psbtBase64: string,
     broadcast: boolean,
     inputsToSign: any[],
-    message?: string,
+    message?: string
   ) => Promise<string>
 
   /**

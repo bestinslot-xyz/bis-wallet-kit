@@ -2,8 +2,8 @@
 
 The `brc20` namespace covers the BRC-2.0 programmable module: moving base BRC-20 balances in and out
 of the programmable layer, and calling smart contracts. It also exposes a set of pure builders that
-**generate base BRC-20 inscription payloads** — see [Base BRC-20 inscriptions](#base-brc-20-inscriptions)
-below.
+**generate base BRC-20 inscription payloads** — see
+[Base BRC-20 inscriptions](#base-brc-20-inscriptions) below.
 
 The top-level helpers map a Bitcoin identity to its EVM-style address used by the programmable
 layer:
@@ -94,7 +94,8 @@ Ticker sizing follows the BRC-20 rules:
 
 - **4 bytes** — free to mint for all (no `self_mint`).
 - **5 bytes** — self-issuance; `self_mint: "true"` is set automatically.
-- **6 bytes** — namespaced ([proposal](https://github.com/bestinslot-xyz/brc20-proposals/blob/main/001-6-byte-namespace/index.md));
+- **6 bytes** — namespaced
+  ([proposal](https://github.com/bestinslot-xyz/brc20-proposals/blob/main/001-6-byte-namespace/index.md));
   requires a salted predeploy/reveal (see below). The ticker must match `^[A-Za-z0-9-]{6}$`.
 
 ### Deploy / mint / transfer (4- and 5-byte)
@@ -110,14 +111,14 @@ const xfer = brc20.transferBrc20Inscription({ tick: 'ordi', amt: '5' })
 await mint.inscribe(deploy, 2 /* feeRate */, null /* postage */, true /* dryRun */)
 ```
 
-`deployBrc20Inscription` accepts `{ tick, max, lim?, dec?, selfMint? }`. A 5-byte `tick` always emits
-`self_mint: "true"`; a 4-byte `tick` omits it unless you pass `selfMint: true`.
+`deployBrc20Inscription` accepts `{ tick, max, lim?, dec?, selfMint? }`. A 5-byte `tick` always
+emits `self_mint: "true"`; a 4-byte `tick` omits it unless you pass `selfMint: true`.
 
 ### 6-byte namespace: predeploy → deploy
 
 `predeployInscriptions` returns **both** payloads (with a shared salt, generated for you unless you
-pass one) so the flow works out of the box. Inscribe the predeploy, wait the required block delay
-(≥ 3 blocks), then inscribe the deploy as a **child** of the predeploy inscription:
+pass one) so the flow works out of the box. Inscribe the predeploy, wait the required block delay (≥
+3 blocks), then inscribe the deploy as a **child** of the predeploy inscription:
 
 ```ts
 const { salt, hash, predeploy, deploy } = brc20.predeployInscriptions({
@@ -141,5 +142,5 @@ predeploy to its output script to prevent cross-wallet replay. Keep `salt` if yo
 separately; the deploy must reuse the exact salt the predeploy committed to.
 
 Lower-level helpers are also exported: `generateBrc20Salt(byteLength?)` for a random hex salt, and
-`computeBrc20PredeployHash(tick, salt, pkscript)` for the raw `double_sha256(tick + salt + pkscript)`
-commitment.
+`computeBrc20PredeployHash(tick, salt, pkscript)` for the raw
+`double_sha256(tick + salt + pkscript)` commitment.

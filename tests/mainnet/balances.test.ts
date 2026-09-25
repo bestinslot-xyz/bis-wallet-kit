@@ -22,7 +22,7 @@ describe('tests for balances', () => {
       assert.ok(typeof result.transferrableBalanceIn18Decimals === 'bigint')
       assert.ok(typeof result.decimals === 'number')
       assert.ok(typeof result.ticker === 'string')
-    },
+    }
   )
 
   it.skipIf(!KNOWN_TOKEN_ADDRESS)(
@@ -30,10 +30,10 @@ describe('tests for balances', () => {
     async () => {
       const balance = await balances.getBRC20ProgBalanceOfAddress(
         KNOWN_ADDRESS,
-        KNOWN_TOKEN_ADDRESS,
+        KNOWN_TOKEN_ADDRESS
       )
       assert.ok(typeof balance === 'bigint')
-    },
+    }
   )
 
   it('should return BRC2.0 token address for ticker', async () => {

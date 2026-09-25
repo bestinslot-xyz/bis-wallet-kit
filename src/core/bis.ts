@@ -43,7 +43,7 @@ export async function sendInscription(
   feeRate: number,
   postage: number | null,
   dryRun: boolean,
-  walletType?: BISWalletPurpose,
+  walletType?: BISWalletPurpose
 ): Promise<SendInscriptionResult> {
   const currentWalletInfo = getWalletInfo()
   if (!currentWalletInfo) {
@@ -60,24 +60,22 @@ export async function sendInscription(
         postage,
         feeRate,
         dryRun,
-        signFn,
+        signFn
       )
-    }
-    else if (walletType === 'payment') {
+    } else if (walletType === 'payment') {
       return await sendInscriptionInPaymentWalletToOpReturnAll(
         inscriptionId,
         targetWallet,
         postage,
         feeRate,
         dryRun,
-        signFn,
+        signFn
       )
     }
   }
   if (!walletType || walletType === 'ordinals') {
     return await sendInscriptionAll(inscriptionId, targetWallet, postage, feeRate, dryRun, signFn)
-  }
-  else {
+  } else {
     throw new Error(`Unsupported wallet type: ${walletType}`)
   }
 }

@@ -23,7 +23,7 @@ function transferInscription(tick: string, amt: string) {
     null,
     null,
     null,
-    Buff.str(`{"p":"brc-20","op":"transfer","tick":"${tick}","amt":"${amt}"}`),
+    Buff.str(`{"p":"brc-20","op":"transfer","tick":"${tick}","amt":"${amt}"}`)
   )
 }
 
@@ -87,7 +87,7 @@ describe('buildReclaimCommitTx', () => {
       'deadbeef'.repeat(8),
       transferInscription('sats', '1000'),
       5,
-      546,
+      546
     )
 
     // commit output is at index == number of reclaims
@@ -148,7 +148,7 @@ describe('assembleReclaimCommitAndReveal', () => {
       transferInscription('sats', '1000'),
       5,
       546,
-      signFn,
+      signFn
     )
 
     expect(res.commitVout).toBe(1)
@@ -200,12 +200,9 @@ describe('assembleReclaimCommitAndReveal', () => {
       const psbt = bitcoinjs.Psbt.fromHex(psbtHex)
       const tx = new bitcoinjs.Transaction()
       tx.version = 2
-      for (const inp of psbt.txInputs)
-        tx.addInput(inp.hash, inp.index, inp.sequence)
-      for (const out of psbt.txOutputs)
-        tx.addOutput(out.script, out.value)
-      for (let i = 0; i < tx.ins.length; i++)
-        tx.setWitness(i, [Buffer.alloc(64)])
+      for (const inp of psbt.txInputs) tx.addInput(inp.hash, inp.index, inp.sequence)
+      for (const out of psbt.txOutputs) tx.addOutput(out.script, out.value)
+      for (let i = 0; i < tx.ins.length; i++) tx.setWitness(i, [Buffer.alloc(64)])
       return { signedTxHex: tx.toHex(), txId: tx.getId() }
     }
 
@@ -230,7 +227,7 @@ describe('assembleReclaimCommitAndReveal', () => {
       transferInscription('sats', '1000'),
       5,
       546,
-      spySignFn,
+      spySignFn
     )
 
     // the ONLY sign() call must mark every reclaim input index as ordinals-owned,

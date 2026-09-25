@@ -6,6 +6,10 @@ packages:
   - examples/vue
   - examples/vanillajs
 
+overrides:
+  elliptic>bn.js: ^4.12.3
+  secp256k1>bn.js: ^4.12.3
+  ws: ^8.21.0
 patchedDependencies:
   '@cmdcode/tapscript@1.5.3': patches/@cmdcode__tapscript@1.5.3.patch
 

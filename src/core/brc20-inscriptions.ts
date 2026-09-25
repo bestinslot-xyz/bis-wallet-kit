@@ -106,36 +106,33 @@ function toInscription(payload: Record<string, string>): InscriptionDetails {
     null,
     null,
     null,
-    Buff.str(JSON.stringify(payload)),
+    Buff.str(JSON.stringify(payload))
   )
 }
 
 function buildDeployPayload(
   opts: Brc20DeployOptions,
   byteLen: number,
-  salt: string | null,
+  salt: string | null
 ): Record<string, string> {
   assertAmountString(opts.max, 'max')
-  if (opts.lim != null)
-    assertAmountString(opts.lim, 'lim')
+  if (opts.lim != null) assertAmountString(opts.lim, 'lim')
 
   // 5-byte tickers are self-issuance and must carry self_mint. A 6-byte ticker
   // (identified by a salt) is likewise self-mintable per the namespace proposal.
   const requiresSelfMint = byteLen === 5 || salt != null
   if (requiresSelfMint && opts.selfMint === false)
-    throw new Error(`${byteLen}-byte tickers are self-issuance tokens; self_mint cannot be disabled`)
+    throw new Error(
+      `${byteLen}-byte tickers are self-issuance tokens; self_mint cannot be disabled`
+    )
   const selfMint = requiresSelfMint || opts.selfMint === true
 
   const payload: Record<string, string> = { p: 'brc-20', op: 'deploy', tick: opts.tick }
-  if (salt != null)
-    payload.salt = salt
+  if (salt != null) payload.salt = salt
   payload.max = opts.max
-  if (opts.lim != null)
-    payload.lim = opts.lim
-  if (opts.dec != null)
-    payload.dec = String(opts.dec)
-  if (selfMint)
-    payload.self_mint = 'true'
+  if (opts.lim != null) payload.lim = opts.lim
+  if (opts.dec != null) payload.dec = String(opts.dec)
+  if (selfMint) payload.self_mint = 'true'
 
   return payload
 }
@@ -169,8 +166,7 @@ export function deployBrc20Inscription(opts: Brc20DeployOptions): InscriptionDet
  */
 export function mintBrc20Inscription(opts: Brc20AmountOptions): InscriptionDetails {
   const byteLen = tickByteLength(opts.tick)
-  if (byteLen < 4 || byteLen > 6)
-    throw new Error(`ticker must be 4-6 bytes, got ${byteLen}`)
+  if (byteLen < 4 || byteLen > 6) throw new Error(`ticker must be 4-6 bytes, got ${byteLen}`)
   assertAmountString(opts.amt, 'amt')
   return toInscription({ p: 'brc-20', op: 'mint', tick: opts.tick, amt: opts.amt })
 }
@@ -184,8 +180,7 @@ export function mintBrc20Inscription(opts: Brc20AmountOptions): InscriptionDetai
  */
 export function transferBrc20Inscription(opts: Brc20AmountOptions): InscriptionDetails {
   const byteLen = tickByteLength(opts.tick)
-  if (byteLen < 4 || byteLen > 6)
-    throw new Error(`ticker must be 4-6 bytes, got ${byteLen}`)
+  if (byteLen < 4 || byteLen > 6) throw new Error(`ticker must be 4-6 bytes, got ${byteLen}`)
   assertAmountString(opts.amt, 'amt')
   return toInscription({ p: 'brc-20', op: 'transfer', tick: opts.tick, amt: opts.amt })
 }
@@ -267,7 +262,7 @@ export function predeployInscriptions(opts: Brc20PredeployOptions): Brc20Predepl
   const deployPayload = buildDeployPayload(
     { tick: opts.tick, max: opts.max, lim: opts.lim, dec: opts.dec },
     6,
-    salt,
+    salt
   )
 
   return {

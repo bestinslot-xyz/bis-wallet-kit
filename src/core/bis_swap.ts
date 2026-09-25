@@ -104,8 +104,7 @@ async function fetchWithErrors<T>(url: string, options: RequestInit): Promise<T>
         // Attempt to get a more specific error message from the response body
         const errorBody = await response.json()
         errorDetails = errorBody.error || JSON.stringify(errorBody)
-      }
-      catch {
+      } catch {
         // Body is not JSON or is empty, fall back to the status text
       }
       throw new Error(errorDetails)
@@ -119,8 +118,7 @@ async function fetchWithErrors<T>(url: string, options: RequestInit): Promise<T>
     }
 
     return data as T
-  }
-  catch (error) {
+  } catch (error) {
     // Re-throw with a consistent prefix to identify the source of the error
     const errorMessage = error instanceof Error ? error.message : String(error)
     throw new Error(`API Request Failed: ${errorMessage}`)
@@ -131,11 +129,9 @@ function getSignatureRequestText(): string {
   const network = getNetwork()
   if (network === 'signet') {
     return SIGNATURE_REQUEST_TEXT_SIGNET
-  }
-  else if (network === 'mainnet') {
+  } else if (network === 'mainnet') {
     return SIGNATURE_REQUEST_TEXT_MAINNET
-  }
-  else {
+  } else {
     throw new Error('Unsupported network for swap signature request text')
   }
 }
@@ -144,11 +140,9 @@ function getSwapBackendUrl(path: string): string {
   const network = getNetwork()
   if (network === 'signet') {
     return `https://sas-proxy.bestinslot.xyz/${path}`
-  }
-  else if (network === 'mainnet') {
+  } else if (network === 'mainnet') {
     return `https://sa-proxy.bestinslot.xyz/${path}`
-  }
-  else {
+  } else {
     throw new Error('Unsupported network for orderbook backend URL')
   }
 }
@@ -157,11 +151,9 @@ function getSwapContractAddress(): string {
   const network = getNetwork()
   if (network === 'signet') {
     return '0xf41B09041DC546F0466D6F74cda81971012B589D'
-  }
-  else if (network === 'mainnet') {
+  } else if (network === 'mainnet') {
     return '0x62879BB3dD949c4CF06f71BF7c281DcF24D163e7'
-  }
-  else {
+  } else {
     throw new Error('Unsupported network for orderbook contract address')
   }
 }
@@ -170,11 +162,9 @@ function getSwapContractInterface(): ethers.Interface {
   const network = getNetwork()
   if (network === 'signet') {
     return new ethers.Interface(SWAP_ABI_SIGNET)
-  }
-  else if (network === 'mainnet') {
+  } else if (network === 'mainnet') {
     return new ethers.Interface(SWAP_ABI_MAINNET)
-  }
-  else {
+  } else {
     throw new Error('Unsupported network for orderbook contract address')
   }
 }
@@ -314,7 +304,7 @@ export interface ImportSwapWalletOptions {
  */
 export async function importSwapWallet(
   securityCode: string,
-  options: ImportSwapWalletOptions = {},
+  options: ImportSwapWalletOptions = {}
 ): Promise<BISSwapWalletInfo> {
   const userOrdinalsWallet = getOrdinalsWallet()
   if (!userOrdinalsWallet?.address) {
@@ -332,7 +322,7 @@ export async function importSwapWallet(
   const existing = await readSwapWalletInfo(userOrdinalsWallet.address)
   if (existing && existing.swapPubkey !== swapWalletInfo.swapPubkey && !options.overwrite) {
     throw new Error(
-      'A different swap wallet is already stored for this address. Pass { overwrite: true } to replace it.',
+      'A different swap wallet is already stored for this address. Pass { overwrite: true } to replace it.'
     )
   }
 
@@ -511,8 +501,7 @@ async function assertPoolExists(token1Addr: string, token2Addr: string): Promise
   let reserves: PairReserves
   try {
     reserves = await getPairReserves(pairAddress)
-  }
-  catch (error) {
+  } catch (error) {
     // A pair that was never created returns "Pair not found" from the backend
     // rather than zero reserves, so treat that as "no pool" too.
     if (error instanceof Error && /pair not found/i.test(error.message)) {
@@ -774,12 +763,12 @@ async function getSwapWalletNonce(): Promise<bigint> {
 
 interface GetSwapReferrerInfoResponse {
   success: boolean
-  result: { pubkey: string, ref_return_bps: string }
+  result: { pubkey: string; ref_return_bps: string }
 }
 async function getSwapReferrerInfo(
   currentPubkey: string,
-  refId: string,
-): Promise<{ referrerPubkey: string, refReturnBps: bigint }> {
+  refId: string
+): Promise<{ referrerPubkey: string; refReturnBps: bigint }> {
   const url = getSwapBackendUrl('get_swap_referrer_info')
   const body = { ref_id: refId }
 
@@ -819,12 +808,11 @@ async function getSwapReferrerInfo(
  */
 export async function tryGetSwapReferrerInfo(
   currentPubkey: string,
-  refId: string,
-): Promise<{ referrerPubkey: string | undefined, refReturnBps: bigint | undefined }> {
+  refId: string
+): Promise<{ referrerPubkey: string | undefined; refReturnBps: bigint | undefined }> {
   try {
     return await getSwapReferrerInfo(currentPubkey, refId)
-  }
-  catch (error) {
+  } catch (error) {
     console.warn(`Failed to get referrer info for ref_id ${refId}:`, error)
     return { referrerPubkey: undefined, refReturnBps: undefined }
   }
@@ -841,7 +829,7 @@ interface RequestMinerFeeResponse {
  * @returns {Promise<bigint>} A promise that resolves to a bigint representing the estimated miner fee for the specified swap operation type. The fee is returned as a string from the API and converted to bigint in this function.
  */
 export async function requestMinerFee(
-  type: 'add_liquidity' | 'remove_liquidity' | 'swap' | 'withdraw' | 'unwrap',
+  type: 'add_liquidity' | 'remove_liquidity' | 'swap' | 'withdraw' | 'unwrap'
 ): Promise<bigint> {
   // 2. Prepare and execute the API call
   const url = getSwapBackendUrl('get_miner_fee')
@@ -887,21 +875,21 @@ export async function listTokens(): Promise<TokenInfo[]> {
   return result.tokens
 }
 
-export type ListPairsOrderBy
-  = | 'price_asc'
-    | 'price_desc'
-    | 'price_change_24h_asc'
-    | 'price_change_24h_desc'
-    | 'price_change_7d_asc'
-    | 'price_change_7d_desc'
-    | 'volume_24h_asc'
-    | 'volume_24h_desc'
-    | 'volume_7d_asc'
-    | 'volume_7d_desc'
-    | 'tvl_asc'
-    | 'tvl_desc'
-    | 'apr_asc'
-    | 'apr_desc'
+export type ListPairsOrderBy =
+  | 'price_asc'
+  | 'price_desc'
+  | 'price_change_24h_asc'
+  | 'price_change_24h_desc'
+  | 'price_change_7d_asc'
+  | 'price_change_7d_desc'
+  | 'volume_24h_asc'
+  | 'volume_24h_desc'
+  | 'volume_7d_asc'
+  | 'volume_7d_desc'
+  | 'tvl_asc'
+  | 'tvl_desc'
+  | 'apr_asc'
+  | 'apr_desc'
 export interface ListPairsRequest {
   order_by?: ListPairsOrderBy
   page?: number
@@ -1007,7 +995,7 @@ export interface GetPairVolumeResponse {
  * @returns {Promise<GetPairVolumeResponse>} A promise that resolves to an object containing the pair address, token addresses and symbols, period in days, total volume in WBTC, total number of trades, and the start and end time of the period. The total volume is returned as a string from the API and can be converted to bigint if needed.
  */
 export async function getPairVolumeOverDays(
-  params: GetPairVolumeRequest,
+  params: GetPairVolumeRequest
 ): Promise<GetPairVolumeResponse> {
   // 2. Prepare and execute the API call
   const url = getSwapBackendUrl(`volume/${params.pair_address}?days=${params.days}`)
@@ -1060,7 +1048,7 @@ export async function getKlines(params: GetKlinesRequest): Promise<GetKlinesResp
 
   // 2. Prepare and execute the API call
   let url = getSwapBackendUrl(
-    `klines/${params.pair_address}?interval=${params.interval}&limit=${params.limit}`,
+    `klines/${params.pair_address}?interval=${params.interval}&limit=${params.limit}`
   )
   if (params.startTime !== null) {
     url += `&startTime=${params.startTime}`
@@ -1106,15 +1094,13 @@ export interface GetTvlHistoryResponse {
  * @param params An object with the pair address and the number of days to look back (max 365; the backend clamps out-of-range values).
  * @returns {Promise<GetTvlHistoryResponse>} A promise that resolves to the pair address, token addresses and symbols, which side is WBTC, the period in days, and the ascending array of `{ timestamp, block_height, tvl }` points. Each `tvl` is a string of sats and can be converted to bigint if needed.
  */
-export async function getTvlHistory(
-  params: GetTvlHistoryRequest,
-): Promise<GetTvlHistoryResponse> {
+export async function getTvlHistory(params: GetTvlHistoryRequest): Promise<GetTvlHistoryResponse> {
   // Encode the path segment and query so a malformed pair_address/days can't
   // produce a broken URL or leak into the path/query.
   const url = getSwapBackendUrl(
     `tvl/${encodeURIComponent(params.pair_address)}?${new URLSearchParams({
       days: String(params.days),
-    })}`,
+    })}`
   )
   const result = await fetchWithErrors<GetTvlHistoryResponse>(url, {
     method: 'GET',
@@ -1166,7 +1152,7 @@ export interface GetActivityOfPairResponse {
  * @returns {Promise<GetActivityOfPairResponse>} A promise that resolves to an object containing the pair address, token details, and an array of recent activities for that pair. Each activity includes details such as the type of activity (add/remove liquidity or swap), timestamp, block height, success status, user address and pubkey, amounts involved, and token addresses.
  */
 export async function getActivityOfPair(
-  params: GetActivityOfPairRequest,
+  params: GetActivityOfPairRequest
 ): Promise<GetActivityOfPairResponse> {
   if (params.limit > 200) {
     throw new Error('Limit cannot exceed 200')
@@ -1174,7 +1160,7 @@ export async function getActivityOfPair(
 
   // 2. Prepare and execute the API call
   const url = getSwapBackendUrl(
-    `pair-activity/${params.pair_address}?limit=${params.limit}&offset=${params.offset}`,
+    `pair-activity/${params.pair_address}?limit=${params.limit}&offset=${params.offset}`
   )
   const result = await fetchWithErrors<GetActivityOfPairResponse>(url, {
     method: 'GET',
@@ -1239,11 +1225,11 @@ export interface GetWalletActivitiesResponse {
  * @returns {Promise<GetWalletActivitiesResponse>} A promise that resolves to an object containing the wallet public key, associated Bitcoin address, pair address, and a list of swap activities (deposits, swaps, liquidity changes, withdrawals) related to that wallet and pair.
  */
 export async function getWalletActivities(
-  params: GetWalletActivitiesRequest,
+  params: GetWalletActivitiesRequest
 ): Promise<GetWalletActivitiesResponse> {
   // 2. Prepare and execute the API call
   const url = getSwapBackendUrl(
-    `wallet-activity/${params.pubkey}?pairAddress=${params.pairAddress}`,
+    `wallet-activity/${params.pubkey}?pairAddress=${params.pairAddress}`
   )
   const result = await fetchWithErrors<GetWalletActivitiesResponse>(url, {
     method: 'GET',
@@ -1268,7 +1254,7 @@ export async function getTokenDecimals(tokenAddress: string): Promise<number> {
     token_address: tokenAddress,
   }
 
-  const result = await fetchWithErrors<{ success: boolean, result: number }>(url, {
+  const result = await fetchWithErrors<{ success: boolean; result: number }>(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -1376,7 +1362,7 @@ interface DepositSignatureResponse {
   token_idx: number
 }
 async function getDepositSignature(
-  toSend: DepositSignatureRequest,
+  toSend: DepositSignatureRequest
 ): Promise<DepositSignatureResponse> {
   const url = getSwapBackendUrl('get_deposit_signature')
 
@@ -1418,7 +1404,7 @@ interface BroadcastDepositOrderResponse {
   result: string[] // txid array
 }
 async function broadcastDepositOrder(
-  toSend: BroadcastDepositOrderRequest,
+  toSend: BroadcastDepositOrderRequest
 ): Promise<BroadcastDepositOrderResponse> {
   const url = getSwapBackendUrl('deposit')
 
@@ -1447,8 +1433,7 @@ function convertAmountToBRC20String(amountInDec18: bigint, decimals: number): st
     if (decimals === 0) {
       // ceil integer part
       return (BigInt(integerPart) + 1n).toString()
-    }
-    else {
+    } else {
       fractionalPart = fractionalPart.slice(0, decimals) // trim to token decimals and ceil
       fractionalPart = (BigInt(fractionalPart) + 1n).toString().padStart(decimals, '0')
       if (fractionalPart.length > decimals) {
@@ -1467,8 +1452,7 @@ export interface ReclaimInscription {
 }
 
 export function sumReclaimAmounts(reclaims?: ReclaimInscription[] | null): bigint {
-  if (!reclaims)
-    return 0n
+  if (!reclaims) return 0n
   return reclaims.reduce((sum, r) => sum + r.amount, 0n)
 }
 
@@ -1488,13 +1472,12 @@ export async function createAndBroadcastDepositOrder(
   tokenAmount: bigint,
   feeRate: number,
   createAllowanceIfNeeded: boolean = true,
-  reclaimInscriptions?: ReclaimInscription[],
+  reclaimInscriptions?: ReclaimInscription[]
 ): Promise<string[]> {
   // Get connected wallet
   const walletInfo = getWalletInfo()
 
-  if (!walletInfo || !walletInfo.wallets)
-    throw new Error('Wallets not found')
+  if (!walletInfo || !walletInfo.wallets) throw new Error('Wallets not found')
 
   // Sign function
   const signFn = getSignFn(walletInfo.provider)
@@ -1502,15 +1485,11 @@ export async function createAndBroadcastDepositOrder(
   const userPaymentWallet = getPaymentWallet()
   const userOrdinalsWallet = getOrdinalsWallet()
 
-  if (!userPaymentWallet)
-    throw new Error('Payment wallet not found')
-  if (!userPaymentWallet.address)
-    throw new Error('Payment wallet address not found')
+  if (!userPaymentWallet) throw new Error('Payment wallet not found')
+  if (!userPaymentWallet.address) throw new Error('Payment wallet address not found')
 
-  if (!userOrdinalsWallet)
-    throw new Error('Ordinals wallet not found')
-  if (!userOrdinalsWallet.address)
-    throw new Error('Ordinals wallet address not found')
+  if (!userOrdinalsWallet) throw new Error('Ordinals wallet not found')
+  if (!userOrdinalsWallet.address) throw new Error('Ordinals wallet address not found')
 
   const payerAddress = userPaymentWallet.address
   const payerPubKey = userPaymentWallet.pubkey
@@ -1524,15 +1503,15 @@ export async function createAndBroadcastDepositOrder(
   const currentTokenAmount = await getBRC20ProgBalance(tokenAddress)
   if (currentTokenAmount < tokenAmount) {
     const currentBaseAvailableTokenInfo = await getBaseBRC20Balance(tokenAddress)
-    const currentBaseAvailableTokenAmount
-      = currentBaseAvailableTokenInfo.available_balance_in_18_dec
+    const currentBaseAvailableTokenAmount =
+      currentBaseAvailableTokenInfo.available_balance_in_18_dec
     baseTokenDecimals = currentBaseAvailableTokenInfo.decimals
     baseTokenTicker = currentBaseAvailableTokenInfo.ticker
     useBaseAvailableBalanceAmount = tokenAmount - currentTokenAmount
     const reclaimTotal = sumReclaimAmounts(reclaimInscriptions)
     if (currentBaseAvailableTokenAmount + reclaimTotal < useBaseAvailableBalanceAmount) {
       console.error(
-        `Insufficient BRC-2.0 + BRC20 available balance. Current BRC-2.0: ${currentTokenAmount}, Available in base: ${currentBaseAvailableTokenAmount}, Reclaimable: ${reclaimTotal}, Required: ${tokenAmount}`,
+        `Insufficient BRC-2.0 + BRC20 available balance. Current BRC-2.0: ${currentTokenAmount}, Available in base: ${currentBaseAvailableTokenAmount}, Reclaimable: ${reclaimTotal}, Required: ${tokenAmount}`
       )
       throw new Error('Insufficient BRC-2.0 + BRC20 available balance')
     }
@@ -1554,7 +1533,7 @@ export async function createAndBroadcastDepositOrder(
   const allowanceCalldata = `0x095ea7b3000000000000000000000000${l1ContractAddress.slice(2).toLowerCase()}ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff`
   const allowanceCalldataCompressed = await compressSmartContractData(allowanceCalldata)
   const allowanceContent = Buff.str(
-    `{"p":"brc20-prog","op":"c","c":"${tokenAddress}","b":"${allowanceCalldataCompressed}"}`,
+    `{"p":"brc20-prog","op":"c","c":"${tokenAddress}","b":"${allowanceCalldataCompressed}"}`
   )
   const allowanceInscriptionDetails = new InscriptionDetails(
     Buff.str('text/plain'),
@@ -1562,7 +1541,7 @@ export async function createAndBroadcastDepositOrder(
     null,
     null,
     null,
-    allowanceContent,
+    allowanceContent
   )
 
   const swapPubKey = (await getSwapWalletFromDB())?.swapPubkey
@@ -1610,7 +1589,7 @@ export async function createAndBroadcastDepositOrder(
   ])
   const depositCalldataCompressed = await compressSmartContractData(depositCalldata)
   const depositContent = Buff.str(
-    `{"p":"brc20-prog","op":"c","c":"${l1ContractAddress}","b":"${depositCalldataCompressed}"}`,
+    `{"p":"brc20-prog","op":"c","c":"${l1ContractAddress}","b":"${depositCalldataCompressed}"}`
   )
   const depositInscriptionDetails = new InscriptionDetails(
     Buff.str('text/plain'),
@@ -1618,7 +1597,7 @@ export async function createAndBroadcastDepositOrder(
     null,
     null,
     null,
-    depositContent,
+    depositContent
   )
 
   let baseDepositInscriptionId: string | null = null
@@ -1633,7 +1612,7 @@ export async function createAndBroadcastDepositOrder(
   if (useBaseAvailableBalanceAmount > 0n) {
     const amountToDeposit = convertAmountToBRC20String(
       useBaseAvailableBalanceAmount,
-      baseTokenDecimals,
+      baseTokenDecimals
     )
     const baseDepositInscriptionDetails = new InscriptionDetails(
       Buff.str('text/plain'),
@@ -1642,8 +1621,8 @@ export async function createAndBroadcastDepositOrder(
       null,
       null,
       Buff.str(
-        `{"p":"brc-20","op":"transfer","tick":"${baseTokenTicker}","amt":"${amountToDeposit}"}`,
-      ),
+        `{"p":"brc-20","op":"transfer","tick":"${baseTokenTicker}","amt":"${amountToDeposit}"}`
+      )
     )
 
     if ((reclaimInscriptions?.length ?? 0) > 0) {
@@ -1654,7 +1633,7 @@ export async function createAndBroadcastDepositOrder(
         feeRate,
         null,
         true,
-        signFn,
+        signFn
       )
       baseDepositMintRes = {
         signed_commit_tx_hex: res.signedCommitTxHex,
@@ -1664,8 +1643,7 @@ export async function createAndBroadcastDepositOrder(
         inscription_id: res.inscriptionId,
         secret: res.secret,
       }
-    }
-    else {
+    } else {
       baseDepositMintRes = await mintAll(
         baseDepositInscriptionDetails,
         feeRate,
@@ -1673,7 +1651,7 @@ export async function createAndBroadcastDepositOrder(
         null,
         0,
         true,
-        signFn,
+        signFn
       )
     }
     baseDepositCommitTxHex = baseDepositMintRes.signed_commit_tx_hex
@@ -1690,7 +1668,7 @@ export async function createAndBroadcastDepositOrder(
       }
       saveExtraUtxos(
         [baseDepositCommitTxHex, baseDepositRevealTxHex],
-        [baseDepositInscriptionId, satpoint],
+        [baseDepositInscriptionId, satpoint]
       )
 
       const targetWallet = new WalletInfo(
@@ -1698,7 +1676,7 @@ export async function createAndBroadcastDepositOrder(
         Buffer.from(Script.encode(['OP_RETURN', Buff.str('BRC20PROG')], false)),
         null,
         null,
-        null,
+        null
       )
       const extraOutputs = [
         {
@@ -1714,10 +1692,9 @@ export async function createAndBroadcastDepositOrder(
         extraOutputs,
         feeRate,
         true,
-        signFn,
+        signFn
       )
-    }
-    finally {
+    } finally {
       clearExtraUtxos()
     }
 
@@ -1744,7 +1721,7 @@ export async function createAndBroadcastDepositOrder(
       extraTxhexesForAllowance.push(
         baseDepositCommitTxHex!,
         baseDepositRevealTxHex!,
-        baseDepositSendToOpReturnTxHex!,
+        baseDepositSendToOpReturnTxHex!
       )
     }
     try {
@@ -1756,7 +1733,7 @@ export async function createAndBroadcastDepositOrder(
         null,
         0,
         true,
-        signFn,
+        signFn
       )
       allowanceCommitTxHex = allowanceMintRes.signed_commit_tx_hex
       allowanceRevealTxHex = allowanceMintRes.signed_reveal_tx_hex
@@ -1764,8 +1741,7 @@ export async function createAndBroadcastDepositOrder(
       allowanceRevealTxid = allowanceMintRes.reveal_txid
       allowanceInscriptionId = allowanceMintRes.inscription_id
       allowanceSecret = allowanceMintRes.secret
-    }
-    finally {
+    } finally {
       clearExtraUtxos()
     }
 
@@ -1783,7 +1759,7 @@ export async function createAndBroadcastDepositOrder(
         Buffer.from(Script.encode(['OP_RETURN', Buff.str('BRC20PROG')], false)),
         null,
         null,
-        null,
+        null
       )
       const extraOutputs = [
         {
@@ -1799,10 +1775,9 @@ export async function createAndBroadcastDepositOrder(
         extraOutputs,
         feeRate,
         true,
-        signFn,
+        signFn
       )
-    }
-    finally {
+    } finally {
       clearExtraUtxos()
     }
 
@@ -1823,7 +1798,7 @@ export async function createAndBroadcastDepositOrder(
     extraTxHexes.push(
       baseDepositCommitTxHex,
       baseDepositRevealTxHex,
-      baseDepositSendToOpReturnTxHex,
+      baseDepositSendToOpReturnTxHex
     )
 
     extraUtxos.push({
@@ -1865,7 +1840,7 @@ export async function createAndBroadcastDepositOrder(
       null,
       0,
       true,
-      signFn,
+      signFn
     )
     depositCommitTxHex = depositMintRes.signedCommitTxHex
     depositRevealTxHex = depositMintRes.signedRevealTxHex
@@ -1879,7 +1854,7 @@ export async function createAndBroadcastDepositOrder(
       Buffer.from(Script.encode(['OP_RETURN', Buff.str('BRC20PROG')], false)),
       null,
       null,
-      null,
+      null
     )
     sendToOpreturnRes = await sendInscriptionToOpReturnWithExtraInputsAndExtraOutputAll(
       depositInscriptionId,
@@ -1889,10 +1864,9 @@ export async function createAndBroadcastDepositOrder(
       [],
       feeRate,
       true,
-      signFn,
+      signFn
     )
-  }
-  finally {
+  } finally {
     clearExtraUtxos()
   }
 
@@ -1968,7 +1942,7 @@ export async function getMinerFeesOfDepositOrder(
   tokenAmount: bigint,
   feeRate: number,
   createAllowanceIfNeeded: boolean = true,
-  reclaimInscriptions?: ReclaimInscription[],
+  reclaimInscriptions?: ReclaimInscription[]
 ): Promise<{
   needs_approval: boolean
   allowance_fees_total: number
@@ -1979,17 +1953,14 @@ export async function getMinerFeesOfDepositOrder(
   // Get connected wallet
   const walletInfo = getWalletInfo()
 
-  if (!walletInfo || !walletInfo.wallets)
-    throw new Error('Wallets not found')
+  if (!walletInfo || !walletInfo.wallets) throw new Error('Wallets not found')
 
   // Sign function
   const network = getBitcoinNetwork()
   const userPaymentWallet = getPaymentWallet()
 
-  if (!userPaymentWallet)
-    throw new Error('Payment wallet not found')
-  if (!userPaymentWallet.address)
-    throw new Error('Payment wallet address not found')
+  if (!userPaymentWallet) throw new Error('Payment wallet not found')
+  if (!userPaymentWallet.address) throw new Error('Payment wallet address not found')
 
   const payerAddr = userPaymentWallet.address
   const payerPublicKey = userPaymentWallet.pubkey
@@ -2002,15 +1973,15 @@ export async function getMinerFeesOfDepositOrder(
   const currentTokenAmount = await getBRC20ProgBalance(tokenAddress)
   if (currentTokenAmount < tokenAmount) {
     const currentBaseAvailableTokenInfo = await getBaseBRC20Balance(tokenAddress)
-    const currentBaseAvailableTokenAmount
-      = currentBaseAvailableTokenInfo.available_balance_in_18_dec
+    const currentBaseAvailableTokenAmount =
+      currentBaseAvailableTokenInfo.available_balance_in_18_dec
     baseTokenDecimals = currentBaseAvailableTokenInfo.decimals
     baseTokenTicker = currentBaseAvailableTokenInfo.ticker
     useBaseAvailableBalanceAmt = tokenAmount - currentTokenAmount
     const reclaimTotal = sumReclaimAmounts(reclaimInscriptions)
     if (currentBaseAvailableTokenAmount + reclaimTotal < useBaseAvailableBalanceAmt) {
       console.error(
-        `Insufficient BRC-2.0 + BRC20 available balance. Current BRC-2.0: ${currentTokenAmount}, Available in base: ${currentBaseAvailableTokenAmount}, Reclaimable: ${reclaimTotal}, Required: ${tokenAmount}`,
+        `Insufficient BRC-2.0 + BRC20 available balance. Current BRC-2.0: ${currentTokenAmount}, Available in base: ${currentBaseAvailableTokenAmount}, Reclaimable: ${reclaimTotal}, Required: ${tokenAmount}`
       )
       throw new Error('Insufficient BRC-2.0 + BRC20 available balance')
     }
@@ -2032,7 +2003,7 @@ export async function getMinerFeesOfDepositOrder(
   const allowanceCalldata = `0x095ea7b3000000000000000000000000${l1ContractAddress.slice(2).toLowerCase()}ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff`
   const allowanceCalldataCompressed = await compressSmartContractData(allowanceCalldata)
   const allowanceContent = Buff.str(
-    `{"p":"brc20-prog","op":"c","c":"${tokenAddress}","b":"${allowanceCalldataCompressed}"}`,
+    `{"p":"brc20-prog","op":"c","c":"${tokenAddress}","b":"${allowanceCalldataCompressed}"}`
   )
   const allowanceInscriptionDetails = new InscriptionDetails(
     Buff.str('text/plain'),
@@ -2040,7 +2011,7 @@ export async function getMinerFeesOfDepositOrder(
     null,
     null,
     null,
-    allowanceContent,
+    allowanceContent
   )
 
   const swapPubkey = (await getSwapWalletFromDB())?.swapPubkey
@@ -2070,7 +2041,7 @@ export async function getMinerFeesOfDepositOrder(
   ])
   const depositCalldataCompressed = await compressSmartContractData(depositCalldata)
   const depositContent = Buff.str(
-    `{"p":"brc20-prog","op":"c","c":"${l1ContractAddress}","b":"${depositCalldataCompressed}"}`,
+    `{"p":"brc20-prog","op":"c","c":"${l1ContractAddress}","b":"${depositCalldataCompressed}"}`
   )
   const depositInscriptionDetails = new InscriptionDetails(
     Buff.str('text/plain'),
@@ -2078,7 +2049,7 @@ export async function getMinerFeesOfDepositOrder(
     null,
     null,
     null,
-    depositContent,
+    depositContent
   )
 
   let baseDepositInscriptionId = null
@@ -2090,7 +2061,7 @@ export async function getMinerFeesOfDepositOrder(
   if (useBaseAvailableBalanceAmt > 0n) {
     const amountToDeposit = convertAmountToBRC20String(
       useBaseAvailableBalanceAmt,
-      baseTokenDecimals,
+      baseTokenDecimals
     )
     const baseDepositInscriptionDetails = new InscriptionDetails(
       Buff.str('text/plain'),
@@ -2099,33 +2070,30 @@ export async function getMinerFeesOfDepositOrder(
       null,
       null,
       Buff.str(
-        `{"p":"brc-20","op":"transfer","tick":"${baseTokenTicker}","amt":"${amountToDeposit}"}`,
-      ),
+        `{"p":"brc-20","op":"transfer","tick":"${baseTokenTicker}","amt":"${amountToDeposit}"}`
+      )
     )
 
     let baseDepositMintRes
     if ((reclaimInscriptions?.length ?? 0) > 0) {
       const userOrdinalsWallet = getOrdinalsWallet()
-      if (!userOrdinalsWallet)
-        throw new Error('Ordinals wallet not found')
-      if (!userOrdinalsWallet.address)
-        throw new Error('Ordinals wallet address not found')
+      if (!userOrdinalsWallet) throw new Error('Ordinals wallet not found')
+      if (!userOrdinalsWallet.address) throw new Error('Ordinals wallet address not found')
       const ordinalsAddress = userOrdinalsWallet.address
       const reclaimInputs = await resolveReclaimInputs(reclaimInscriptions!, ordinalsAddress)
       baseDepositMintRes = await mintWithReclaimsCheckFees(
         baseDepositInscriptionDetails,
         reclaimInputs,
         feeRate,
-        null,
+        null
       )
-    }
-    else {
+    } else {
       baseDepositMintRes = await mintAllCheckFees(
         baseDepositInscriptionDetails,
         feeRate,
         null,
         null,
-        0,
+        0
       )
     }
     baseDepositCommitTxHex = baseDepositMintRes.unsigned_commit_tx_hex
@@ -2140,7 +2108,7 @@ export async function getMinerFeesOfDepositOrder(
       }
       saveExtraUtxos(
         [baseDepositCommitTxHex, baseDepositRevealTxHex],
-        [baseDepositInscriptionId, satpoint],
+        [baseDepositInscriptionId, satpoint]
       )
 
       const targetWallet = new WalletInfo(
@@ -2148,7 +2116,7 @@ export async function getMinerFeesOfDepositOrder(
         Buffer.from(Script.encode(['OP_RETURN', Buff.str('BRC20PROG')], false)),
         null,
         null,
-        null,
+        null
       )
       const extraOutputs = [
         {
@@ -2162,10 +2130,9 @@ export async function getMinerFeesOfDepositOrder(
         targetWallet,
         1,
         extraOutputs,
-        feeRate,
+        feeRate
       )
-    }
-    finally {
+    } finally {
       clearExtraUtxos()
     }
 
@@ -2190,7 +2157,7 @@ export async function getMinerFeesOfDepositOrder(
       extraTxhexesForAllowance.push(
         baseDepositCommitTxHex!,
         baseDepositRevealTxHex!,
-        baseDepositSendToOpReturnTxHex!,
+        baseDepositSendToOpReturnTxHex!
       )
     }
     try {
@@ -2200,14 +2167,13 @@ export async function getMinerFeesOfDepositOrder(
         feeRate,
         null,
         null,
-        0,
+        0
       )
       allowanceCommitTxHex = allowanceMintRes.unsigned_commit_tx_hex
       allowanceRevealTxHex = allowanceMintRes.signed_reveal_tx_hex
       allowanceInscriptionId = allowanceMintRes.inscription_id
       allowanceFeesTotal += allowanceMintRes.total_fee
-    }
-    finally {
+    } finally {
       clearExtraUtxos()
     }
 
@@ -2225,7 +2191,7 @@ export async function getMinerFeesOfDepositOrder(
         Buffer.from(Script.encode(['OP_RETURN', Buff.str('BRC20PROG')], false)),
         null,
         null,
-        null,
+        null
       )
       const extraOutputs = [
         {
@@ -2239,10 +2205,9 @@ export async function getMinerFeesOfDepositOrder(
         targetWallet,
         1,
         extraOutputs,
-        feeRate,
+        feeRate
       )
-    }
-    finally {
+    } finally {
       clearExtraUtxos()
     }
 
@@ -2264,7 +2229,7 @@ export async function getMinerFeesOfDepositOrder(
     extraTxHexes.push(
       baseDepositCommitTxHex,
       baseDepositRevealTxHex,
-      baseDepositSendToOpReturnTxHex,
+      baseDepositSendToOpReturnTxHex
     )
 
     extraUtxos.push({
@@ -2300,7 +2265,7 @@ export async function getMinerFeesOfDepositOrder(
       feeRate,
       null,
       null,
-      0,
+      0
     )
     const depositCommitTxHex = depositMintRes.unsigned_commit_tx_hex
     const depositRevealTxHex = depositMintRes.signed_reveal_tx_hex
@@ -2314,7 +2279,7 @@ export async function getMinerFeesOfDepositOrder(
       Buffer.from(Script.encode(['OP_RETURN', Buff.str('BRC20PROG')], false)),
       null,
       null,
-      null,
+      null
     )
     sendToOpreturnRes = await sendInscriptionToOpReturnWithExtraInputsAndExtraOutputFeeRate(
       depositInscriptionId,
@@ -2322,10 +2287,9 @@ export async function getMinerFeesOfDepositOrder(
       targetWallet,
       1,
       [],
-      feeRate,
+      feeRate
     )
-  }
-  finally {
+  } finally {
     clearExtraUtxos()
   }
 
@@ -2361,7 +2325,7 @@ interface BroadcastWrapOrderResponse {
   result: string[] // txid array
 }
 async function broadcastWrapOrder(
-  toSend: BroadcastWrapOrderRequest,
+  toSend: BroadcastWrapOrderRequest
 ): Promise<BroadcastWrapOrderResponse> {
   const url = getSwapBackendUrl('wrap')
 
@@ -2379,7 +2343,7 @@ interface EstimateGasWrapOrderResponse {
   allocated_gas: number
 }
 async function estimateGasWrapOrder(
-  toSend: BroadcastWrapOrderRequest,
+  toSend: BroadcastWrapOrderRequest
 ): Promise<EstimateGasWrapOrderResponse> {
   const url = getSwapBackendUrl('estimate_wrap_gas')
 
@@ -2401,29 +2365,24 @@ async function estimateGasWrapOrder(
  */
 export async function createAndBroadcastWrapOrder(
   btcAmount: bigint,
-  feeRate: number,
+  feeRate: number
 ): Promise<string[]> {
   const swapInfo = await getSwapInfo()
   // Get connected wallet
   const walletInfo = getWalletInfo()
 
-  if (!walletInfo || !walletInfo.wallets)
-    throw new Error('Wallets not found')
+  if (!walletInfo || !walletInfo.wallets) throw new Error('Wallets not found')
 
   // Sign function
   const signFn = getSignFn(walletInfo.provider)
   const userPaymentWallet = getPaymentWallet()
   const userOrdinalsWallet = getOrdinalsWallet()
 
-  if (!userPaymentWallet)
-    throw new Error('Payment wallet not found')
-  if (!userPaymentWallet.address)
-    throw new Error('Payment wallet address not found')
+  if (!userPaymentWallet) throw new Error('Payment wallet not found')
+  if (!userPaymentWallet.address) throw new Error('Payment wallet address not found')
 
-  if (!userOrdinalsWallet)
-    throw new Error('Ordinals wallet not found')
-  if (!userOrdinalsWallet.address)
-    throw new Error('Ordinals wallet address not found')
+  if (!userOrdinalsWallet) throw new Error('Ordinals wallet not found')
+  if (!userOrdinalsWallet.address) throw new Error('Ordinals wallet address not found')
 
   const ordinalsAddr = userOrdinalsWallet.address
 
@@ -2471,27 +2430,27 @@ export async function createAndBroadcastWrapOrder(
       pubkeyIdx,
       Buffer.from(negSignatureBls12.slice(2), 'hex'),
       Buffer.from(ecSignature.slice(2), 'hex'),
-    ],
+    ]
   )
   const wrapCallData = ethers.AbiCoder.defaultAbiCoder().encode(
     ['address', 'bytes'],
-    [l1ContractAddress, Buffer.from(callData.slice(2), 'hex')],
+    [l1ContractAddress, Buffer.from(callData.slice(2), 'hex')]
   )
   const wrapCallDataFull = `0x5608f857${wrapCallData.slice(2)}`
 
   const depositCalldataCompressed = await compressSmartContractData(wrapCallDataFull)
   const depositContent = Buff.str(
-    `{"p":"brc20-prog","op":"c","c":"${swapInfo.wbtc_address}","b":"${depositCalldataCompressed}"}`,
+    `{"p":"brc20-prog","op":"c","c":"${swapInfo.wbtc_address}","b":"${depositCalldataCompressed}"}`
   )
   let estimatedGas = 0
   for (let i = 0; i < 5; i++) {
     const depositContentGasAllocation = depositContent.length * GAS_PER_BYTE
-    const neededPadding
-      = estimatedGas > depositContentGasAllocation
+    const neededPadding =
+      estimatedGas > depositContentGasAllocation
         ? Math.ceil((estimatedGas - depositContentGasAllocation) / GAS_PER_BYTE)
         : 0
     const paddedDepositContent = Buff.from(
-      Buffer.concat([depositContent, Buff.str(' '.repeat(neededPadding))]),
+      Buffer.concat([depositContent, Buff.str(' '.repeat(neededPadding))])
     )
     const depositInscriptionDetails = new InscriptionDetails(
       Buff.str('text/plain'),
@@ -2499,7 +2458,7 @@ export async function createAndBroadcastWrapOrder(
       null,
       null,
       null,
-      paddedDepositContent,
+      paddedDepositContent
     )
 
     const depositMintRes = await mintWithExtraInputInCommitAll(
@@ -2510,7 +2469,7 @@ export async function createAndBroadcastWrapOrder(
       null,
       0,
       true,
-      signFn,
+      signFn
     )
     const depositCommitTxHex = depositMintRes.signedCommitTxHex
     const depositRevealTxHex = depositMintRes.signedRevealTxHex
@@ -2521,7 +2480,7 @@ export async function createAndBroadcastWrapOrder(
     try {
       saveExtraUtxos(
         [depositCommitTxHex, depositRevealTxHex],
-        [depositInscriptionId, depositSatpoint],
+        [depositInscriptionId, depositSatpoint]
       )
 
       const targetWallet = new WalletInfo(
@@ -2529,7 +2488,7 @@ export async function createAndBroadcastWrapOrder(
         Buffer.from(Script.encode(['OP_RETURN', Buff.str('BRC20PROG')], false)),
         null,
         null,
-        null,
+        null
       )
       const extraOutputUtxos = [
         // send BTC to WBTC handler
@@ -2546,10 +2505,9 @@ export async function createAndBroadcastWrapOrder(
         extraOutputUtxos,
         feeRate,
         true,
-        signFn,
+        signFn
       )
-    }
-    finally {
+    } finally {
       clearExtraUtxos()
     }
 
@@ -2574,7 +2532,7 @@ export async function createAndBroadcastWrapOrder(
     const estimateGasRes = await estimateGasWrapOrder(toSendForBroadcast)
     const estimatePadded = Math.max(
       estimateGasRes.estimated_gas + 100000,
-      estimateGasRes.estimated_gas * 1.2,
+      estimateGasRes.estimated_gas * 1.2
     )
     if (estimateGasRes.allocated_gas < estimatePadded) {
       estimatedGas = estimatePadded + 50000
@@ -2598,21 +2556,18 @@ export async function createAndBroadcastWrapOrder(
  */
 export async function getMinerFeesOfWrapOrder(
   btcAmount: bigint,
-  feeRate: number,
-): Promise<{ total_fee: number, fee_rate: number }> {
+  feeRate: number
+): Promise<{ total_fee: number; fee_rate: number }> {
   const swapInfo = await getSwapInfo()
   const walletInfo = getWalletInfo()
 
-  if (!walletInfo || !walletInfo.wallets)
-    throw new Error('Wallets not found')
+  if (!walletInfo || !walletInfo.wallets) throw new Error('Wallets not found')
 
   // Sign function
   const userPaymentWallet = getPaymentWallet()
 
-  if (!userPaymentWallet)
-    throw new Error('Payment wallet not found')
-  if (!userPaymentWallet.address)
-    throw new Error('Payment wallet address not found')
+  if (!userPaymentWallet) throw new Error('Payment wallet not found')
+  if (!userPaymentWallet.address) throw new Error('Payment wallet address not found')
 
   const l1ContractAddress = getSwapContractAddress()
 
@@ -2640,17 +2595,17 @@ export async function getMinerFeesOfWrapOrder(
       pubkeyIdx,
       Buffer.from(negSignatureBls12.slice(2), 'hex'),
       Buffer.from(ecSignature.slice(2), 'hex'),
-    ],
+    ]
   )
   const wrapCallData = ethers.AbiCoder.defaultAbiCoder().encode(
     ['address', 'bytes'],
-    [l1ContractAddress, Buffer.from(callData.slice(2), 'hex')],
+    [l1ContractAddress, Buffer.from(callData.slice(2), 'hex')]
   )
   const wrapCallDataFull = `0x5608f857${wrapCallData.slice(2)}`
 
   const depositCalldataCompressed = await compressSmartContractData(wrapCallDataFull)
   const depositContent = Buff.str(
-    `{"p":"brc20-prog","op":"c","c":"${swapInfo.wbtc_address}","b":"${depositCalldataCompressed}"}`,
+    `{"p":"brc20-prog","op":"c","c":"${swapInfo.wbtc_address}","b":"${depositCalldataCompressed}"}`
   )
   const depositInscriptionDetails = new InscriptionDetails(
     Buff.str('text/plain'),
@@ -2658,7 +2613,7 @@ export async function getMinerFeesOfWrapOrder(
     null,
     null,
     null,
-    depositContent,
+    depositContent
   )
 
   let depositFeesTotal = 0
@@ -2668,7 +2623,7 @@ export async function getMinerFeesOfWrapOrder(
     feeRate,
     null,
     null,
-    0,
+    0
   )
   const depositCommitTxHex = depositMintRes.unsigned_commit_tx_hex
   const depositRevealTxHex = depositMintRes.signed_reveal_tx_hex
@@ -2679,7 +2634,7 @@ export async function getMinerFeesOfWrapOrder(
   try {
     saveExtraUtxos(
       [depositCommitTxHex, depositRevealTxHex],
-      [depositInscriptionId, depositSatpoint],
+      [depositInscriptionId, depositSatpoint]
     )
 
     const targetWallet = new WalletInfo(
@@ -2687,7 +2642,7 @@ export async function getMinerFeesOfWrapOrder(
       Buffer.from(Script.encode(['OP_RETURN', Buff.str('BRC20PROG')], false)),
       null,
       null,
-      null,
+      null
     )
     const extraOutputUtxos = [
       // send BTC to WBTC handler
@@ -2702,10 +2657,9 @@ export async function getMinerFeesOfWrapOrder(
       targetWallet,
       1,
       extraOutputUtxos,
-      feeRate,
+      feeRate
     )
-  }
-  finally {
+  } finally {
     clearExtraUtxos()
   }
 
@@ -2736,8 +2690,8 @@ export async function getAddLiquidityResult(
   token1Addr: string,
   token2Addr: string,
   amt1: bigint,
-  amt2: bigint,
-): Promise<{ amountA: bigint, amountB: bigint, liquidity: bigint }> {
+  amt2: bigint
+): Promise<{ amountA: bigint; amountB: bigint; liquidity: bigint }> {
   const swapInfo = await getSwapInfo()
   saveInfo(swapInfo.wbtc_address, swapInfo.factory_address)
 
@@ -2766,7 +2720,7 @@ export async function getAddLiquidityResult(
     0n, // nonce
     0n, // token1FeeBps
     0n, // token2FeeBps
-    btcFee, // btc_fee
+    btcFee // btc_fee
   )
 
   if (!result.success) {
@@ -2794,7 +2748,7 @@ interface AddLiquiditySignatureRequest {
   btc_fee: string
 }
 async function getAddLiquiditySignature(
-  orderParams: AddLiquiditySignatureRequest,
+  orderParams: AddLiquiditySignatureRequest
 ): Promise<string> {
   orderParams.token1_addr = orderParams.token1_addr.toLowerCase()
   orderParams.token2_addr = orderParams.token2_addr.toLowerCase()
@@ -2830,7 +2784,7 @@ interface AddLiquidityBLSSignatureRequest {
   btc_fee: bigint
 }
 async function getAddLiquidityBLSSignature(
-  params: AddLiquidityBLSSignatureRequest,
+  params: AddLiquidityBLSSignatureRequest
 ): Promise<string> {
   params.pubkey = params.pubkey.startsWith('0x') ? params.pubkey.slice(2) : params.pubkey
 
@@ -2884,7 +2838,7 @@ interface AddLiquidityOrderResponse {
   success: boolean
 }
 async function sendAddLiquidityOrder(
-  toSend: AddLiquidityOrderRequest,
+  toSend: AddLiquidityOrderRequest
 ): Promise<AddLiquidityOrderResponse> {
   const url = getSwapBackendUrl('add_liq_req')
 
@@ -2913,7 +2867,7 @@ export async function prepareAndSendAddLiquidityOrder(
   token2Addr: string,
   amt1: bigint,
   amt2: bigint,
-  slippageBPS: bigint,
+  slippageBPS: bigint
 ): Promise<AddLiquidityOrderResponse> {
   const swapInfo = await getSwapInfo()
 
@@ -2927,8 +2881,8 @@ export async function prepareAndSendAddLiquidityOrder(
   const token1FeeBPS = 0n
   const token2FeeBPS = 0n
   if (
-    token1Addr.toLowerCase() !== swapInfo.wbtc_address.toLowerCase()
-    && token2Addr.toLowerCase() !== swapInfo.wbtc_address.toLowerCase()
+    token1Addr.toLowerCase() !== swapInfo.wbtc_address.toLowerCase() &&
+    token2Addr.toLowerCase() !== swapInfo.wbtc_address.toLowerCase()
   ) {
     throw new Error('One of the tokens must be BTC')
   }
@@ -2990,8 +2944,8 @@ export async function prepareAndSendAddLiquidityOrder(
 export async function getRemoveLiquidityResult(
   token1Addr: string,
   token2Addr: string,
-  lpAmt: bigint,
-): Promise<{ amountA: bigint, amountB: bigint, liquidity: bigint }> {
+  lpAmt: bigint
+): Promise<{ amountA: bigint; amountB: bigint; liquidity: bigint }> {
   const swapInfo = await getSwapInfo()
   saveInfo(swapInfo.wbtc_address, swapInfo.factory_address)
 
@@ -3018,7 +2972,7 @@ export async function getRemoveLiquidityResult(
     0n, // nonce
     0n, // token1FeeBps
     0n, // token2FeeBps
-    btcFee, // btc_fee
+    btcFee // btc_fee
   )
 
   if (!result.success) {
@@ -3045,7 +2999,7 @@ interface RemoveLiquiditySignatureRequest {
   btc_fee: string
 }
 async function getRemoveLiquiditySignature(
-  orderParams: RemoveLiquiditySignatureRequest,
+  orderParams: RemoveLiquiditySignatureRequest
 ): Promise<string> {
   orderParams.token1_addr = orderParams.token1_addr.toLowerCase()
   orderParams.token2_addr = orderParams.token2_addr.toLowerCase()
@@ -3079,7 +3033,7 @@ interface RemoveLiquidityBLSSignatureRequest {
   btc_fee: bigint
 }
 async function getRemoveLiquidityBLSSignature(
-  params: RemoveLiquidityBLSSignatureRequest,
+  params: RemoveLiquidityBLSSignatureRequest
 ): Promise<string> {
   params.pubkey = params.pubkey.startsWith('0x') ? params.pubkey.slice(2) : params.pubkey
 
@@ -3131,7 +3085,7 @@ interface RemoveLiquidityOrderResponse {
   success: boolean
 }
 async function sendRemoveLiquidityOrder(
-  toSend: RemoveLiquidityOrderRequest,
+  toSend: RemoveLiquidityOrderRequest
 ): Promise<RemoveLiquidityOrderResponse> {
   const url = getSwapBackendUrl('remove_liq_req')
 
@@ -3162,7 +3116,7 @@ export async function prepareAndSendRemoveLiquidityOrder(
   lpAmt: bigint,
   amt1: bigint,
   amt2: bigint,
-  slippageBPS: bigint,
+  slippageBPS: bigint
 ): Promise<RemoveLiquidityOrderResponse> {
   const swapInfo = await getSwapInfo()
 
@@ -3176,8 +3130,8 @@ export async function prepareAndSendRemoveLiquidityOrder(
   const token1FeeBPS = 0n
   const token2FeeBPS = 0n
   if (
-    token1Addr.toLowerCase() !== swapInfo.wbtc_address.toLowerCase()
-    && token2Addr.toLowerCase() !== swapInfo.wbtc_address.toLowerCase()
+    token1Addr.toLowerCase() !== swapInfo.wbtc_address.toLowerCase() &&
+    token2Addr.toLowerCase() !== swapInfo.wbtc_address.toLowerCase()
   ) {
     throw new Error('One of the tokens must be BTC')
   }
@@ -3226,15 +3180,15 @@ export async function prepareAndSendRemoveLiquidityOrder(
 
 async function getSwapFeesBps(
   token1Addr: string,
-  token2Addr: string,
-): Promise<{ token1FeeBps: bigint, token2FeeBps: bigint }> {
+  token2Addr: string
+): Promise<{ token1FeeBps: bigint; token2FeeBps: bigint }> {
   const swapInfo = await getSwapInfo()
 
   let token1FeeBps = 25n
   let token2FeeBps = 0n
   if (
-    token1Addr.toLowerCase() !== swapInfo.wbtc_address.toLowerCase()
-    && token2Addr.toLowerCase() !== swapInfo.wbtc_address.toLowerCase()
+    token1Addr.toLowerCase() !== swapInfo.wbtc_address.toLowerCase() &&
+    token2Addr.toLowerCase() !== swapInfo.wbtc_address.toLowerCase()
   ) {
     throw new Error('One of the tokens must be BTC')
   }
@@ -3258,7 +3212,7 @@ async function getSwapFeesBps(
 export async function getSwapResult(
   tokenInAddr: string,
   tokenOutAddr: string,
-  amtIn: bigint,
+  amtIn: bigint
 ): Promise<{
   amount_out: bigint
   quoted_price: number
@@ -3297,7 +3251,7 @@ export async function getSwapResult(
     0n, // nonce
     token1FeeBps,
     token2FeeBps,
-    btcFee,
+    btcFee
   )
 
   if (!result.success) {
@@ -3315,8 +3269,8 @@ export async function getSwapResult(
 
   const decimalsOfIn = await getTokenDecimals(tokenInAddr)
   const decimalsOfOut = await getTokenDecimals(tokenOutAddr)
-  const quotedPrice
-    = tokenInAddr.toLowerCase() === swapInfo.wbtc_address.toLowerCase()
+  const quotedPrice =
+    tokenInAddr.toLowerCase() === swapInfo.wbtc_address.toLowerCase()
       ? (amtIn * 10n ** BigInt(decimalsOfOut) * 100n) / result.amounts[1]!
       : (result.amounts[1]! * 10n ** BigInt(decimalsOfIn) * 100n) / amtIn
   const quotedPriceNumber = Number(quotedPrice) / 100.0
@@ -3467,7 +3421,7 @@ export async function prepareAndSendSwapOrder(
   amt1: bigint,
   amt2: bigint,
   slippageBPS: bigint,
-  referrerId?: string,
+  referrerId?: string
 ): Promise<SwapOrderResponse> {
   const pubkey = (await getSwapWalletFromDB())?.swapPubkey
   if (!pubkey) {
@@ -3539,7 +3493,7 @@ export async function prepareAndSendSwapOrder(
 export async function getSwap2Result(
   tokenInAddr: string,
   tokenOutAddr: string,
-  amtOut: bigint,
+  amtOut: bigint
 ): Promise<{
   amount_in: bigint
   quoted_price: number
@@ -3578,7 +3532,7 @@ export async function getSwap2Result(
     0n, // nonce
     token1FeeBps,
     token2FeeBps,
-    btcFee,
+    btcFee
   )
 
   if (!result.success) {
@@ -3596,8 +3550,8 @@ export async function getSwap2Result(
 
   const decimalsOfIn = await getTokenDecimals(tokenInAddr)
   const decimalsOfOut = await getTokenDecimals(tokenOutAddr)
-  const quotedPrice
-    = tokenInAddr.toLowerCase() === swapInfo.wbtc_address.toLowerCase()
+  const quotedPrice =
+    tokenInAddr.toLowerCase() === swapInfo.wbtc_address.toLowerCase()
       ? (result.amounts[0]! * 10n ** BigInt(decimalsOfOut) * 100n) / amtOut
       : (amtOut * 10n ** BigInt(decimalsOfIn) * 100n) / result.amounts[0]!
 
@@ -3749,7 +3703,7 @@ export async function prepareAndSendSwap2Order(
   amt1: bigint,
   amt2: bigint,
   slippageBPS: bigint,
-  referrerId?: string,
+  referrerId?: string
 ): Promise<Swap2OrderResponse> {
   const pubkey = (await getSwapWalletFromDB())?.swapPubkey
   if (!pubkey) {
@@ -3826,7 +3780,7 @@ function btcAddressToEvmAddress(btcAddr: string): string {
 export async function getWithdrawToOrdinalWalletResult(
   tokenAddress: string,
   ordinalAddress: string,
-  amt: bigint,
+  amt: bigint
 ): Promise<{ amt: bigint }> {
   const swapInfo = await getSwapInfo()
   saveInfo(swapInfo.wbtc_address, swapInfo.factory_address)
@@ -3853,7 +3807,7 @@ export async function getWithdrawToOrdinalWalletResult(
     amt,
     '', // bls_signature
     0n, // nonce
-    btcFee,
+    btcFee
   )
 
   if (!result.success) {
@@ -3879,7 +3833,7 @@ export async function getWithdrawToOrdinalWalletResult(
  */
 export async function getWithdrawToSelfOrdinalWalletResult(
   tokenAddress: string,
-  amt: bigint,
+  amt: bigint
 ): Promise<{ amt: bigint }> {
   const swapInfo = await getSwapInfo()
   saveInfo(swapInfo.wbtc_address, swapInfo.factory_address)
@@ -3912,7 +3866,7 @@ export async function getWithdrawToSelfOrdinalWalletResult(
     amt,
     '', // bls_signature
     0n, // nonce
-    btcFee,
+    btcFee
   )
 
   if (!result.success) {
@@ -3937,7 +3891,7 @@ interface WithdrawOrderSignatureRequest {
   btc_fee: string
 }
 async function getWithdrawOrderSignature(
-  orderParams: WithdrawOrderSignatureRequest,
+  orderParams: WithdrawOrderSignatureRequest
 ): Promise<string> {
   orderParams.token_address = orderParams.token_address.toLowerCase()
   orderParams.target_addr = orderParams.target_addr.toLowerCase()
@@ -4032,7 +3986,7 @@ async function sendWithdrawOrder(toSend: WithdrawOrderRequest): Promise<Withdraw
 export async function prepareAndSendWithdrawOrderToOrdinalWallet(
   tokenAddr: string,
   ordinalAddr: string,
-  amt: bigint,
+  amt: bigint
 ): Promise<WithdrawOrderResponse> {
   const pubkey = (await getSwapWalletFromDB())?.swapPubkey
   if (!pubkey) {
@@ -4089,7 +4043,7 @@ export async function prepareAndSendWithdrawOrderToOrdinalWallet(
  */
 export async function prepareAndSendWithdrawOrderToSelfOrdinalWallet(
   tokenAddr: string,
-  amt: bigint,
+  amt: bigint
 ): Promise<WithdrawOrderResponse> {
   const pubkey = (await getSwapWalletFromDB())?.swapPubkey
   if (!pubkey) {
@@ -4170,7 +4124,7 @@ export async function getUnwrapResult(pkscript: string, amt: bigint): Promise<{ 
     amt,
     '', // bls_signature
     0n, // nonce
-    btcFee,
+    btcFee
   )
 
   if (!result.success) {
@@ -4280,7 +4234,7 @@ async function sendUnwrapOrder(toSend: UnwrapOrderRequest): Promise<UnwrapOrderR
  */
 export async function prepareAndSendUnwrapOrder(
   pkscript: string,
-  amt: bigint,
+  amt: bigint
 ): Promise<UnwrapOrderResponse> {
   const pubkey = (await getSwapWalletFromDB())?.swapPubkey
   if (!pubkey) {

@@ -12,7 +12,7 @@ describe('tests for BRC20', () => {
       process.env.PRIVATE_KEY_WIF!,
       'signet',
       'p2tr',
-      'unisat',
+      'unisat'
     )
     console.log('Connected!')
     console.log('Address:', localWallet.address)
@@ -79,10 +79,10 @@ describe('tests for BRC20', () => {
         process.env.SIGNET_PARENT_INSCRIPTION_ID!,
         2,
         null,
-        true,
+        true
       )
       assert.ok(typeof result.commitTxId === 'string')
       assert.ok(typeof result.revealTxId === 'string')
-    },
+    }
   )
 })

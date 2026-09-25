@@ -10,8 +10,7 @@ async function connect() {
   try {
     await modal.connect()
     session.value = wallet.getSession()
-  }
-  catch (e) {
+  } catch (e) {
     console.error('Connection failed:', e)
   }
 }
@@ -25,22 +24,12 @@ function disconnect() {
 <template>
   <main>
     <h1>BiS Wallet Kit — Vue</h1>
-    <button type="button" @click="connect">
-      Connect
-    </button>
-    <button type="button" @click="disconnect">
-      Disconnect
-    </button>
+    <button type="button" @click="connect">Connect</button>
+    <button type="button" @click="disconnect">Disconnect</button>
     <select v-model="network">
-      <option value="mainnet">
-        mainnet
-      </option>
-      <option value="testnet">
-        testnet
-      </option>
-      <option value="signet">
-        signet
-      </option>
+      <option value="mainnet">mainnet</option>
+      <option value="testnet">testnet</option>
+      <option value="signet">signet</option>
     </select>
     <pre>{{ session ? JSON.stringify(session, null, 2) : 'Not connected' }}</pre>
   </main>

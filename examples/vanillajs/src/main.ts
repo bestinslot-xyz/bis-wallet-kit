@@ -13,8 +13,7 @@ document.querySelector('#connect')!.addEventListener('click', async () => {
   try {
     await modal.connect()
     renderSession()
-  }
-  catch (e) {
+  } catch (e) {
     console.error('Connection failed:', e)
   }
 })
@@ -26,7 +25,7 @@ document.querySelector('#disconnect')!.addEventListener('click', () => {
 
 networkEl.value = wallet.getNetwork()
 networkEl.addEventListener('change', () => wallet.setNetwork(networkEl.value as any))
-subscribeToNetwork((net) => {
+subscribeToNetwork(net => {
   networkEl.value = net
 })
 

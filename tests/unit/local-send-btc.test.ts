@@ -64,15 +64,12 @@ describe('local sendBTC', () => {
 
     fetchMock = vi.fn(async (url: string | URL, opts?: any) => {
       const u = String(url)
-      if (u.includes('/cardinal_utxos/'))
-        return jsonResponse({ data: utxos })
+      if (u.includes('/cardinal_utxos/')) return jsonResponse({ data: utxos })
       if (u.includes('/gettxhex/'))
         return jsonResponse(prevHexByTxid[u.split('/gettxhex/')[1]!] ?? '')
-      if (u.includes('/testmempoolaccept'))
-        return jsonResponse(mempoolResult)
+      if (u.includes('/testmempoolaccept')) return jsonResponse(mempoolResult)
       if (u.includes('/sendrawtransactions')) {
-        if (broadcastShouldFail)
-          throw new Error('network down')
+        if (broadcastShouldFail) throw new Error('network down')
         broadcastBodies.push(JSON.parse(opts.body).txhexes)
         return jsonResponse({ result: 'ok' })
       }
@@ -110,7 +107,7 @@ describe('local sendBTC', () => {
     const txid = 'bb'.repeat(32)
     utxos = [fakeCardinalUtxo(txid, 100000)]
     prevHexByTxid[txid] = prevTxHex(100000)
-    mempoolResult = [{ 'allowed': false, 'reject-reason': 'min relay fee not met' }]
+    mempoolResult = [{ allowed: false, 'reject-reason': 'min relay fee not met' }]
 
     await expect(wallet.sendBTC(50000, RECIPIENT, 1)).rejects.toThrow(/min relay fee not met/)
     assert.equal(broadcastBodies.length, 0)

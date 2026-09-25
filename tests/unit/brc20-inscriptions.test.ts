@@ -24,7 +24,7 @@ const VECTOR = {
 // derives the pkscript from this address on the current network.
 const VECTOR_ADDRESS = bitcoinjs.address.fromOutputScript(
   Buffer.from(VECTOR.pkscript, 'hex'),
-  bitcoinjs.networks.bitcoin,
+  bitcoinjs.networks.bitcoin
 )
 
 // predeployInscriptions reads the current network to convert the address, so pin
@@ -70,8 +70,9 @@ describe('brc20 inscription builders', () => {
   })
 
   it('5-byte deploy rejects selfMint:false', () => {
-    expect(() => deployBrc20Inscription({ tick: 'ordit', max: '1', selfMint: false }))
-      .toThrow(/self.?mint/i)
+    expect(() => deployBrc20Inscription({ tick: 'ordit', max: '1', selfMint: false })).toThrow(
+      /self.?mint/i
+    )
   })
 
   it('deploy includes optional dec', () => {
@@ -80,8 +81,7 @@ describe('brc20 inscription builders', () => {
   })
 
   it('deploy rejects 6-byte tickers (must use predeployInscriptions)', () => {
-    expect(() => deployBrc20Inscription({ tick: 'sixbyt', max: '1' }))
-      .toThrow(/predeploy/i)
+    expect(() => deployBrc20Inscription({ tick: 'sixbyt', max: '1' })).toThrow(/predeploy/i)
   })
 
   it('deploy rejects tickers outside 4-6 bytes', () => {
@@ -135,13 +135,15 @@ describe('brc20 inscription builders', () => {
   })
 
   it('predeployInscriptions rejects 6-byte tickers with illegal characters', () => {
-    expect(() => predeployInscriptions({ tick: 'six!yt', address: VECTOR_ADDRESS, max: '1' }))
-      .toThrow()
+    expect(() =>
+      predeployInscriptions({ tick: 'six!yt', address: VECTOR_ADDRESS, max: '1' })
+    ).toThrow()
   })
 
   it('predeployInscriptions rejects non-6-byte tickers', () => {
-    expect(() => predeployInscriptions({ tick: 'ordi', address: VECTOR_ADDRESS, max: '1' }))
-      .toThrow()
+    expect(() =>
+      predeployInscriptions({ tick: 'ordi', address: VECTOR_ADDRESS, max: '1' })
+    ).toThrow()
   })
 
   it('rejects a non-hex salt', () => {
