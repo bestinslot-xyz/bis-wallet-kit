@@ -143,13 +143,21 @@ function handleAccountsChanged(provider: BISWalletProvider, accounts: string[]) 
     return
 
   clearWalletInfo()
+  accountWatch?.unsubscribe()
+  accountWatch = null
+
   const event: AccountChangeEvent = {
     provider,
     previousAddresses: session.wallets.map(wallet => wallet.address),
     accounts,
   }
   for (const listener of accountListeners) {
-    listener(event)
+    try {
+      listener(event)
+    }
+    catch (err) {
+      console.error('Account change listener failed.', err)
+    }
   }
 }
 

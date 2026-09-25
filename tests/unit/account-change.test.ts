@@ -148,6 +148,29 @@ describe('subscribeToAccountChanges', () => {
     unsubscribe()
   })
 
+  it('keeps notifying other listeners when one throws', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const failing = vi.fn(() => {
+      throw new Error('boom')
+    })
+    const listener = vi.fn()
+    const unsubscribeFailing = subscribeToAccountChanges(failing)
+    const unsubscribe = subscribeToAccountChanges(listener)
+
+    expect(() => emitAccounts?.([OTHER])).not.toThrow()
+
+    expect(failing).toHaveBeenCalledOnce()
+    expect(listener).toHaveBeenCalledOnce()
+    unsubscribeFailing()
+    unsubscribe()
+  })
+
+  it('releases the wallet event subscription once the session is cleared', () => {
+    emitAccounts?.([OTHER])
+
+    assert.equal(emitAccounts, undefined)
+  })
+
   it('stops notifying after unsubscribe', () => {
     const listener = vi.fn()
     subscribeToAccountChanges(listener)()

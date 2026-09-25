@@ -50,8 +50,8 @@ async function getWallets(): Promise<BISWallet[]> {
 }
 
 async function getAccounts(): Promise<string[]> {
-  if (!window.unisat)
-    throw new Error('UniSat not found.')
+  if (typeof window.unisat?.getAccounts !== 'function')
+    return []
 
   return (await window.unisat.getAccounts()) ?? []
 }
