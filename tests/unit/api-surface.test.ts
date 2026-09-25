@@ -20,6 +20,8 @@ const SHARED_WALLET_FNS = [
   'signMessage',
   'signMessageLocalVerify',
   'signMessageLocalVerifyDeterministic',
+  'subscribeToAccountChanges',
+  'WalletAccountChangedError',
 ]
 
 // Feature namespaces present in both flavours.

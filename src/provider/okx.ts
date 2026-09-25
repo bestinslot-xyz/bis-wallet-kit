@@ -33,6 +33,38 @@ async function getWallets(): Promise<BISWallet[]> {
   ]
 }
 
+// The OKX namespace for the current network. OKX exposes `getAccounts` and the
+// `accountChanged` event on its mainnet namespace; callers feature-check before use.
+function okxNamespace(): any {
+  const network = getNetwork()
+  if (network === 'mainnet')
+    return window.okxwallet?.bitcoin
+  if (network === 'testnet')
+    return window.okxwallet?.bitcoinTestnet
+  if (network === 'signet')
+    return window.okxwallet?.bitcoinSignet
+  return undefined
+}
+
+async function getAccounts(): Promise<string[]> {
+  const okx = okxNamespace()
+  if (typeof okx?.getAccounts !== 'function')
+    return []
+
+  return (await okx.getAccounts()) ?? []
+}
+
+function onAccountsChanged(handler: (accounts: string[]) => void): () => void {
+  const okx = okxNamespace()
+  if (typeof okx?.on !== 'function')
+    return () => {}
+
+  const listener = (info: { address?: string } | null) =>
+    handler(info?.address ? [info.address] : [])
+  okx.on('accountChanged', listener)
+  return () => okx.removeListener?.('accountChanged', listener)
+}
+
 async function signMessage(message: string): Promise<string> {
   if (!window.okxwallet)
     throw new Error('OKX extension not found.')
@@ -216,6 +248,8 @@ async function sign(
 
 export const OKX: BISProvider = {
   getWallets,
+  getAccounts,
+  onAccountsChanged,
   signMessage,
   signMessageDeterministic,
   sendBTC,

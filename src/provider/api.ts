@@ -62,6 +62,24 @@ export interface BISProvider {
   getWallets: () => Promise<BISWallet[]>
 
   /**
+   * Returns the addresses of the account currently active in the wallet, without prompting the
+   * user. Implemented only by providers that expose this silently; the kit compares the result
+   * with the stored session before signing to detect an account switch made inside the wallet.
+   *
+   * @returns The active account's addresses, or an empty array when the wallet cannot tell (e.g. it is locked).
+   */
+  getAccounts?: () => Promise<string[]>
+
+  /**
+   * Subscribes to account switches made inside the wallet. Implemented only by providers that
+   * emit such an event.
+   *
+   * @param handler Called with the newly active account's addresses (empty when the wallet cannot tell).
+   * @returns An unsubscribe function.
+   */
+  onAccountsChanged?: (handler: (accounts: string[]) => void) => () => void
+
+  /**
    * Signs a message using the provider. The signMessage method takes a message as a string and returns a promise that resolves to the signature of the message as a hexadecimal string. This method allows developers to sign messages using the wallets associated with the provider, enabling functionalities such as authentication or transaction signing. If there is an error in signing the message, the promise will be rejected with an appropriate error message.
    *
    * @param message The message to be signed as a string. This message will be sent to the provider for signing, and the resulting signature will be returned as a hexadecimal string.

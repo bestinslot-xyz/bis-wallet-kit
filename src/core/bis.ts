@@ -17,7 +17,10 @@ export {
   signMessage,
   signMessageLocalVerify,
   signMessageLocalVerifyDeterministic,
+  subscribeToAccountChanges,
+  WalletAccountChangedError,
 } from './providers'
+export type { AccountChangeEvent } from './providers'
 export { getWalletInfo as getSession } from './store'
 export { getNetwork, setNetwork } from './store-network'
 
