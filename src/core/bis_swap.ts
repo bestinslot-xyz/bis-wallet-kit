@@ -1197,6 +1197,12 @@ export interface GetActivityOfPairResponse {
     decimals: number
   }
   activities: PairActivityEntry[]
+  /** Page size the backend applied. Absent on older backends. */
+  limit?: number
+  /** Offset the backend applied. Absent on older backends. */
+  offset?: number
+  /** Whether more activities exist past this page. Absent on older backends. */
+  has_more?: boolean
 }
 /**
  * Fetches the recent swap activities for a specific token pair by making an API call to the swap backend.
@@ -1228,6 +1234,10 @@ export async function getActivityOfPair(
 interface GetWalletActivitiesRequest {
   pubkey: string
   pairAddress: string
+  /** Page size, 1-200. When omitted, the backend returns every activity. */
+  limit?: number
+  /** Number of activities to skip. The backend defaults to 0 when omitted. */
+  offset?: number
 }
 
 export interface WalletActivityEntry {
@@ -1270,20 +1280,46 @@ export interface GetWalletActivitiesResponse {
   btc_address: string
   pair_address: string
   activities: WalletActivityEntry[]
+  /** Page size the backend applied, or null when no `limit` was sent. Absent on older backends. */
+  limit?: number | null
+  /** Offset the backend applied. Absent on older backends. */
+  offset?: number
+  /** Whether more activities exist past this page. Absent on older backends. */
+  has_more?: boolean
 }
 /**
  * Fetches the swap activities associated with a specific wallet public key and pair address by making an API call to the swap backend.
  *
- * @param params An object containing the wallet public key and pair address to query activities for.
+ * Activities come back unconfirmed first (null timestamp), then newest first. `limit` and
+ * `offset` page through them; each is sent only when given. Without `limit` the backend
+ * returns every activity from `offset` on, with `limit: null` and `has_more: false`.
+ * Backends that predate pagination ignore both and return the full list without `has_more`,
+ * `limit` or `offset`.
+ *
+ * @param params An object containing the wallet public key and pair address to query activities for, plus optional `limit` (1-200) and `offset` (>= 0).
  * @returns {Promise<GetWalletActivitiesResponse>} A promise that resolves to an object containing the wallet public key, associated Bitcoin address, pair address, and a list of swap activities (deposits, swaps, liquidity changes, withdrawals) related to that wallet and pair.
+ * @throws If `limit` is not an integer from 1 to 200, or `offset` is not a non-negative integer.
  */
 export async function getWalletActivities(
   params: GetWalletActivitiesRequest
 ): Promise<GetWalletActivitiesResponse> {
+  if (params.limit !== undefined) {
+    if (params.limit > 200) {
+      throw new Error('Limit cannot exceed 200')
+    }
+    if (!Number.isInteger(params.limit) || params.limit < 1) {
+      throw new Error('Limit must be an integer of at least 1')
+    }
+  }
+  if (params.offset !== undefined && (!Number.isInteger(params.offset) || params.offset < 0)) {
+    throw new Error('Offset must be a non-negative integer')
+  }
+
   // 2. Prepare and execute the API call
-  const url = getSwapBackendUrl(
-    `wallet-activity/${params.pubkey}?pairAddress=${params.pairAddress}`
-  )
+  const query = new URLSearchParams({ pairAddress: params.pairAddress })
+  if (params.limit !== undefined) query.set('limit', String(params.limit))
+  if (params.offset !== undefined) query.set('offset', String(params.offset))
+  const url = getSwapBackendUrl(`wallet-activity/${encodeURIComponent(params.pubkey)}?${query}`)
   const result = await fetchWithErrors<GetWalletActivitiesResponse>(url, {
     method: 'GET',
     headers: {

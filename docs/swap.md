@@ -207,8 +207,27 @@ await swap.getKlines({/* GetKlinesRequest */})
 await swap.getPairVolumeOverDays(/* … */)
 await swap.getTvlHistory(/* GetTvlHistoryRequest — daily TVL series in WBTC sats */)
 await swap.getActivityOfPair(pairAddress, limit, offset)
-await swap.getWalletActivities(pubkey, pairAddress)
+await swap.getWalletActivities(pubkey, pairAddress, limit, offset) // limit, offset optional
 ```
+
+Both activity endpoints page with `limit` (max 200) and `offset`. `getActivityOfPair` defaults to 20
+and 0. `getWalletActivities` sends each only when given; without `limit` it returns every activity,
+with `limit: null` and `has_more: false`. An out-of-range value throws before any request. Wallet
+activities come back unconfirmed first (null `timestamp`), then newest first. Page until `has_more`
+is not `true`:
+
+```ts
+let offset = 0
+for (;;) {
+  const page = await swap.getWalletActivities(pubkey, pairAddress, 200, offset)
+  render(page.activities)
+  if (!page.has_more) break
+  offset += page.activities.length
+}
+```
+
+`has_more`, `limit` and `offset` are optional on both responses. Older backends omit them and return
+the full list, which ends the loop above after one page.
 
 Volume and TVL are in WBTC sats; APR is a percentage. For a **token/token pair** all three are null
 when the pair doesn't have enough BTC behind it: its `exposure_sats` (the BTC in both tokens' own

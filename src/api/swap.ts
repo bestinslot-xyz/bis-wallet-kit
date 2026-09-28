@@ -73,14 +73,29 @@ export { calculatePairAddress as getPairAddress } from '../lib/uniswap_ops'
 /**
  * Retrieves the wallet activities for a given public key and pair address.
  *
+ *
+ * Activities come back unconfirmed first, then newest first. Pass `limit` and `offset` to page
+ * through them and read `has_more` on the response to know whether another page exists. Backends
+ * that predate pagination ignore both parameters, return the full list, and omit `has_more`.
+ *
  * @param pubkey - The public key of the wallet for which to retrieve activities.
  * @param pairAddress - The address of the pair for which to retrieve activities.
- * @returns A promise that resolves to an array of wallet activities.
+ * @param limit - (Optional) Page size, an integer from 1 to 200. When omitted, the backend returns every activity.
+ * @param offset - (Optional) Number of activities to skip, a non-negative integer. The backend defaults to 0 when omitted.
+ * @returns A promise that resolves to the wallet's activities for the pair, with pagination fields when the backend supports them.
+ * @throws If `limit` or `offset` is out of range, before any request is sent.
  */
-export async function getWalletActivities(pubkey: string, pairAddress: string) {
+export async function getWalletActivities(
+  pubkey: string,
+  pairAddress: string,
+  limit?: number,
+  offset?: number
+) {
   return await getWalletActivitiesCore({
     pubkey,
     pairAddress,
+    limit,
+    offset,
   })
 }
 
