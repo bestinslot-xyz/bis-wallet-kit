@@ -459,9 +459,9 @@ interface SwapInfoResponse {
 // contract addresses, so one entry per network rather than a single slot.
 const SWAP_INFO_TTL_MS = 60_000
 const swapInfoCache = new Map<BISNetwork, { info: SwapInfo; fetchedAt: number }>()
-// The last fee_policy parse error per network, so getSwapFeesBps can report it
-// instead of MISSING_FEE_POLICY_ERROR when the backend served a policy that
-// doesn't parse. Cleared once the backend serves a valid policy again.
+// The fee_policy parse error from each network's latest response, so
+// getSwapFeesBps can report it instead of MISSING_FEE_POLICY_ERROR when the
+// backend serves a policy that doesn't parse. Every fetch resets it.
 const feePolicyParseErrors = new Map<BISNetwork, string>()
 /**
  * Fetches the swap's deployment info (the factory, WBTC and WBTC handler addresses, and the
@@ -493,10 +493,10 @@ export async function getSwapInfo(): Promise<SwapInfo> {
   // Built field by field, so every new SwapInfo field must be copied here.
   const rawFeePolicy = result.result.fee_policy
   let feePolicy: FeePolicy | null = null
+  feePolicyParseErrors.delete(network)
   if (rawFeePolicy !== undefined && rawFeePolicy !== null) {
     try {
       feePolicy = parseFeePolicy(rawFeePolicy)
-      feePolicyParseErrors.delete(network)
     } catch (error) {
       // A malformed fee_policy fails only swaps, not balances, liquidity, wrap or
       // unwrap: keep the error text so getSwapFeesBps can report it.

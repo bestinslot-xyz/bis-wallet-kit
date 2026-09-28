@@ -88,6 +88,19 @@ describe('getSwapInfo fee_policy', () => {
     })
     await assertRejects(getSwapFeesBps(WBTC, XYZ), /Invalid fee_policy/)
   })
+
+  it('reports the missing-policy error once a malformed policy is followed by none', async () => {
+    let body: unknown = swapInfoBody({ ...FEE_POLICY, swap_fee_bps: 2.5 })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: true, status: 200, statusText: 'OK', json: async () => body }))
+    )
+    const { getSwapFeesBps } = await freshSwapModule()
+
+    await assertRejects(getSwapFeesBps(WBTC, XYZ), /Invalid fee_policy/)
+    body = swapInfoBody()
+    await assertRejects(getSwapFeesBps(WBTC, XYZ), /older than this wallet-kit release/)
+  })
 })
 
 describe('getSwapInfo fee_policy freshness', () => {

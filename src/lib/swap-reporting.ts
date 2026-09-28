@@ -127,8 +127,11 @@ export function buildSwapFees(
 }
 
 /**
- * The `quoted_price` that the swap quote functions report, with two decimals
- * (truncated). Its unit depends on the direction:
+ * The `quoted_price` that the swap quote functions report. The price is floored
+ * to hundredths in bigint arithmetic, then converted to a `number`; above
+ * `Number.MAX_SAFE_INTEGER` hundredths (common for token/token quotes) that
+ * conversion rounds to the nearest representable value. Its unit depends on the
+ * direction:
  *
  * - WBTC in: sats per whole output token.
  * - Any other input, WBTC out included: output-token base units per whole input
