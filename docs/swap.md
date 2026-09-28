@@ -211,9 +211,10 @@ await swap.getWalletActivities(pubkey, pairAddress, limit, offset) // limit, off
 ```
 
 Both activity endpoints page with `limit` (max 200) and `offset`. `getActivityOfPair` defaults to 20
-and 0. `getWalletActivities` sends each only when given, so the backend applies its own defaults
-(100 and 0); an out-of-range value throws before any request. Wallet activities come back
-unconfirmed first (null `timestamp`), then newest first. Page until `has_more` is not `true`:
+and 0. `getWalletActivities` sends each only when given; without `limit` it returns every activity,
+with `limit: null` and `has_more: false`. An out-of-range value throws before any request. Wallet
+activities come back unconfirmed first (null `timestamp`), then newest first. Page until `has_more`
+is not `true`:
 
 ```ts
 let offset = 0

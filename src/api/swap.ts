@@ -80,7 +80,7 @@ export { calculatePairAddress as getPairAddress } from '../lib/uniswap_ops'
  *
  * @param pubkey - The public key of the wallet for which to retrieve activities.
  * @param pairAddress - The address of the pair for which to retrieve activities.
- * @param limit - (Optional) Page size, an integer from 1 to 200. The backend defaults to 100 when omitted.
+ * @param limit - (Optional) Page size, an integer from 1 to 200. When omitted, the backend returns every activity.
  * @param offset - (Optional) Number of activities to skip, a non-negative integer. The backend defaults to 0 when omitted.
  * @returns A promise that resolves to the wallet's activities for the pair, with pagination fields when the backend supports them.
  * @throws If `limit` or `offset` is out of range, before any request is sent.

@@ -114,6 +114,15 @@ describe('getWalletActivities', () => {
     assert.isUndefined(result.offset)
   })
 
+  it('parses a new-backend response with a null limit when none was sent', async () => {
+    body = { ...OLD_BACKEND_BODY, limit: null, offset: 0, has_more: false }
+
+    const result = await getWalletActivities(PUBKEY, PAIR)
+
+    assert.isNull(result.limit)
+    assert.isFalse(result.has_more)
+  })
+
   it('returns the pagination fields from a new backend', async () => {
     body = { ...OLD_BACKEND_BODY, limit: 50, offset: 0, has_more: true }
 

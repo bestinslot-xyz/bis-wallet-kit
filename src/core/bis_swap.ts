@@ -1234,7 +1234,7 @@ export async function getActivityOfPair(
 interface GetWalletActivitiesRequest {
   pubkey: string
   pairAddress: string
-  /** Page size, 1-200. The backend defaults to 100 when omitted. */
+  /** Page size, 1-200. When omitted, the backend returns every activity. */
   limit?: number
   /** Number of activities to skip. The backend defaults to 0 when omitted. */
   offset?: number
@@ -1280,8 +1280,8 @@ export interface GetWalletActivitiesResponse {
   btc_address: string
   pair_address: string
   activities: WalletActivityEntry[]
-  /** Page size the backend applied. Absent on older backends. */
-  limit?: number
+  /** Page size the backend applied, or null when no `limit` was sent. Absent on older backends. */
+  limit?: number | null
   /** Offset the backend applied. Absent on older backends. */
   offset?: number
   /** Whether more activities exist past this page. Absent on older backends. */
@@ -1291,8 +1291,10 @@ export interface GetWalletActivitiesResponse {
  * Fetches the swap activities associated with a specific wallet public key and pair address by making an API call to the swap backend.
  *
  * Activities come back unconfirmed first (null timestamp), then newest first. `limit` and
- * `offset` page through them; each is sent only when given. Backends that predate
- * pagination ignore both and return the full list without `has_more`, `limit` or `offset`.
+ * `offset` page through them; each is sent only when given. Without `limit` the backend
+ * returns every activity from `offset` on, with `limit: null` and `has_more: false`.
+ * Backends that predate pagination ignore both and return the full list without `has_more`,
+ * `limit` or `offset`.
  *
  * @param params An object containing the wallet public key and pair address to query activities for, plus optional `limit` (1-200) and `offset` (>= 0).
  * @returns {Promise<GetWalletActivitiesResponse>} A promise that resolves to an object containing the wallet public key, associated Bitcoin address, pair address, and a list of swap activities (deposits, swaps, liquidity changes, withdrawals) related to that wallet and pair.
