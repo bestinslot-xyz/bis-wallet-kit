@@ -14,7 +14,7 @@ import * as bitcoinjs from 'bitcoinjs-lib'
 import * as ethers from 'ethers'
 import { getBitcoinNetwork } from '../lib/bitcoin'
 import { MISSING_FEE_POLICY_ERROR, parseFeePolicy, swapFeeBps } from '../lib/fee-policy'
-import { buildSwapFees } from '../lib/swap-reporting'
+import { buildSwapFees, quotedPrice } from '../lib/swap-reporting'
 import {
   addLiquidityRequest,
   calculatePairAddress,
@@ -3222,7 +3222,7 @@ export async function getSwapFeesBps(
  * @param tokenOutAddr The address of the token being swapped to.
  * @param amtIn The amount of the input token to be swapped, represented as a bigint.
  *
- * @returns A promise that resolves to an object containing the expected output amount of the token being swapped to, the quoted price for the swap, the price impact in basis points, and the fee breakdown (see `SwapFees` — `amount_out` is net of the pool fee only, with the rest charged on top).
+ * @returns A promise that resolves to an object containing the expected output amount of the token being swapped to, the quoted price for the swap (sats per whole token when either side is WBTC; for a token/token swap, output-token base units per whole input token, see `quotedPrice`), the price impact in basis points, and the fee breakdown (see `SwapFees` — `amount_out` is net of the pool fee only, with the rest charged on top).
  */
 export async function getSwapResult(
   tokenInAddr: string,
@@ -3284,11 +3284,14 @@ export async function getSwapResult(
 
   const decimalsOfIn = await getTokenDecimals(tokenInAddr)
   const decimalsOfOut = await getTokenDecimals(tokenOutAddr)
-  const quotedPrice =
-    tokenInAddr.toLowerCase() === swapInfo.wbtc_address.toLowerCase()
-      ? (amtIn * 10n ** BigInt(decimalsOfOut) * 100n) / result.amounts[1]!
-      : (result.amounts[1]! * 10n ** BigInt(decimalsOfIn) * 100n) / amtIn
-  const quotedPriceNumber = Number(quotedPrice) / 100.0
+  const quotedPriceNumber = quotedPrice(
+    tokenInAddr,
+    swapInfo.wbtc_address,
+    amtIn,
+    result.amounts[1]!,
+    decimalsOfIn,
+    decimalsOfOut
+  )
 
   return {
     amount_out: result.amounts[1]!,
@@ -3503,7 +3506,7 @@ export async function prepareAndSendSwapOrder(
  * @param tokenOutAddr The address of the token being swapped to.
  * @param amtOut The amount of the output token expected from the swap, represented as a bigint.
  *
- * @returns A promise that resolves to an object containing the expected input amount of the token being swapped from, the quoted price for the swap, the price impact in basis points, and the fee breakdown (see `SwapFees` — `amount_in` covers the pool fee only, with the rest charged on top).
+ * @returns A promise that resolves to an object containing the expected input amount of the token being swapped from, the quoted price for the swap (sats per whole token when either side is WBTC; for a token/token swap, output-token base units per whole input token, see `quotedPrice`), the price impact in basis points, and the fee breakdown (see `SwapFees` — `amount_in` covers the pool fee only, with the rest charged on top).
  */
 export async function getSwap2Result(
   tokenInAddr: string,
@@ -3565,12 +3568,14 @@ export async function getSwap2Result(
 
   const decimalsOfIn = await getTokenDecimals(tokenInAddr)
   const decimalsOfOut = await getTokenDecimals(tokenOutAddr)
-  const quotedPrice =
-    tokenInAddr.toLowerCase() === swapInfo.wbtc_address.toLowerCase()
-      ? (result.amounts[0]! * 10n ** BigInt(decimalsOfOut) * 100n) / amtOut
-      : (amtOut * 10n ** BigInt(decimalsOfIn) * 100n) / result.amounts[0]!
-
-  const quotedPriceNumber = Number(quotedPrice) / 100.0
+  const quotedPriceNumber = quotedPrice(
+    tokenInAddr,
+    swapInfo.wbtc_address,
+    result.amounts[0]!,
+    amtOut,
+    decimalsOfIn,
+    decimalsOfOut
+  )
 
   return {
     amount_in: result.amounts[0]!,

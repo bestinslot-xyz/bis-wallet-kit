@@ -18,8 +18,10 @@ let factoryAddr = ''
  * @param factory The Bis Swap factory address as a string. This address is used to calculate pair addresses and to interact with the Bis Swap protocol for operations such as fetching reserves or performing swaps. By saving this information, the module can ensure that all Bis Swap-related functions have access to the necessary contract addresses for their operations.
  */
 export function saveInfo(wbtcAddr: string, factory: string) {
-  wbtcAddress = wbtcAddr
-  factoryAddr = factory
+  // Lowercased because the swap math compares it with lowercased token addresses
+  // (the price-impact orientation and the miner-fee balance key).
+  wbtcAddress = wbtcAddr.toLowerCase()
+  factoryAddr = factory.toLowerCase()
 }
 
 function sqrt(value: bigint): bigint {
