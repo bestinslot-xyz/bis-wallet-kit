@@ -153,7 +153,9 @@ Either token may be WBTC or a BRC-20 token, so token/token pools (e.g. `ORDI`/`N
 Adding liquidity to a pair that doesn't exist yet creates it; the swap backend rejects a new pair
 unless each side is WBTC or a BRC-20 token. Beyond that, the swap backend decides which new pairs it
 accepts, and rejects a pair it does not allow with its own error message, which the kit passes
-through unchanged. Liquidity orders carry no protocol fee.
+through unchanged. `getSwapInfo()` reports whether the backend currently accepts a new pool with no
+WBTC side as `allow_token_token_pairs`, so a UI can offer token/token pool creation only where it
+succeeds. Liquidity orders carry no protocol fee.
 
 ```ts
 await swap.addLiquidity(token1, token2, amount1Desired, amount2Desired, slippageBPS)

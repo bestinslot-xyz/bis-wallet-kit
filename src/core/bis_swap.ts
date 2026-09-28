@@ -450,10 +450,17 @@ export interface SwapInfo {
   // The backend-owned swap fee policy; null when the backend does not serve one
   // (swaps then fail with MISSING_FEE_POLICY_ERROR, everything else keeps working).
   fee_policy: FeePolicy | null
+  // Whether the backend accepts a new pool with no WBTC side. The backend enforces
+  // it; a UI reads it to offer token/token pool creation only where it succeeds.
+  // False when the backend does not serve it.
+  allow_token_token_pairs: boolean
 }
 interface SwapInfoResponse {
   success: boolean
-  result: Omit<SwapInfo, 'fee_policy'> & { fee_policy?: unknown }
+  result: Omit<SwapInfo, 'fee_policy' | 'allow_token_token_pairs'> & {
+    fee_policy?: unknown
+    allow_token_token_pairs?: unknown
+  }
 }
 // Keyed by network: each network has its own swap backend and therefore its own
 // contract addresses, so one entry per network rather than a single slot.
@@ -472,7 +479,7 @@ const feePolicyParseErrors = new Map<BISNetwork, string>()
  *
  * This does not require a connected wallet or a smart wallet.
  *
- * @returns {Promise<SwapInfo>} A promise that resolves to a SwapInfo object containing the factory address, the WBTC token address, the WBTC handler address, and the fee policy (`null` if the backend does not serve one).
+ * @returns {Promise<SwapInfo>} A promise that resolves to a SwapInfo object containing the factory address, the WBTC token address, the WBTC handler address, the fee policy (`null` if the backend does not serve one), and whether the backend accepts new token/token pools.
  */
 export async function getSwapInfo(): Promise<SwapInfo> {
   const network = getNetwork()
@@ -508,6 +515,7 @@ export async function getSwapInfo(): Promise<SwapInfo> {
     wbtc_address: result.result.wbtc_address.toLowerCase(),
     wbtc_handler_address: result.result.wbtc_handler_address,
     fee_policy: feePolicy,
+    allow_token_token_pairs: result.result.allow_token_token_pairs === true,
   }
   if (swapInfo.fee_policy !== null) {
     swapInfoCache.set(network, { info: swapInfo, fetchedAt: Date.now() })

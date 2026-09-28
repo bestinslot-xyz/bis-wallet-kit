@@ -60,10 +60,30 @@ describe('getSwapInfo fee_policy', () => {
       wbtc_address: WBTC,
       wbtc_handler_address: 'bc1qhandler',
       fee_policy: FEE_POLICY,
+      allow_token_token_pairs: false,
     })
     await getSwapInfo()
     assert.equal(fetchMock.mock.calls.length, 1)
     assert.equal(String(fetchMock.mock.calls[0]![0]), SWAP_INFO_URL)
+  })
+
+  it('reads allow_token_token_pairs, treating anything but true as false', async () => {
+    for (const [served, expected] of [
+      [true, true],
+      [false, false],
+      ['true', false],
+      [undefined, false],
+    ] as const) {
+      const body = swapInfoBody(FEE_POLICY)
+      if (served !== undefined) Object.assign(body.result, { allow_token_token_pairs: served })
+      serve(body)
+      const { getSwapInfo } = await freshSwapModule()
+      assert.equal(
+        (await getSwapInfo()).allow_token_token_pairs,
+        expected,
+        `served ${String(served)}`
+      )
+    }
   })
 
   it('returns fee_policy: null for an older backend and does not cache it', async () => {
@@ -85,6 +105,7 @@ describe('getSwapInfo fee_policy', () => {
       wbtc_address: WBTC,
       wbtc_handler_address: 'bc1qhandler',
       fee_policy: null,
+      allow_token_token_pairs: false,
     })
     await assertRejects(getSwapFeesBps(WBTC, XYZ), /Invalid fee_policy/)
   })
