@@ -607,14 +607,18 @@ async function getBaseBRC20Balance(tokenAddress: string): Promise<BaseBRC20Balan
 export interface SwapBalance {
   token_address: string
   balance: string
-  ticker: string
+  ticker: string // LP tokens: LP-<BASE>-<QUOTE>, QUOTE is 'BTC' for WBTC pairs
   decimals: number
   is_lp: boolean
-  price_sats: number
-  reserve_token_amt?: string
-  token_decimals?: number
-  reserve_btc_amt?: string
-  btc_decimals?: number
+  // Sats per whole token; null when the token has no BTC price (no direct BTC pool
+  // and no one-hop route through a BTC pool holding at least min_btc_exposure_sats).
+  // For an LP token, the price of its base token.
+  price_sats: number | null
+  reserve_token_amt?: string // LP only: the base token's reserve
+  token_decimals?: number // LP only: the base token's decimals
+  reserve_btc_amt?: string // LP only: the quote token's reserve (WBTC for BTC pairs)
+  btc_decimals?: number // LP only: the quote token's decimals (8 for WBTC)
+  quote_token?: string // LP only: the quote token's address (the WBTC address for BTC pairs)
   lp_total_supply?: string
 }
 
@@ -907,19 +911,29 @@ export interface ListPairsRequest {
 }
 export interface PairInfo {
   pair_address: string
-  pair_name: string
+  pair_name: string // token/token pairs: BASE/QUOTE (see price_quote_token)
   token_a_addr: string // compare case-insensitively; the backend does not normalise case
   token_a_symbol: string
   token_b_addr: string // compare case-insensitively; the backend does not normalise case
   token_b_symbol: string
+  // Price of the base token in the quote token's base units per whole base token
+  // (sats per token for WBTC pairs).
   price: number
   price_change_24h: number
   price_change_7d: number
-  volume_24h: bigint
-  volume_7d: bigint
+  // Volume, TVL and APR are in WBTC sats. They are null for a token/token pair whose
+  // BTC exposure is below the backend's min_btc_exposure_sats (show "N/A").
+  volume_24h: bigint | null
+  volume_7d: bigint | null
   lp_fee_tier: number
-  tvl: bigint
-  apr: number
+  tvl: bigint | null
+  apr: number | null
+  // The token `price` is quoted in (compare case-insensitively). WBTC for WBTC
+  // pairs; for token/token pairs the higher-priority fee token, else token_b.
+  price_quote_token: string
+  // BTC reserve backing the pair, in sats: a WBTC pair's own WBTC reserve, or for a
+  // token/token pair the sum of both tokens' direct BTC pools.
+  exposure_sats: bigint
 }
 export interface ListPairsResponse {
   page: number
@@ -931,11 +945,16 @@ interface GetTableDataResponse {
   page: number
   count: number
   total: number
-  data: (Omit<PairInfo, 'volume_24h' | 'volume_7d' | 'tvl'> & {
-    volume_24h: string
-    volume_7d: string
-    tvl: string
+  data: (Omit<PairInfo, 'volume_24h' | 'volume_7d' | 'tvl' | 'exposure_sats'> & {
+    volume_24h: string | null
+    volume_7d: string | null
+    tvl: string | null
+    exposure_sats: string
   })[]
+}
+
+function toBigIntOrNull(value: string | null): bigint | null {
+  return value === null ? null : BigInt(value)
 }
 /**
  * Fetches a paginated, sortable listing of every swap pair and its market data by making an API call to the swap backend.
@@ -943,7 +962,7 @@ interface GetTableDataResponse {
  * This does not require a connected wallet or a smart wallet, so it can be used to populate a market table or pair selector before the user connects.
  *
  * @param params (Optional) An object containing the sort order (defaults to 'tvl_desc'), the page to fetch (defaults to 1), and the number of pairs per page (defaults to 20, max 100).
- * @returns {Promise<ListPairsResponse>} A promise that resolves to an object containing the current page, page size, total number of pairs, and an array of PairInfo objects. Each pair includes both token addresses and symbols, price, 24h/7d price change, 24h/7d volume, LP fee tier, TVL, and APR. The volumes and TVL are returned as strings from the API and converted to bigint in this function.
+ * @returns {Promise<ListPairsResponse>} A promise that resolves to an object containing the current page, page size, total number of pairs, and an array of PairInfo objects. Each pair includes both token addresses and symbols, price and the token it is quoted in, 24h/7d price change, 24h/7d volume, LP fee tier, TVL, APR, and BTC exposure. The volumes, TVL and exposure are returned as strings from the API and converted to bigint in this function; volume, TVL and APR are `null` for a token/token pair below the backend's BTC-exposure threshold.
  */
 export async function listPairs(params: ListPairsRequest = {}): Promise<ListPairsResponse> {
   const orderBy = params.order_by ?? 'tvl_desc'
@@ -975,9 +994,10 @@ export async function listPairs(params: ListPairsRequest = {}): Promise<ListPair
     total: result.total,
     data: result.data.map(pair => ({
       ...pair,
-      volume_24h: BigInt(pair.volume_24h),
-      volume_7d: BigInt(pair.volume_7d),
-      tvl: BigInt(pair.tvl),
+      volume_24h: toBigIntOrNull(pair.volume_24h),
+      volume_7d: toBigIntOrNull(pair.volume_7d),
+      tvl: toBigIntOrNull(pair.tvl),
+      exposure_sats: BigInt(pair.exposure_sats),
     })),
   }
 }
@@ -993,7 +1013,7 @@ export interface GetPairVolumeResponse {
   token_b_address: string
   token_b_symbol: string
   period_days: number
-  total_volume_wbtc: string
+  total_volume_wbtc: string | null // null for a token/token pair below the BTC-exposure threshold
   total_trades: number
   start_time: string
   end_time: string
@@ -1002,7 +1022,7 @@ export interface GetPairVolumeResponse {
  * Fetches the trading volume and number of trades for a specific token pair over a given number of days by making an API call to the swap backend.
  *
  * @param params An object containing the pair address and the number of days to look back for volume data.
- * @returns {Promise<GetPairVolumeResponse>} A promise that resolves to an object containing the pair address, token addresses and symbols, period in days, total volume in WBTC, total number of trades, and the start and end time of the period. The total volume is returned as a string from the API and can be converted to bigint if needed.
+ * @returns {Promise<GetPairVolumeResponse>} A promise that resolves to an object containing the pair address, token addresses and symbols, period in days, total volume in WBTC, total number of trades, and the start and end time of the period. The total volume is returned as a string from the API and can be converted to bigint if needed; it is `null` for a token/token pair below the backend's BTC-exposure threshold.
  */
 export async function getPairVolumeOverDays(
   params: GetPairVolumeRequest
@@ -1042,6 +1062,9 @@ export interface GetKlinesResponse {
   token_a_symbol: string
   token_b_address: string
   token_b_symbol: string
+  // The token OHLC prices are quoted in (compare case-insensitively); null if the
+  // backend could not resolve the pair.
+  price_quote_token: string | null
   interval: string
   klines: Kline[]
 }
@@ -1049,7 +1072,7 @@ export interface GetKlinesResponse {
  * Fetches the historical price and volume data (klines) for a specific token pair and time interval by making an API call to the swap backend.
  *
  * @param params An object containing the pair address, desired time interval for the klines, limit on the number of klines to fetch (max 1000), and optional start and end timestamps to filter the klines.
- * @returns {Promise<GetKlinesResponse>} A promise that resolves to an object containing the pair address, token addresses and symbols, interval, and an array of kline data. Each kline includes open time, close time, open price, high price, low price, close price, volume in WBTC, and number of trades. The volume is returned as a string from the API and can be converted to bigint if needed.
+ * @returns {Promise<GetKlinesResponse>} A promise that resolves to an object containing the pair address, token addresses and symbols, the token prices are quoted in (`price_quote_token`), interval, and an array of kline data. Each kline includes open time, close time, open price, high price, low price, close price, volume in WBTC, and number of trades. For a token/token pair the prices are the raw base/quote ratio (quote-token base units per whole base token), with no BTC conversion. The volume is returned as a string from the API and can be converted to bigint if needed.
  */
 export async function getKlines(params: GetKlinesRequest): Promise<GetKlinesResponse> {
   if (params.limit > 1000) {
@@ -1084,7 +1107,7 @@ export interface GetTvlHistoryRequest {
 export interface TvlPoint {
   timestamp: number // unix ms for the day bucket
   block_height: number // block the reserves were sampled at
-  tvl: string // total value locked, in WBTC sats
+  tvl: string | null // total value locked, in WBTC sats; null on days a token/token pair is below the BTC-exposure threshold
 }
 export interface GetTvlHistoryResponse {
   pair_address: string
@@ -1099,10 +1122,10 @@ export interface GetTvlHistoryResponse {
 /**
  * Fetches a daily Total Value Locked (TVL) series for a token pair from the swap backend, for charting TVL over time.
  *
- * TVL is valued in WBTC sats (2 x the WBTC-side reserve). Points are one per day, oldest first, each carrying the pair's reserves as of that day (carried forward across days with no on-chain change). A pair with no WBTC side reports `wbtc_side: ''` and a zero series.
+ * TVL is valued in WBTC sats: 2 x the WBTC-side reserve for a WBTC pair. A token/token pair (`wbtc_side: ''`) is valued through each token's direct BTC pool as of that day, and its point is `tvl: null` on days its BTC exposure is below the backend's threshold. Points are one per day, oldest first, each carrying the pair's reserves as of that day (carried forward across days with no on-chain change).
  *
  * @param params An object with the pair address and the number of days to look back (max 365; the backend clamps out-of-range values).
- * @returns {Promise<GetTvlHistoryResponse>} A promise that resolves to the pair address, token addresses and symbols, which side is WBTC, the period in days, and the ascending array of `{ timestamp, block_height, tvl }` points. Each `tvl` is a string of sats and can be converted to bigint if needed.
+ * @returns {Promise<GetTvlHistoryResponse>} A promise that resolves to the pair address, token addresses and symbols, which side is WBTC, the period in days, and the ascending array of `{ timestamp, block_height, tvl }` points. Each `tvl` is a string of sats (or `null`, see above) and can be converted to bigint if needed.
  */
 export async function getTvlHistory(params: GetTvlHistoryRequest): Promise<GetTvlHistoryResponse> {
   // Encode the path segment and query so a malformed pair_address/days can't
