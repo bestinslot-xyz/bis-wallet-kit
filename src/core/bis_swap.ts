@@ -457,9 +457,14 @@ interface SwapInfoResponse {
 }
 // Keyed by network: each network has its own swap backend and therefore its own
 // contract addresses, so one entry per network rather than a single slot.
-const swapInfoCache = new Map<BISNetwork, SwapInfo>()
+const SWAP_INFO_TTL_MS = 60_000
+const swapInfoCache = new Map<BISNetwork, { info: SwapInfo; fetchedAt: number }>()
 /**
- * Fetches the swap's deployment info — the factory, WBTC and WBTC handler addresses, and the backend-owned swap fee policy — for the current network, by making an API call to the swap backend. The result is fetched once per network and cached; a response without a fee policy (an older backend) is returned but not cached, so the policy is picked up once the backend is upgraded.
+ * Fetches the swap's deployment info (the factory, WBTC and WBTC handler addresses, and the
+ * backend-owned swap fee policy) for the current network, by making an API call to the swap
+ * backend. The result is cached per network for 60 seconds; a response without a fee policy (an
+ * older backend) is returned but not cached, so the policy is picked up once the backend is
+ * upgraded.
  *
  * This does not require a connected wallet or a smart wallet.
  *
@@ -468,8 +473,8 @@ const swapInfoCache = new Map<BISNetwork, SwapInfo>()
 export async function getSwapInfo(): Promise<SwapInfo> {
   const network = getNetwork()
   const cached = swapInfoCache.get(network)
-  if (cached) {
-    return cached
+  if (cached && Date.now() - cached.fetchedAt < SWAP_INFO_TTL_MS) {
+    return cached.info
   }
 
   // Prepare and execute the API call
@@ -491,7 +496,7 @@ export async function getSwapInfo(): Promise<SwapInfo> {
       rawFeePolicy === undefined || rawFeePolicy === null ? null : parseFeePolicy(rawFeePolicy),
   }
   if (swapInfo.fee_policy !== null) {
-    swapInfoCache.set(network, swapInfo)
+    swapInfoCache.set(network, { info: swapInfo, fetchedAt: Date.now() })
   }
   return swapInfo
 }

@@ -83,6 +83,47 @@ describe('getSwapInfo fee_policy', () => {
   })
 })
 
+describe('getSwapInfo fee_policy freshness', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('does not refetch within the 60s TTL', async () => {
+    serve(swapInfoBody(FEE_POLICY))
+    const { getSwapInfo } = await freshSwapModule()
+
+    await getSwapInfo()
+    vi.setSystemTime(Date.now() + 59_000)
+    await getSwapInfo()
+    assert.equal(fetchMock.mock.calls.length, 1)
+  })
+
+  it('refetches after the 60s TTL and picks up the new fee_policy', async () => {
+    let body: unknown = swapInfoBody(FEE_POLICY)
+    const dynamicFetchMock = vi.fn(async (url: string | URL) => {
+      if (String(url) === SWAP_INFO_URL)
+        return { ok: true, status: 200, statusText: 'OK', json: async () => body }
+      return { ok: false, status: 404, statusText: 'Not Found', json: async () => ({}) }
+    })
+    vi.stubGlobal('fetch', dynamicFetchMock)
+    const { getSwapInfo, getSwapFeesBps } = await freshSwapModule()
+
+    await getSwapInfo()
+    assert.deepEqual(await getSwapFeesBps(XYZ, ABC), { token1FeeBps: 13n, token2FeeBps: 12n })
+
+    body = swapInfoBody({ ...FEE_POLICY, priority_tokens: [WBTC, ORDI, ABC] })
+    vi.setSystemTime(Date.now() + 60_001)
+
+    await getSwapInfo()
+    assert.equal(dynamicFetchMock.mock.calls.length, 2)
+    assert.deepEqual(await getSwapFeesBps(XYZ, ABC), { token1FeeBps: 0n, token2FeeBps: 25n })
+  })
+})
+
 describe('getSwapFeesBps', () => {
   it('charges the WBTC side 25 bps', async () => {
     serve(swapInfoBody(FEE_POLICY))
