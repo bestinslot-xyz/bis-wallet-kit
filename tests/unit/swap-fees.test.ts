@@ -53,8 +53,9 @@ describe('pOOL_FEE_BPS', () => {
 })
 
 describe('buildSwapFees reconciles with swapRequest (exact input)', () => {
-  // Selling TOKEN for WBTC: the protocol fee sits on the WBTC leg, which is the
-  // output here, so token1FeeBps is 0 and token2FeeBps is 25 (see getSwapFeesBps).
+  // Selling TOKEN for WBTC: under the backend's fee policy the protocol fee sits on
+  // the WBTC leg, which is the output here, so token1FeeBps is 0 and token2FeeBps is
+  // 25 (fee_vectors.json case 2; getSwapFeesBps derives it from fee_policy).
   const AMOUNT_IN = 1_000_000_000n
   const TOKEN_IN_FEE_BPS = 0n
   const TOKEN_OUT_FEE_BPS = 25n
