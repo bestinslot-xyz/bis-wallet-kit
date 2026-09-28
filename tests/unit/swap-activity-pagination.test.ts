@@ -67,6 +67,16 @@ describe('getWalletActivities', () => {
     assert.equal(url.searchParams.get('offset'), '0')
   })
 
+  it('encodes the pubkey and pair address so they cannot inject parameters', async () => {
+    await getWalletActivities('ab/cd?x=1', `${PAIR}&limit=999`)
+
+    const url = requestedUrl()
+    assert.equal(url.pathname, `/wallet-activity/${encodeURIComponent('ab/cd?x=1')}`)
+    assert.equal(url.searchParams.get('pairAddress'), `${PAIR}&limit=999`)
+    assert.isFalse(url.searchParams.has('limit'))
+    assert.isFalse(url.searchParams.has('x'))
+  })
+
   it('accepts the 200 limit boundary', async () => {
     await getWalletActivities(PUBKEY, PAIR, 200)
 

@@ -1314,10 +1314,10 @@ export async function getWalletActivities(
   }
 
   // 2. Prepare and execute the API call
-  let query = `pairAddress=${params.pairAddress}`
-  if (params.limit !== undefined) query += `&limit=${params.limit}`
-  if (params.offset !== undefined) query += `&offset=${params.offset}`
-  const url = getSwapBackendUrl(`wallet-activity/${params.pubkey}?${query}`)
+  const query = new URLSearchParams({ pairAddress: params.pairAddress })
+  if (params.limit !== undefined) query.set('limit', String(params.limit))
+  if (params.offset !== undefined) query.set('offset', String(params.offset))
+  const url = getSwapBackendUrl(`wallet-activity/${encodeURIComponent(params.pubkey)}?${query}`)
   const result = await fetchWithErrors<GetWalletActivitiesResponse>(url, {
     method: 'GET',
     headers: {
