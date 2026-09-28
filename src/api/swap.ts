@@ -104,7 +104,9 @@ export async function getActivityOfPair(pairAddress: string, limit?: number, off
  *
  * Either token may be WBTC or a BRC-20 token. Adding to a pair that doesn't exist
  * yet creates it; the swap backend rejects a new pair unless each side is WBTC or
- * a BRC-20 token.
+ * a BRC-20 token. Beyond that, the swap backend decides which new pairs it
+ * accepts, and rejects a pair it does not allow with its own error message,
+ * which the kit passes through unchanged.
  *
  * @param token1Address - The address of the first token in the pair.
  * @param token2Address - The address of the second token in the pair.

@@ -447,8 +447,8 @@ export interface SwapInfo {
   factory_address: string // lowercased
   wbtc_address: string // lowercased
   wbtc_handler_address: string
-  // The backend-owned swap fee policy; null when the backend predates it (swaps
-  // then fail with MISSING_FEE_POLICY_ERROR, everything else keeps working).
+  // The backend-owned swap fee policy; null when the backend does not serve one
+  // (swaps then fail with MISSING_FEE_POLICY_ERROR, everything else keeps working).
   fee_policy: FeePolicy | null
 }
 interface SwapInfoResponse {
@@ -940,8 +940,9 @@ export interface PairInfo {
   price: number
   price_change_24h: number
   price_change_7d: number
-  // Volume, TVL and APR are in WBTC sats. They are null for a token/token pair whose
-  // BTC exposure is below the backend's min_btc_exposure_sats (show "N/A").
+  // Volume and TVL are in WBTC sats; APR is a percentage. They are null for a
+  // token/token pair whose BTC exposure is below the backend's
+  // min_btc_exposure_sats (show "N/A").
   volume_24h: bigint | null
   volume_7d: bigint | null
   lp_fee_tier: number
@@ -3242,7 +3243,7 @@ export async function getSwapFeesBps(
  * @param tokenOutAddr The address of the token being swapped to.
  * @param amtIn The amount of the input token to be swapped, represented as a bigint.
  *
- * @returns A promise that resolves to an object containing the expected output amount of the token being swapped to, the quoted price for the swap (sats per whole token when either side is WBTC; for a token/token swap, output-token base units per whole input token, see `quotedPrice`), the price impact in basis points, and the fee breakdown (see `SwapFees` — `amount_out` is net of the pool fee only, with the rest charged on top).
+ * @returns A promise that resolves to an object containing the expected output amount of the token being swapped to, the quoted price for the swap (sats per whole token when either side is WBTC; for a token/token swap, output-token base units per whole input token, see `quotedPrice`), the price impact in basis points, and the fee breakdown (see `SwapFees`: `amount_out` is net of the pool fee only, with the rest charged on top).
  */
 export async function getSwapResult(
   tokenInAddr: string,
@@ -3526,7 +3527,7 @@ export async function prepareAndSendSwapOrder(
  * @param tokenOutAddr The address of the token being swapped to.
  * @param amtOut The amount of the output token expected from the swap, represented as a bigint.
  *
- * @returns A promise that resolves to an object containing the expected input amount of the token being swapped from, the quoted price for the swap (sats per whole token when either side is WBTC; for a token/token swap, output-token base units per whole input token, see `quotedPrice`), the price impact in basis points, and the fee breakdown (see `SwapFees` — `amount_in` covers the pool fee only, with the rest charged on top).
+ * @returns A promise that resolves to an object containing the expected input amount of the token being swapped from, the quoted price for the swap (sats per whole token when either side is WBTC; for a token/token swap, output-token base units per whole input token, see `quotedPrice`), the price impact in basis points, and the fee breakdown (see `SwapFees`: `amount_in` covers the pool fee only, with the rest charged on top).
  */
 export async function getSwap2Result(
   tokenInAddr: string,

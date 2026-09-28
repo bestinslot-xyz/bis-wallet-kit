@@ -151,7 +151,9 @@ const { referrerPubkey, refReturnBps } = await swap.tryGetSwapReferrerInfo(mySwa
 
 Either token may be WBTC or a BRC-20 token, so token/token pools (e.g. `ORDI`/`NUTKIN`) work too.
 Adding liquidity to a pair that doesn't exist yet creates it; the swap backend rejects a new pair
-unless each side is WBTC or a BRC-20 token. Liquidity orders carry no protocol fee.
+unless each side is WBTC or a BRC-20 token. Beyond that, the swap backend decides which new pairs it
+accepts, and rejects a pair it does not allow with its own error message, which the kit passes
+through unchanged. Liquidity orders carry no protocol fee.
 
 ```ts
 await swap.addLiquidity(token1, token2, amount1Desired, amount2Desired, slippageBPS)
@@ -208,9 +210,9 @@ await swap.getActivityOfPair(pairAddress, limit, offset)
 await swap.getWalletActivities(pubkey, pairAddress)
 ```
 
-Volume, TVL and APR are valued in WBTC sats. For a **token/token pair** the backend reports them
-only once the pair has enough BTC behind it: its `exposure_sats` (the BTC in both tokens' own BTC
-pools) must reach the backend's `fee_policy.min_btc_exposure_sats`. Below that they come back as
+Volume and TVL are in WBTC sats; APR is a percentage. For a **token/token pair** all three are null
+when the pair doesn't have enough BTC behind it: its `exposure_sats` (the BTC in both tokens' own
+BTC pools) must reach the backend's `fee_policy.min_btc_exposure_sats`. Below that they come back as
 `null`: `PairInfo.volume_24h` / `volume_7d` / `tvl` / `apr`, `total_volume_wbtc` from
 `getPairVolumeOverDays`, and each `getTvlHistory` point's `tvl`. Show them as "N/A", don't treat
 `null` as zero. Likewise `SwapBalance.price_sats` is `null` for a token with no BTC price.
