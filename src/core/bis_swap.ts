@@ -459,6 +459,10 @@ interface SwapInfoResponse {
 // contract addresses, so one entry per network rather than a single slot.
 const SWAP_INFO_TTL_MS = 60_000
 const swapInfoCache = new Map<BISNetwork, { info: SwapInfo; fetchedAt: number }>()
+// The last fee_policy parse error per network, so getSwapFeesBps can report it
+// instead of MISSING_FEE_POLICY_ERROR when the backend served a policy that
+// doesn't parse. Cleared once the backend serves a valid policy again.
+const feePolicyParseErrors = new Map<BISNetwork, string>()
 /**
  * Fetches the swap's deployment info (the factory, WBTC and WBTC handler addresses, and the
  * backend-owned swap fee policy) for the current network, by making an API call to the swap
@@ -488,12 +492,22 @@ export async function getSwapInfo(): Promise<SwapInfo> {
 
   // Built field by field, so every new SwapInfo field must be copied here.
   const rawFeePolicy = result.result.fee_policy
+  let feePolicy: FeePolicy | null = null
+  if (rawFeePolicy !== undefined && rawFeePolicy !== null) {
+    try {
+      feePolicy = parseFeePolicy(rawFeePolicy)
+      feePolicyParseErrors.delete(network)
+    } catch (error) {
+      // A malformed fee_policy fails only swaps, not balances, liquidity, wrap or
+      // unwrap: keep the error text so getSwapFeesBps can report it.
+      feePolicyParseErrors.set(network, error instanceof Error ? error.message : String(error))
+    }
+  }
   const swapInfo: SwapInfo = {
     factory_address: result.result.factory_address.toLowerCase(),
     wbtc_address: result.result.wbtc_address.toLowerCase(),
     wbtc_handler_address: result.result.wbtc_handler_address,
-    fee_policy:
-      rawFeePolicy === undefined || rawFeePolicy === null ? null : parseFeePolicy(rawFeePolicy),
+    fee_policy: feePolicy,
   }
   if (swapInfo.fee_policy !== null) {
     swapInfoCache.set(network, { info: swapInfo, fetchedAt: Date.now() })
@@ -3215,7 +3229,8 @@ export async function getSwapFeesBps(
 ): Promise<{ token1FeeBps: bigint; token2FeeBps: bigint }> {
   const swapInfo = await getSwapInfo()
   if (swapInfo.fee_policy === null) {
-    throw new Error(MISSING_FEE_POLICY_ERROR)
+    const parseError = feePolicyParseErrors.get(getNetwork())
+    throw new Error(parseError ?? MISSING_FEE_POLICY_ERROR)
   }
   return swapFeeBps(token1Addr, token2Addr, swapInfo.fee_policy)
 }

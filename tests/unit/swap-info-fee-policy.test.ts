@@ -75,11 +75,18 @@ describe('getSwapInfo fee_policy', () => {
     assert.equal(fetchMock.mock.calls.length, 2)
   })
 
-  it('rejects a malformed fee_policy', async () => {
-    serve(swapInfoBody({ ...FEE_POLICY, swap_fee_bps: '25' }))
-    const { getSwapInfo } = await freshSwapModule()
+  it('serves fee_policy: null for a malformed policy, without caching it', async () => {
+    serve(swapInfoBody({ ...FEE_POLICY, swap_fee_bps: 2.5 }))
+    const { getSwapInfo, getSwapFeesBps } = await freshSwapModule()
 
-    await assertRejects(getSwapInfo(), /Invalid fee_policy/)
+    const info = await getSwapInfo()
+    assert.deepEqual(info, {
+      factory_address: '0x0000000000000000000000000000000000001234',
+      wbtc_address: WBTC,
+      wbtc_handler_address: 'bc1qhandler',
+      fee_policy: null,
+    })
+    await assertRejects(getSwapFeesBps(WBTC, XYZ), /Invalid fee_policy/)
   })
 })
 
