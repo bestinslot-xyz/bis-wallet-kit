@@ -20,7 +20,7 @@ export interface FeePolicy {
 export const MISSING_FEE_POLICY_ERROR =
   'The swap backend did not return a fee_policy from get_swap_info, so it is older than this ' +
   'wallet-kit release and swap fees cannot be computed. Upgrade the swap backend, or pin ' +
-  '@bestinslot/wallet-kit below 0.10.0.'
+  '@bestinslot/wallet-kit below 0.11.0.'
 
 const ADDRESS_RE = /^0x[0-9a-f]{40}$/
 

@@ -18,7 +18,7 @@ function resolve(name: string): string {
   return vectors.addresses[name as AddressName]
 }
 
-describe('swapFeeBps — shared vectors', () => {
+describe('swapFeeBps: shared vectors', () => {
   for (const c of vectors.cases) {
     it(c.name, () => {
       // Same resolution as the backend test: WBTC is always first, then the
