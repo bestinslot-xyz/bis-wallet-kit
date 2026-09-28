@@ -1,3 +1,4 @@
+import type { FeePolicy } from '../lib/fee-policy'
 import type { SwapFees } from '../lib/swap-reporting'
 import type { UniswapInfoProxy } from '../lib/uniswap_ops'
 import type { BISNetwork } from '../types/common'
@@ -12,7 +13,8 @@ import { sha256 } from '@noble/hashes/sha2.js'
 import * as bitcoinjs from 'bitcoinjs-lib'
 import * as ethers from 'ethers'
 import { getBitcoinNetwork } from '../lib/bitcoin'
-import { buildSwapFees } from '../lib/swap-reporting'
+import { MISSING_FEE_POLICY_ERROR, parseFeePolicy, swapFeeBps } from '../lib/fee-policy'
+import { buildSwapFees, quotedPrice } from '../lib/swap-reporting'
 import {
   addLiquidityRequest,
   calculatePairAddress,
@@ -445,26 +447,38 @@ export interface SwapInfo {
   factory_address: string // lowercased
   wbtc_address: string // lowercased
   wbtc_handler_address: string
+  // The backend-owned swap fee policy; null when the backend does not serve one
+  // (swaps then fail with MISSING_FEE_POLICY_ERROR, everything else keeps working).
+  fee_policy: FeePolicy | null
 }
 interface SwapInfoResponse {
   success: boolean
-  result: SwapInfo
+  result: Omit<SwapInfo, 'fee_policy'> & { fee_policy?: unknown }
 }
 // Keyed by network: each network has its own swap backend and therefore its own
 // contract addresses, so one entry per network rather than a single slot.
-const swapInfoCache = new Map<BISNetwork, SwapInfo>()
+const SWAP_INFO_TTL_MS = 60_000
+const swapInfoCache = new Map<BISNetwork, { info: SwapInfo; fetchedAt: number }>()
+// The fee_policy parse error from each network's latest response, so
+// getSwapFeesBps can report it instead of MISSING_FEE_POLICY_ERROR when the
+// backend serves a policy that doesn't parse. Every fetch resets it.
+const feePolicyParseErrors = new Map<BISNetwork, string>()
 /**
- * Fetches the swap's deployment info — the factory, WBTC and WBTC handler addresses — for the current network, by making an API call to the swap backend. The result is fetched once per network and cached.
+ * Fetches the swap's deployment info (the factory, WBTC and WBTC handler addresses, and the
+ * backend-owned swap fee policy) for the current network, by making an API call to the swap
+ * backend. The result is cached per network for 60 seconds; a response without a fee policy (an
+ * older backend) is returned but not cached, so the policy is picked up once the backend is
+ * upgraded.
  *
  * This does not require a connected wallet or a smart wallet.
  *
- * @returns {Promise<SwapInfo>} A promise that resolves to a SwapInfo object containing the factory address, the WBTC token address, and the WBTC handler address.
+ * @returns {Promise<SwapInfo>} A promise that resolves to a SwapInfo object containing the factory address, the WBTC token address, the WBTC handler address, and the fee policy (`null` if the backend does not serve one).
  */
 export async function getSwapInfo(): Promise<SwapInfo> {
   const network = getNetwork()
   const cached = swapInfoCache.get(network)
-  if (cached) {
-    return cached
+  if (cached && Date.now() - cached.fetchedAt < SWAP_INFO_TTL_MS) {
+    return cached.info
   }
 
   // Prepare and execute the API call
@@ -476,13 +490,28 @@ export async function getSwapInfo(): Promise<SwapInfo> {
     method: 'GET',
   })
 
-  // Convert the result to SwapInfo
-  const swapInfo = {
+  // Built field by field, so every new SwapInfo field must be copied here.
+  const rawFeePolicy = result.result.fee_policy
+  let feePolicy: FeePolicy | null = null
+  feePolicyParseErrors.delete(network)
+  if (rawFeePolicy !== undefined && rawFeePolicy !== null) {
+    try {
+      feePolicy = parseFeePolicy(rawFeePolicy)
+    } catch (error) {
+      // A malformed fee_policy fails only swaps, not balances, liquidity, wrap or
+      // unwrap: keep the error text so getSwapFeesBps can report it.
+      feePolicyParseErrors.set(network, error instanceof Error ? error.message : String(error))
+    }
+  }
+  const swapInfo: SwapInfo = {
     factory_address: result.result.factory_address.toLowerCase(),
     wbtc_address: result.result.wbtc_address.toLowerCase(),
     wbtc_handler_address: result.result.wbtc_handler_address,
+    fee_policy: feePolicy,
   }
-  swapInfoCache.set(network, swapInfo)
+  if (swapInfo.fee_policy !== null) {
+    swapInfoCache.set(network, { info: swapInfo, fetchedAt: Date.now() })
+  }
   return swapInfo
 }
 
@@ -597,14 +626,18 @@ async function getBaseBRC20Balance(tokenAddress: string): Promise<BaseBRC20Balan
 export interface SwapBalance {
   token_address: string
   balance: string
-  ticker: string
+  ticker: string // LP tokens: LP-<BASE>-<QUOTE>, QUOTE is 'BTC' for WBTC pairs
   decimals: number
   is_lp: boolean
-  price_sats: number
-  reserve_token_amt?: string
-  token_decimals?: number
-  reserve_btc_amt?: string
-  btc_decimals?: number
+  // Sats per whole token; null when the token has no BTC price (no direct BTC pool
+  // and no one-hop route through a BTC pool holding at least min_btc_exposure_sats).
+  // For an LP token, the price of its base token.
+  price_sats: number | null
+  reserve_token_amt?: string // LP only: the base token's reserve
+  token_decimals?: number // LP only: the base token's decimals
+  reserve_btc_amt?: string // LP only: the quote token's reserve (WBTC for BTC pairs)
+  btc_decimals?: number // LP only: the quote token's decimals (8 for WBTC)
+  quote_token?: string // LP only: the quote token's address (the WBTC address for BTC pairs)
   lp_total_supply?: string
 }
 
@@ -897,19 +930,30 @@ export interface ListPairsRequest {
 }
 export interface PairInfo {
   pair_address: string
-  pair_name: string
+  pair_name: string // token/token pairs: BASE/QUOTE (see price_quote_token)
   token_a_addr: string // compare case-insensitively; the backend does not normalise case
   token_a_symbol: string
   token_b_addr: string // compare case-insensitively; the backend does not normalise case
   token_b_symbol: string
+  // Price of the base token in the quote token's base units per whole base token
+  // (sats per token for WBTC pairs).
   price: number
   price_change_24h: number
   price_change_7d: number
-  volume_24h: bigint
-  volume_7d: bigint
+  // Volume and TVL are in WBTC sats; APR is a percentage. They are null for a
+  // token/token pair whose BTC exposure is below the backend's
+  // min_btc_exposure_sats (show "N/A").
+  volume_24h: bigint | null
+  volume_7d: bigint | null
   lp_fee_tier: number
-  tvl: bigint
-  apr: number
+  tvl: bigint | null
+  apr: number | null
+  // The token `price` is quoted in (compare case-insensitively). WBTC for WBTC
+  // pairs; for token/token pairs the higher-priority fee token, else token_b.
+  price_quote_token: string
+  // BTC reserve backing the pair, in sats: a WBTC pair's own WBTC reserve, or for a
+  // token/token pair the sum of both tokens' direct BTC pools.
+  exposure_sats: bigint
 }
 export interface ListPairsResponse {
   page: number
@@ -921,11 +965,16 @@ interface GetTableDataResponse {
   page: number
   count: number
   total: number
-  data: (Omit<PairInfo, 'volume_24h' | 'volume_7d' | 'tvl'> & {
-    volume_24h: string
-    volume_7d: string
-    tvl: string
+  data: (Omit<PairInfo, 'volume_24h' | 'volume_7d' | 'tvl' | 'exposure_sats'> & {
+    volume_24h: string | null
+    volume_7d: string | null
+    tvl: string | null
+    exposure_sats: string
   })[]
+}
+
+function toBigIntOrNull(value: string | null): bigint | null {
+  return value === null ? null : BigInt(value)
 }
 /**
  * Fetches a paginated, sortable listing of every swap pair and its market data by making an API call to the swap backend.
@@ -933,7 +982,7 @@ interface GetTableDataResponse {
  * This does not require a connected wallet or a smart wallet, so it can be used to populate a market table or pair selector before the user connects.
  *
  * @param params (Optional) An object containing the sort order (defaults to 'tvl_desc'), the page to fetch (defaults to 1), and the number of pairs per page (defaults to 20, max 100).
- * @returns {Promise<ListPairsResponse>} A promise that resolves to an object containing the current page, page size, total number of pairs, and an array of PairInfo objects. Each pair includes both token addresses and symbols, price, 24h/7d price change, 24h/7d volume, LP fee tier, TVL, and APR. The volumes and TVL are returned as strings from the API and converted to bigint in this function.
+ * @returns {Promise<ListPairsResponse>} A promise that resolves to an object containing the current page, page size, total number of pairs, and an array of PairInfo objects. Each pair includes both token addresses and symbols, price and the token it is quoted in, 24h/7d price change, 24h/7d volume, LP fee tier, TVL, APR, and BTC exposure. The volumes, TVL and exposure are returned as strings from the API and converted to bigint in this function; volume, TVL and APR are `null` for a token/token pair below the backend's BTC-exposure threshold.
  */
 export async function listPairs(params: ListPairsRequest = {}): Promise<ListPairsResponse> {
   const orderBy = params.order_by ?? 'tvl_desc'
@@ -965,9 +1014,10 @@ export async function listPairs(params: ListPairsRequest = {}): Promise<ListPair
     total: result.total,
     data: result.data.map(pair => ({
       ...pair,
-      volume_24h: BigInt(pair.volume_24h),
-      volume_7d: BigInt(pair.volume_7d),
-      tvl: BigInt(pair.tvl),
+      volume_24h: toBigIntOrNull(pair.volume_24h),
+      volume_7d: toBigIntOrNull(pair.volume_7d),
+      tvl: toBigIntOrNull(pair.tvl),
+      exposure_sats: BigInt(pair.exposure_sats),
     })),
   }
 }
@@ -983,7 +1033,7 @@ export interface GetPairVolumeResponse {
   token_b_address: string
   token_b_symbol: string
   period_days: number
-  total_volume_wbtc: string
+  total_volume_wbtc: string | null // null for a token/token pair below the BTC-exposure threshold
   total_trades: number
   start_time: string
   end_time: string
@@ -992,7 +1042,7 @@ export interface GetPairVolumeResponse {
  * Fetches the trading volume and number of trades for a specific token pair over a given number of days by making an API call to the swap backend.
  *
  * @param params An object containing the pair address and the number of days to look back for volume data.
- * @returns {Promise<GetPairVolumeResponse>} A promise that resolves to an object containing the pair address, token addresses and symbols, period in days, total volume in WBTC, total number of trades, and the start and end time of the period. The total volume is returned as a string from the API and can be converted to bigint if needed.
+ * @returns {Promise<GetPairVolumeResponse>} A promise that resolves to an object containing the pair address, token addresses and symbols, period in days, total volume in WBTC, total number of trades, and the start and end time of the period. The total volume is returned as a string from the API and can be converted to bigint if needed; it is `null` for a token/token pair below the backend's BTC-exposure threshold.
  */
 export async function getPairVolumeOverDays(
   params: GetPairVolumeRequest
@@ -1032,6 +1082,9 @@ export interface GetKlinesResponse {
   token_a_symbol: string
   token_b_address: string
   token_b_symbol: string
+  // The token OHLC prices are quoted in (compare case-insensitively); null if the
+  // backend could not resolve the pair.
+  price_quote_token: string | null
   interval: string
   klines: Kline[]
 }
@@ -1039,7 +1092,7 @@ export interface GetKlinesResponse {
  * Fetches the historical price and volume data (klines) for a specific token pair and time interval by making an API call to the swap backend.
  *
  * @param params An object containing the pair address, desired time interval for the klines, limit on the number of klines to fetch (max 1000), and optional start and end timestamps to filter the klines.
- * @returns {Promise<GetKlinesResponse>} A promise that resolves to an object containing the pair address, token addresses and symbols, interval, and an array of kline data. Each kline includes open time, close time, open price, high price, low price, close price, volume in WBTC, and number of trades. The volume is returned as a string from the API and can be converted to bigint if needed.
+ * @returns {Promise<GetKlinesResponse>} A promise that resolves to an object containing the pair address, token addresses and symbols, the token prices are quoted in (`price_quote_token`), interval, and an array of kline data. Each kline includes open time, close time, open price, high price, low price, close price, volume in WBTC, and number of trades. For a token/token pair the prices are the raw base/quote ratio (quote-token base units per whole base token), with no BTC conversion. The volume is returned as a string from the API and can be converted to bigint if needed.
  */
 export async function getKlines(params: GetKlinesRequest): Promise<GetKlinesResponse> {
   if (params.limit > 1000) {
@@ -1074,7 +1127,7 @@ export interface GetTvlHistoryRequest {
 export interface TvlPoint {
   timestamp: number // unix ms for the day bucket
   block_height: number // block the reserves were sampled at
-  tvl: string // total value locked, in WBTC sats
+  tvl: string | null // total value locked, in WBTC sats; null on days a token/token pair is below the BTC-exposure threshold
 }
 export interface GetTvlHistoryResponse {
   pair_address: string
@@ -1089,10 +1142,10 @@ export interface GetTvlHistoryResponse {
 /**
  * Fetches a daily Total Value Locked (TVL) series for a token pair from the swap backend, for charting TVL over time.
  *
- * TVL is valued in WBTC sats (2 x the WBTC-side reserve). Points are one per day, oldest first, each carrying the pair's reserves as of that day (carried forward across days with no on-chain change). A pair with no WBTC side reports `wbtc_side: ''` and a zero series.
+ * TVL is valued in WBTC sats: 2 x the WBTC-side reserve for a WBTC pair. A token/token pair (`wbtc_side: ''`) is valued through each token's direct BTC pool as of that day, and its point is `tvl: null` on days its BTC exposure is below the backend's threshold. Points are one per day, oldest first, each carrying the pair's reserves as of that day (carried forward across days with no on-chain change).
  *
  * @param params An object with the pair address and the number of days to look back (max 365; the backend clamps out-of-range values).
- * @returns {Promise<GetTvlHistoryResponse>} A promise that resolves to the pair address, token addresses and symbols, which side is WBTC, the period in days, and the ascending array of `{ timestamp, block_height, tvl }` points. Each `tvl` is a string of sats and can be converted to bigint if needed.
+ * @returns {Promise<GetTvlHistoryResponse>} A promise that resolves to the pair address, token addresses and symbols, which side is WBTC, the period in days, and the ascending array of `{ timestamp, block_height, tvl }` points. Each `tvl` is a string of sats (or `null`, see above) and can be converted to bigint if needed.
  */
 export async function getTvlHistory(params: GetTvlHistoryRequest): Promise<GetTvlHistoryResponse> {
   // Encode the path segment and query so a malformed pair_address/days can't
@@ -2869,8 +2922,6 @@ export async function prepareAndSendAddLiquidityOrder(
   amt2: bigint,
   slippageBPS: bigint
 ): Promise<AddLiquidityOrderResponse> {
-  const swapInfo = await getSwapInfo()
-
   const pubkey = (await getSwapWalletFromDB())?.swapPubkey
   if (!pubkey) {
     throw new Error('Smart wallet not found. Please generate a smart wallet first.')
@@ -2880,12 +2931,6 @@ export async function prepareAndSendAddLiquidityOrder(
   const minamt2 = (amt2 * (10000n - slippageBPS)) / 10000n
   const token1FeeBPS = 0n
   const token2FeeBPS = 0n
-  if (
-    token1Addr.toLowerCase() !== swapInfo.wbtc_address.toLowerCase() &&
-    token2Addr.toLowerCase() !== swapInfo.wbtc_address.toLowerCase()
-  ) {
-    throw new Error('One of the tokens must be BTC')
-  }
 
   const nonce = await getSwapWalletNonce()
 
@@ -3118,8 +3163,6 @@ export async function prepareAndSendRemoveLiquidityOrder(
   amt2: bigint,
   slippageBPS: bigint
 ): Promise<RemoveLiquidityOrderResponse> {
-  const swapInfo = await getSwapInfo()
-
   const pubkey = (await getSwapWalletFromDB())?.swapPubkey
   if (!pubkey) {
     throw new Error('Smart wallet not found. Please generate a smart wallet first.')
@@ -3129,12 +3172,6 @@ export async function prepareAndSendRemoveLiquidityOrder(
   const minamt2 = (amt2 * (10000n - slippageBPS)) / 10000n
   const token1FeeBPS = 0n
   const token2FeeBPS = 0n
-  if (
-    token1Addr.toLowerCase() !== swapInfo.wbtc_address.toLowerCase() &&
-    token2Addr.toLowerCase() !== swapInfo.wbtc_address.toLowerCase()
-  ) {
-    throw new Error('One of the tokens must be BTC')
-  }
 
   const nonce = await getSwapWalletNonce()
 
@@ -3178,26 +3215,25 @@ export async function prepareAndSendRemoveLiquidityOrder(
   })
 }
 
-async function getSwapFeesBps(
+/**
+ * The protocol-fee split the swap backend requires for a swap, from its
+ * `fee_policy` (see `swapFeeBps`). Exported for tests; not part of the public API.
+ *
+ * @param token1Addr The input token address (for both exact-input and exact-output swaps).
+ * @param token2Addr The output token address.
+ * @returns The fee bps on the input (`token1FeeBps`) and output (`token2FeeBps`) legs.
+ * @throws {Error} `MISSING_FEE_POLICY_ERROR` if the backend does not serve a fee policy.
+ */
+export async function getSwapFeesBps(
   token1Addr: string,
   token2Addr: string
 ): Promise<{ token1FeeBps: bigint; token2FeeBps: bigint }> {
   const swapInfo = await getSwapInfo()
-
-  let token1FeeBps = 25n
-  let token2FeeBps = 0n
-  if (
-    token1Addr.toLowerCase() !== swapInfo.wbtc_address.toLowerCase() &&
-    token2Addr.toLowerCase() !== swapInfo.wbtc_address.toLowerCase()
-  ) {
-    throw new Error('One of the tokens must be BTC')
+  if (swapInfo.fee_policy === null) {
+    const parseError = feePolicyParseErrors.get(getNetwork())
+    throw new Error(parseError ?? MISSING_FEE_POLICY_ERROR)
   }
-  if (token1Addr.toLowerCase() !== swapInfo.wbtc_address.toLowerCase()) {
-    token1FeeBps = 0n
-    token2FeeBps = 25n
-  }
-
-  return { token1FeeBps, token2FeeBps }
+  return swapFeeBps(token1Addr, token2Addr, swapInfo.fee_policy)
 }
 
 /**
@@ -3207,7 +3243,7 @@ async function getSwapFeesBps(
  * @param tokenOutAddr The address of the token being swapped to.
  * @param amtIn The amount of the input token to be swapped, represented as a bigint.
  *
- * @returns A promise that resolves to an object containing the expected output amount of the token being swapped to, the quoted price for the swap, the price impact in basis points, and the fee breakdown (see `SwapFees` — `amount_out` is net of the pool fee only, with the rest charged on top).
+ * @returns A promise that resolves to an object containing the expected output amount of the token being swapped to, the quoted price for the swap (sats per whole token when either side is WBTC; for a token/token swap, output-token base units per whole input token, see `quotedPrice`), the price impact in basis points, and the fee breakdown (see `SwapFees`: `amount_out` is net of the pool fee only, with the rest charged on top).
  */
 export async function getSwapResult(
   tokenInAddr: string,
@@ -3269,11 +3305,14 @@ export async function getSwapResult(
 
   const decimalsOfIn = await getTokenDecimals(tokenInAddr)
   const decimalsOfOut = await getTokenDecimals(tokenOutAddr)
-  const quotedPrice =
-    tokenInAddr.toLowerCase() === swapInfo.wbtc_address.toLowerCase()
-      ? (amtIn * 10n ** BigInt(decimalsOfOut) * 100n) / result.amounts[1]!
-      : (result.amounts[1]! * 10n ** BigInt(decimalsOfIn) * 100n) / amtIn
-  const quotedPriceNumber = Number(quotedPrice) / 100.0
+  const quotedPriceNumber = quotedPrice(
+    tokenInAddr,
+    swapInfo.wbtc_address,
+    amtIn,
+    result.amounts[1]!,
+    decimalsOfIn,
+    decimalsOfOut
+  )
 
   return {
     amount_out: result.amounts[1]!,
@@ -3488,7 +3527,7 @@ export async function prepareAndSendSwapOrder(
  * @param tokenOutAddr The address of the token being swapped to.
  * @param amtOut The amount of the output token expected from the swap, represented as a bigint.
  *
- * @returns A promise that resolves to an object containing the expected input amount of the token being swapped from, the quoted price for the swap, the price impact in basis points, and the fee breakdown (see `SwapFees` — `amount_in` covers the pool fee only, with the rest charged on top).
+ * @returns A promise that resolves to an object containing the expected input amount of the token being swapped from, the quoted price for the swap (sats per whole token when either side is WBTC; for a token/token swap, output-token base units per whole input token, see `quotedPrice`), the price impact in basis points, and the fee breakdown (see `SwapFees`: `amount_in` covers the pool fee only, with the rest charged on top).
  */
 export async function getSwap2Result(
   tokenInAddr: string,
@@ -3550,12 +3589,14 @@ export async function getSwap2Result(
 
   const decimalsOfIn = await getTokenDecimals(tokenInAddr)
   const decimalsOfOut = await getTokenDecimals(tokenOutAddr)
-  const quotedPrice =
-    tokenInAddr.toLowerCase() === swapInfo.wbtc_address.toLowerCase()
-      ? (result.amounts[0]! * 10n ** BigInt(decimalsOfOut) * 100n) / amtOut
-      : (amtOut * 10n ** BigInt(decimalsOfIn) * 100n) / result.amounts[0]!
-
-  const quotedPriceNumber = Number(quotedPrice) / 100.0
+  const quotedPriceNumber = quotedPrice(
+    tokenInAddr,
+    swapInfo.wbtc_address,
+    result.amounts[0]!,
+    amtOut,
+    decimalsOfIn,
+    decimalsOfOut
+  )
 
   return {
     amount_in: result.amounts[0]!,

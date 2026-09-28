@@ -15,7 +15,7 @@ const status = await swap.getSwapStatus() // { reorg_handler_running, emergency_
 ## Balances and pricing
 
 ```ts
-const balances = await swap.getSwapBalances(ordinalsAddress) // SwapBalance[]
+const balances = await swap.getSwapBalances(ordinalsAddress) // SwapBalance[]; price_sats may be null
 const one = await swap.getSwapBalance(tokenAddress) // bigint
 const decimals = await swap.getTokenDecimals(tokenAddress) // number
 const reserves = await swap.getPairReserves(pairAddress) // PairReserves
@@ -55,9 +55,15 @@ await swap.swapExactOutput(
 Quote before sending with `getSwapExactInputResult` (for `swapExactInput`) and
 `getSwapExactOutputResult` (for `swapExactOutput`).
 
-Swaps and quotes fail fast with a clear `No swap pool with liquidity for …` error when the token
-pair has no pool (e.g. an unsupported token-to-token pair), rather than failing deeper in the swap
-math.
+Any two tokens with a pool between them can be swapped, including token/token pairs with no WBTC
+side (e.g. `ORDI` → `NUTKIN`). Only direct pools are used, there is no routing through WBTC, so
+swaps and quotes fail fast with a clear `No swap pool with liquidity for …` error when the two
+tokens have no pool of their own, rather than failing deeper in the swap math. The miner fee is
+always debited in WBTC, so a token/token trader still needs a little WBTC in the smart wallet.
+
+The quotes' `quoted_price` is sats per whole token when either side is WBTC. For a token/token swap
+it is the output token's **base units** per whole input token (not scaled by the output's decimals:
+1 XYZ in for 2 ABC out, both 18 decimals, quotes `2e18`).
 
 ## Quote fees
 
@@ -88,9 +94,18 @@ const totalOut = quote.amount_out - quote.fees.token_out_fee
 // plus quote.fees.miner_fee_sats, debited in WBTC regardless of which leg it's on
 ```
 
-The protocol fee (currently 25 bps) always sits on whichever leg is WBTC — so it lands in
-`token_in_fee_bps` when you spend WBTC and in `token_out_fee_bps` when you receive it. Read the
-values rather than hard-coding them.
+The protocol fee's rate and placement are set by the swap backend, which serves them as `fee_policy`
+from `getSwapInfo()`; the kit reads them from there and hard-codes neither:
+
+- If either side is a priority token (WBTC first, then any the backend lists), the higher-priority
+  side pays the whole rate. So a WBTC pair charges it on the WBTC leg, in `token_in_fee_bps` when
+  you spend WBTC and in `token_out_fee_bps` when you receive it, and an `ORDI`/`NUTKIN` pair charges
+  it on `ORDI` if the backend ranks `ORDI` higher.
+- Otherwise it is split, with the odd bp on the input leg: at 25 bps, 13 on the input and 12 on the
+  output.
+
+Read the values from the quote rather than hard-coding them. A backend too old to serve `fee_policy`
+makes swaps and swap quotes fail with an error saying so; everything else keeps working.
 
 `miner_fee_sats` is a flat sat amount, not a rate. It can't be folded into a bps figure and stays
 meaningful only as an absolute number; use `satsToBtc`/`satsToUsd` to display it.
@@ -134,7 +149,11 @@ const { referrerPubkey, refReturnBps } = await swap.tryGetSwapReferrerInfo(mySwa
 
 ## Liquidity
 
-One of the two tokens must be WBTC.
+Either token may be WBTC or a BRC-20 token, so token/token pools (e.g. `ORDI`/`NUTKIN`) work too.
+Adding liquidity to a pair that doesn't exist yet creates it; the swap backend rejects a new pair
+unless each side is WBTC or a BRC-20 token. Beyond that, the swap backend decides which new pairs it
+accepts, and rejects a pair it does not allow with its own error message, which the kit passes
+through unchanged. Liquidity orders carry no protocol fee.
 
 ```ts
 await swap.addLiquidity(token1, token2, amount1Desired, amount2Desired, slippageBPS)
@@ -183,6 +202,7 @@ await swap.unwrapBtc(pkscript, amountSats)
 ## Market data
 
 ```ts
+await swap.listPairs({ order_by: 'tvl_desc', page: 1, count: 20 }) // ListPairsResponse
 await swap.getKlines({/* GetKlinesRequest */})
 await swap.getPairVolumeOverDays(/* … */)
 await swap.getTvlHistory(/* GetTvlHistoryRequest — daily TVL series in WBTC sats */)
@@ -190,8 +210,22 @@ await swap.getActivityOfPair(pairAddress, limit, offset)
 await swap.getWalletActivities(pubkey, pairAddress)
 ```
 
+Volume and TVL are in WBTC sats; APR is a percentage. For a **token/token pair** all three are null
+when the pair doesn't have enough BTC behind it: its `exposure_sats` (the BTC in both tokens' own
+BTC pools) must reach the backend's `fee_policy.min_btc_exposure_sats`. Below that they come back as
+`null`: `PairInfo.volume_24h` / `volume_7d` / `tvl` / `apr`, `total_volume_wbtc` from
+`getPairVolumeOverDays`, and each `getTvlHistory` point's `tvl`. Show them as "N/A", don't treat
+`null` as zero. Likewise `SwapBalance.price_sats` is `null` for a token with no BTC price.
+
+Prices are quoted in `price_quote_token` (on `PairInfo` and `GetKlinesResponse`): WBTC for a WBTC
+pair; for a token/token pair, the higher-priority fee token if either side is one, else `token_b`. A
+token/token `pair_name` reads `BASE/QUOTE`, and its price and klines are the raw ratio in
+quote-token base units per whole base token, with no BTC conversion. A token/token LP token's
+`SwapBalance` carries the quote token's reserve and decimals in `reserve_btc_amt` / `btc_decimals`,
+and its address in `quote_token`.
+
 The `Get…Request` / `Get…Response`, `Kline`, `PairReserves`, `SwapBalance`, `PairActivityEntry`, and
-`WalletActivityEntry` types are exported from the same namespace — see the
+`WalletActivityEntry` types are exported from the same namespace, see the
 [generated API reference](./README.md#api-reference) for exact shapes.
 
 ## Reporting helpers
@@ -214,4 +248,5 @@ const usd = swap.satsToUsd(amountSats, btcUsd) // sats → USD
 
 For **TVL of a WBTC pair**: it's `2 ×` the WBTC-side reserve (the other side is worth the same in
 BTC terms), then convert with `satsToBtc` / `satsToUsd` — e.g.
-`swap.satsToUsd(wbtcReserve * 2n, btcUsd)`.
+`swap.satsToUsd(wbtcReserve * 2n, btcUsd)`. A token/token pair has no WBTC reserve: use the `tvl`
+that `listPairs` reports (in sats, or `null`, see [Market data](#market-data)).

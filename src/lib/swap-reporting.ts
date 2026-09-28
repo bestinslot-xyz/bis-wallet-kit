@@ -125,3 +125,39 @@ export function buildSwapFees(
     miner_fee_sats: btcFee,
   }
 }
+
+/**
+ * The `quoted_price` that the swap quote functions report. The price is floored
+ * to hundredths in bigint arithmetic, then converted to a `number`; above
+ * `Number.MAX_SAFE_INTEGER` hundredths (common for token/token quotes) that
+ * conversion rounds to the nearest representable value. Its unit depends on the
+ * direction:
+ *
+ * - WBTC in: sats per whole output token.
+ * - Any other input, WBTC out included: output-token base units per whole input
+ *   token. With WBTC out that is sats per whole input token. For a token/token swap
+ *   the output is **not** scaled by its decimals, so 1 XYZ in for 2 ABC out (18
+ *   decimals) quotes `2e18`.
+ *
+ * @param tokenInAddress The input token address.
+ * @param wbtcAddress The WBTC token address.
+ * @param amountIn The input amount, in input-token base units.
+ * @param amountOut The output amount, in output-token base units.
+ * @param decimalsIn The input token's decimals.
+ * @param decimalsOut The output token's decimals.
+ * @returns The quoted price.
+ */
+export function quotedPrice(
+  tokenInAddress: string,
+  wbtcAddress: string,
+  amountIn: bigint,
+  amountOut: bigint,
+  decimalsIn: number,
+  decimalsOut: number
+): number {
+  const hundredths =
+    tokenInAddress.toLowerCase() === wbtcAddress.toLowerCase()
+      ? (amountIn * 10n ** BigInt(decimalsOut) * 100n) / amountOut
+      : (amountOut * 10n ** BigInt(decimalsIn) * 100n) / amountIn
+  return Number(hundredths) / 100.0
+}

@@ -44,6 +44,14 @@ describe('swap (signet)', () => {
     assert.ok(typeof fee.fee_rate === 'number')
   })
 
+  it('serves the backend fee policy', async () => {
+    const info = await swap.getSwapInfo()
+    assert.ok(info.fee_policy, 'the signet swap backend must serve fee_policy in get_swap_info')
+    assert.equal(info.fee_policy!.priority_tokens[0], info.wbtc_address)
+    assert.ok(Number.isInteger(info.fee_policy!.swap_fee_bps))
+    assert.match(info.fee_policy!.min_btc_exposure_sats, /^\d+$/)
+  })
+
   // ---- Smart-wallet balances ----
 
   it('returns smart-wallet balances for the ordinals address', async () => {

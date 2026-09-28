@@ -65,6 +65,7 @@ export type {
 } from '../core/bis_swap' // Export types related to wallet activities
 export type { AllBalanceDetails } from '../core/helpers' // Export the AllBalanceDetails type from the core helpers module
 export type { BISSwapWalletInfo } from '../core/store' // Export the BISSwapWalletInfo type from the core store module
+export type { FeePolicy } from '../lib/fee-policy' // The backend-owned swap fee policy carried on SwapInfo
 export type { SwapFees } from '../lib/swap-reporting' // The fee breakdown carried on swap quote results
 export { satsToBtc, satsToUsd, swapSide } from '../lib/swap-reporting' // Reporting helpers (buy/sell side, sat→BTC/USD)
 export { calculatePairAddress as getPairAddress } from '../lib/uniswap_ops'
@@ -101,7 +102,11 @@ export async function getActivityOfPair(pairAddress: string, limit?: number, off
 /**
  * Adds liquidity to a specified token pair with the desired amounts and slippage tolerance.
  *
- * One of the two tokens must be WBTC; the order is rejected otherwise.
+ * Either token may be WBTC or a BRC-20 token. Adding to a pair that doesn't exist
+ * yet creates it; the swap backend rejects a new pair unless each side is WBTC or
+ * a BRC-20 token. Beyond that, the swap backend decides which new pairs it
+ * accepts, and rejects a pair it does not allow with its own error message,
+ * which the kit passes through unchanged.
  *
  * @param token1Address - The address of the first token in the pair.
  * @param token2Address - The address of the second token in the pair.
@@ -132,7 +137,7 @@ export async function addLiquidity(
  * Removes liquidity from a specified token pair, burning `liquidity` LP tokens and
  * returning both underlying tokens.
  *
- * One of the two tokens must be WBTC; the order is rejected otherwise.
+ * Works for any existing pair, including token/token pairs with no WBTC side.
  *
  * @param token1Address - The address of the first token in the pair.
  * @param token2Address - The address of the second token in the pair.

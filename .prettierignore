@@ -1,2 +1,5 @@
 pnpm-lock.yaml
 patches/
+# Byte-for-byte copy of SwapSequencer's test/fee_vectors.json; both files must
+# stay identical, and SwapSequencer has no prettier config to match.
+tests/unit/fee_vectors.json
