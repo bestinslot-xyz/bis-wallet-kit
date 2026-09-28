@@ -1,3 +1,4 @@
+import type { FeePolicy } from '../lib/fee-policy'
 import type { SwapFees } from '../lib/swap-reporting'
 import type { UniswapInfoProxy } from '../lib/uniswap_ops'
 import type { BISNetwork } from '../types/common'
@@ -12,6 +13,7 @@ import { sha256 } from '@noble/hashes/sha2.js'
 import * as bitcoinjs from 'bitcoinjs-lib'
 import * as ethers from 'ethers'
 import { getBitcoinNetwork } from '../lib/bitcoin'
+import { MISSING_FEE_POLICY_ERROR, parseFeePolicy, swapFeeBps } from '../lib/fee-policy'
 import { buildSwapFees } from '../lib/swap-reporting'
 import {
   addLiquidityRequest,
@@ -445,20 +447,23 @@ export interface SwapInfo {
   factory_address: string // lowercased
   wbtc_address: string // lowercased
   wbtc_handler_address: string
+  // The backend-owned swap fee policy; null when the backend predates it (swaps
+  // then fail with MISSING_FEE_POLICY_ERROR, everything else keeps working).
+  fee_policy: FeePolicy | null
 }
 interface SwapInfoResponse {
   success: boolean
-  result: SwapInfo
+  result: Omit<SwapInfo, 'fee_policy'> & { fee_policy?: unknown }
 }
 // Keyed by network: each network has its own swap backend and therefore its own
 // contract addresses, so one entry per network rather than a single slot.
 const swapInfoCache = new Map<BISNetwork, SwapInfo>()
 /**
- * Fetches the swap's deployment info — the factory, WBTC and WBTC handler addresses — for the current network, by making an API call to the swap backend. The result is fetched once per network and cached.
+ * Fetches the swap's deployment info — the factory, WBTC and WBTC handler addresses, and the backend-owned swap fee policy — for the current network, by making an API call to the swap backend. The result is fetched once per network and cached; a response without a fee policy (an older backend) is returned but not cached, so the policy is picked up once the backend is upgraded.
  *
  * This does not require a connected wallet or a smart wallet.
  *
- * @returns {Promise<SwapInfo>} A promise that resolves to a SwapInfo object containing the factory address, the WBTC token address, and the WBTC handler address.
+ * @returns {Promise<SwapInfo>} A promise that resolves to a SwapInfo object containing the factory address, the WBTC token address, the WBTC handler address, and the fee policy (`null` if the backend does not serve one).
  */
 export async function getSwapInfo(): Promise<SwapInfo> {
   const network = getNetwork()
@@ -476,13 +481,18 @@ export async function getSwapInfo(): Promise<SwapInfo> {
     method: 'GET',
   })
 
-  // Convert the result to SwapInfo
-  const swapInfo = {
+  // Built field by field, so every new SwapInfo field must be copied here.
+  const rawFeePolicy = result.result.fee_policy
+  const swapInfo: SwapInfo = {
     factory_address: result.result.factory_address.toLowerCase(),
     wbtc_address: result.result.wbtc_address.toLowerCase(),
     wbtc_handler_address: result.result.wbtc_handler_address,
+    fee_policy:
+      rawFeePolicy === undefined || rawFeePolicy === null ? null : parseFeePolicy(rawFeePolicy),
   }
-  swapInfoCache.set(network, swapInfo)
+  if (swapInfo.fee_policy !== null) {
+    swapInfoCache.set(network, swapInfo)
+  }
   return swapInfo
 }
 
@@ -2869,8 +2879,6 @@ export async function prepareAndSendAddLiquidityOrder(
   amt2: bigint,
   slippageBPS: bigint
 ): Promise<AddLiquidityOrderResponse> {
-  const swapInfo = await getSwapInfo()
-
   const pubkey = (await getSwapWalletFromDB())?.swapPubkey
   if (!pubkey) {
     throw new Error('Smart wallet not found. Please generate a smart wallet first.')
@@ -2880,12 +2888,6 @@ export async function prepareAndSendAddLiquidityOrder(
   const minamt2 = (amt2 * (10000n - slippageBPS)) / 10000n
   const token1FeeBPS = 0n
   const token2FeeBPS = 0n
-  if (
-    token1Addr.toLowerCase() !== swapInfo.wbtc_address.toLowerCase() &&
-    token2Addr.toLowerCase() !== swapInfo.wbtc_address.toLowerCase()
-  ) {
-    throw new Error('One of the tokens must be BTC')
-  }
 
   const nonce = await getSwapWalletNonce()
 
@@ -3118,8 +3120,6 @@ export async function prepareAndSendRemoveLiquidityOrder(
   amt2: bigint,
   slippageBPS: bigint
 ): Promise<RemoveLiquidityOrderResponse> {
-  const swapInfo = await getSwapInfo()
-
   const pubkey = (await getSwapWalletFromDB())?.swapPubkey
   if (!pubkey) {
     throw new Error('Smart wallet not found. Please generate a smart wallet first.')
@@ -3129,12 +3129,6 @@ export async function prepareAndSendRemoveLiquidityOrder(
   const minamt2 = (amt2 * (10000n - slippageBPS)) / 10000n
   const token1FeeBPS = 0n
   const token2FeeBPS = 0n
-  if (
-    token1Addr.toLowerCase() !== swapInfo.wbtc_address.toLowerCase() &&
-    token2Addr.toLowerCase() !== swapInfo.wbtc_address.toLowerCase()
-  ) {
-    throw new Error('One of the tokens must be BTC')
-  }
 
   const nonce = await getSwapWalletNonce()
 
@@ -3178,26 +3172,24 @@ export async function prepareAndSendRemoveLiquidityOrder(
   })
 }
 
-async function getSwapFeesBps(
+/**
+ * The protocol-fee split the swap backend requires for a swap, from its
+ * `fee_policy` (see `swapFeeBps`). Exported for tests; not part of the public API.
+ *
+ * @param token1Addr The input token address (for both exact-input and exact-output swaps).
+ * @param token2Addr The output token address.
+ * @returns The fee bps on the input (`token1FeeBps`) and output (`token2FeeBps`) legs.
+ * @throws {Error} `MISSING_FEE_POLICY_ERROR` if the backend does not serve a fee policy.
+ */
+export async function getSwapFeesBps(
   token1Addr: string,
   token2Addr: string
 ): Promise<{ token1FeeBps: bigint; token2FeeBps: bigint }> {
   const swapInfo = await getSwapInfo()
-
-  let token1FeeBps = 25n
-  let token2FeeBps = 0n
-  if (
-    token1Addr.toLowerCase() !== swapInfo.wbtc_address.toLowerCase() &&
-    token2Addr.toLowerCase() !== swapInfo.wbtc_address.toLowerCase()
-  ) {
-    throw new Error('One of the tokens must be BTC')
+  if (swapInfo.fee_policy === null) {
+    throw new Error(MISSING_FEE_POLICY_ERROR)
   }
-  if (token1Addr.toLowerCase() !== swapInfo.wbtc_address.toLowerCase()) {
-    token1FeeBps = 0n
-    token2FeeBps = 25n
-  }
-
-  return { token1FeeBps, token2FeeBps }
+  return swapFeeBps(token1Addr, token2Addr, swapInfo.fee_policy)
 }
 
 /**
