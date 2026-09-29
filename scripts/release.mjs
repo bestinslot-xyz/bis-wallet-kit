@@ -7,9 +7,12 @@
 //        "chore(release): bump version to X.Y.Z" PR against main.
 //
 //   2. pnpm release:tag        (after that PR is merged)
-//        Cuts the annotated vX.Y.Z tag on the merged main commit and pushes
-//        it. Tagging is deferred to here because PRs squash-merge, so the tag
-//        must point at the real merge commit — not the pre-merge bump commit.
+//        Cuts the annotated vX.Y.Z tag on the merged main commit, pushes it,
+//        and creates the GitHub release with generated notes. Tagging is
+//        deferred to here because PRs squash-merge, so the tag must point at
+//        the real merge commit — not the pre-merge bump commit. Re-running it
+//        after a failed release step reuses the existing tag and creates only
+//        the missing release.
 //
 // Then run `pnpm publish`.
 //
@@ -55,6 +58,16 @@ const run = (cmd, cmdArgs) => {
   execFileSync(cmd, cmdArgs, { stdio: 'inherit' })
 }
 
+// Read-only probe: true when the command exits zero.
+const succeeds = (cmd, cmdArgs) => {
+  try {
+    execFileSync(cmd, cmdArgs, { stdio: 'ignore' })
+    return true
+  } catch {
+    return false
+  }
+}
+
 // The version currently on origin/main is the authoritative base for both flows.
 const baseVersionOnMain = () => {
   const pkg = JSON.parse(capture('git', ['show', 'origin/main:package.json']))
@@ -90,18 +103,35 @@ if (status) die(`Working tree is not clean. Commit or stash first:\n${status}`)
 run('git', ['fetch', 'origin', 'main', '--tags'])
 
 if (tagOnly) {
-  // Step 2: tag the merged commit on origin/main.
+  // Step 2: tag the merged commit on origin/main and create its GitHub release.
   const version = baseVersionOnMain()
   const tag = `v${version}`
-  const existing = capture('git', ['tag', '--list', tag])
-  if (existing) die(`Tag ${tag} already exists locally. Nothing to do.`)
+  const tagExists = Boolean(capture('git', ['tag', '--list', tag]))
+  if (tagExists && succeeds('gh', ['release', 'view', tag])) {
+    die(`Tag ${tag} and its GitHub release already exist. Nothing to do.`)
+  }
 
-  run('git', ['tag', '-a', tag, 'origin/main', '-m', tag])
+  if (tagExists) {
+    console.log(`Tag ${tag} already exists; creating its missing GitHub release.`)
+  } else {
+    run('git', ['tag', '-a', tag, 'origin/main', '-m', tag])
+  }
+  // Pushing an up-to-date tag is a no-op, so this also covers a retry after a failed push.
   run('git', ['push', 'origin', tag])
+  run('gh', [
+    'release',
+    'create',
+    tag,
+    '--verify-tag',
+    '--title',
+    tag,
+    '--generate-notes',
+    ...(version.includes('-') ? ['--prerelease'] : []),
+  ])
   console.log(
     dry
-      ? `\n[dry] Would cut ${tag} on origin/main and push it.`
-      : `\nCut and pushed ${tag} (pointing at origin/main). Now run \`pnpm publish\`.`
+      ? `\n[dry] Would cut ${tag} on origin/main, push it, and create its GitHub release.`
+      : `\nCut and pushed ${tag} (pointing at origin/main) and created its GitHub release. Now run \`pnpm publish\`.`
   )
   process.exit(0)
 }
