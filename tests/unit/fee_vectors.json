@@ -1,5 +1,5 @@
 {
-  "description": "Swap protocol-fee vectors shared by SwapSequencer (pricing.swapFeeBps) and bis-wallet-kit (getSwapFeesBps). token1 = input token. A case's optional token_pair_swap_fee_bps is the rate when neither side is WBTC; absent means equal to swap_fee_bps. Keep both copies identical.",
+  "description": "Swap protocol-fee vectors shared by SwapSequencer (pricing.swapFeeBps) and bis-wallet-kit (getSwapFeesBps). token1 = input token. swap_fee_bps is the rate for pairs with a WBTC side; token_pair_swap_fee_bps is the rate for token/token pairs and, when absent, equals swap_fee_bps. Keep both copies identical.",
   "addresses": {
     "WBTC": "0x1111111111111111111111111111111111111111",
     "ORDI": "0x2222222222222222222222222222222222222222",
