@@ -25,6 +25,7 @@ describe('swapFeeBps: shared vectors', () => {
       // listed priority names in order.
       const policy: FeePolicy = {
         swap_fee_bps: c.swap_fee_bps,
+        token_pair_swap_fee_bps: c.token_pair_swap_fee_bps ?? c.swap_fee_bps,
         priority_tokens: [
           vectors.addresses.WBTC,
           ...c.priority_tokens.filter(n => n !== 'WBTC').map(resolve),
@@ -51,9 +52,39 @@ describe('parseFeePolicy', () => {
     })
     assert.deepEqual(policy, {
       swap_fee_bps: 25,
+      token_pair_swap_fee_bps: 25,
       priority_tokens: [WBTC, ORDI],
       min_btc_exposure_sats: '5000000',
     })
+  })
+
+  it('defaults token_pair_swap_fee_bps to swap_fee_bps when the backend omits it', () => {
+    const policy = parseFeePolicy({
+      swap_fee_bps: 30,
+      priority_tokens: [WBTC],
+      min_btc_exposure_sats: '0',
+    })
+    assert.equal(policy.token_pair_swap_fee_bps, 30)
+  })
+
+  it('reads a served token_pair_swap_fee_bps', () => {
+    const ok = { swap_fee_bps: 25, priority_tokens: [WBTC], min_btc_exposure_sats: '0' }
+    assert.equal(parseFeePolicy({ ...ok, token_pair_swap_fee_bps: 50 }).token_pair_swap_fee_bps, 50)
+    assert.equal(parseFeePolicy({ ...ok, token_pair_swap_fee_bps: 0 }).token_pair_swap_fee_bps, 0)
+    assert.equal(
+      parseFeePolicy({ ...ok, token_pair_swap_fee_bps: 10000 }).token_pair_swap_fee_bps,
+      10000
+    )
+  })
+
+  it('rejects a malformed token_pair_swap_fee_bps', () => {
+    const ok = { swap_fee_bps: 25, priority_tokens: [WBTC], min_btc_exposure_sats: '0' }
+    for (const bad of [-1, 1.5, '50', 10001, null]) {
+      assert.throws(
+        () => parseFeePolicy({ ...ok, token_pair_swap_fee_bps: bad }),
+        /token_pair_swap_fee_bps must be an integer/
+      )
+    }
   })
 
   it('throws the "backend too old" error when fee_policy is missing', () => {
