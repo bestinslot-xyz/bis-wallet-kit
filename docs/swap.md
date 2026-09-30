@@ -201,6 +201,26 @@ const pkscript = bitcoinjs.address.toOutputScript(btcAddress, network).toString(
 await swap.unwrapBtc(pkscript, amountSats)
 ```
 
+### Signature progress
+
+`deposit`, `wrapBtc`, `ensureSwapWallet` and `createSwapWallet` each raise several wallet prompts.
+Pass `{ onSignRequest }` as their last argument to hear about each one just before it opens:
+
+```ts
+await swap.deposit(tokenAddress, amount, feeRate, true, undefined, {
+  onSignRequest: ({ step, total }) => setProgress(`${step}/${total}`),
+})
+```
+
+| Call                                    | Prompts                                                                 | `total`         |
+| --------------------------------------- | ----------------------------------------------------------------------- | --------------- |
+| `ensureSwapWallet` / `createSwapWallet` | 2 when a wallet is created, 0 otherwise                                 | `2`             |
+| `deposit`                               | 3, plus 2 to convert base-layer balance, plus 2 to create the allowance | `3`, `5` or `7` |
+| `wrapBtc`                               | 3, plus 2 for each extra gas-sizing round (at most 11)                  | absent          |
+
+`wrapBtc` learns whether it needs another round only after the user signs, so it reports `step`
+alone. The callback runs synchronously; if it throws, the error is logged and the flow carries on.
+
 ## Market data
 
 ```ts

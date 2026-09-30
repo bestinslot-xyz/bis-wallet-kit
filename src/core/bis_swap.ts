@@ -2,6 +2,7 @@ import type { FeePolicy } from '../lib/fee-policy'
 import type { SwapFees } from '../lib/swap-reporting'
 import type { UniswapInfoProxy } from '../lib/uniswap_ops'
 import type { BISNetwork } from '../types/common'
+import type { SignProgressOptions } from './sign-progress'
 import type { BISSwapWalletInfo } from './store'
 import { Buffer } from 'node:buffer'
 import { Buff } from '@cmdcode/buff-utils'
@@ -47,6 +48,7 @@ import {
   signMessageLocalVerify,
   signMessageLocalVerifyDeterministic,
 } from './providers'
+import { SignProgress } from './sign-progress'
 import { getWalletInfo, readSwapWalletInfo, saveSwapWalletInfo } from './store'
 import { getNetwork } from './store-network'
 
@@ -203,9 +205,12 @@ function blsPubkeyHexFromPrivkey(blsPrivKey: Buffer): string {
  * 3. Computing the corresponding BLS public key.
  * 4. Storing the swap wallet information (Bitcoin address, BLS public key, and BLS private key) in IndexedDB for future use.
  *
+ * @param options `onSignRequest` is called before each of the two wallet prompts, with `total: 2`.
  * @returns {Promise<BISSwapWalletInfo>} Resolves with the generated SwapWalletInfo containing the Bitcoin address, BLS public key, and BLS private key.
  */
-export async function generateAndStoreSwapWallet(): Promise<BISSwapWalletInfo> {
+export async function generateAndStoreSwapWallet(
+  options: SignProgressOptions = {}
+): Promise<BISSwapWalletInfo> {
   // 1. Validate Wallet
   const userOrdinalsWallet = getOrdinalsWallet()
   if (!userOrdinalsWallet?.address) {
@@ -213,8 +218,11 @@ export async function generateAndStoreSwapWallet(): Promise<BISSwapWalletInfo> {
   }
 
   // 2. Generate BLS Privkey via BIP-322 signature
+  const progress = new SignProgress(options, 2)
+  progress.next()
   const signatureHex = await signMessageLocalVerifyDeterministic(getSignatureRequestText())
   await new Promise(resolve => setTimeout(resolve, 500))
+  progress.next()
   const signatureHexTwin = await signMessageLocalVerifyDeterministic(getSignatureRequestText())
   if (signatureHex !== signatureHexTwin) {
     throw new Error('Deterministic signature mismatch. Please try again.')
@@ -347,9 +355,12 @@ export interface EnsureSwapWalletResult {
  *
  * `created` distinguishes the two paths, so a caller can show a first-run disclosure exactly once.
  *
+ * @param options `onSignRequest` is called before each wallet prompt, and only when a wallet is created (two prompts).
  * @returns {Promise<EnsureSwapWalletResult>} Resolves with the swap wallet and whether this call created it.
  */
-export async function ensureSwapWallet(): Promise<EnsureSwapWalletResult> {
+export async function ensureSwapWallet(
+  options: SignProgressOptions = {}
+): Promise<EnsureSwapWalletResult> {
   const userOrdinalsWallet = getOrdinalsWallet()
   if (!userOrdinalsWallet?.address) {
     throw new Error('Ordinals wallet address not found.')
@@ -362,7 +373,7 @@ export async function ensureSwapWallet(): Promise<EnsureSwapWalletResult> {
     return { wallet: existing, created: false }
   }
 
-  return { wallet: await generateAndStoreSwapWallet(), created: true }
+  return { wallet: await generateAndStoreSwapWallet(options), created: true }
 }
 
 /**
@@ -1561,6 +1572,7 @@ export function sumReclaimAmounts(reclaims?: ReclaimInscription[] | null): bigin
  * @param feeRate The fee rate to use for the transactions, represented in sats/vbyte.
  * @param createAllowanceIfNeeded A boolean flag indicating whether to create an allowance for the BRC-2.0 token transfer if the current allowance is insufficient. Defaults to true.
  * @param reclaimInscriptions Optional transfer inscriptions to reclaim toward the base-layer sufficiency check, each with `inscriptionId` and `amount` (bigint, 18 decimals).
+ * @param options `onSignRequest` is called before each wallet prompt, with `total` set: 3, plus 2 when base-layer balance is converted, plus 2 when an allowance is created.
  *
  * @returns {Promise<string[]>} A promise that resolves to an array of transaction IDs (txids) for the transactions involved in the deposit order, including the commit transaction, reveal transaction, and send-to-opreturn transaction.
  */
@@ -1569,15 +1581,14 @@ export async function createAndBroadcastDepositOrder(
   tokenAmount: bigint,
   feeRate: number,
   createAllowanceIfNeeded: boolean = true,
-  reclaimInscriptions?: ReclaimInscription[]
+  reclaimInscriptions?: ReclaimInscription[],
+  options: SignProgressOptions = {}
 ): Promise<string[]> {
   // Get connected wallet
   const walletInfo = getWalletInfo()
 
   if (!walletInfo || !walletInfo.wallets) throw new Error('Wallets not found')
 
-  // Sign function
-  const signFn = getSignFn(walletInfo.provider)
   const network = getBitcoinNetwork()
   const userPaymentWallet = getPaymentWallet()
   const userOrdinalsWallet = getOrdinalsWallet()
@@ -1626,6 +1637,14 @@ export async function createAndBroadcastDepositOrder(
     needsAllowance = true
   }
 
+  // Wallet prompts: the BIP-322 message and the deposit's inscribe + send, then an inscribe + send
+  // for each of the base-layer conversion and the allowance when they are needed.
+  const progress = new SignProgress(
+    options,
+    3 + (useBaseAvailableBalanceAmount > 0n ? 2 : 0) + (needsAllowance ? 2 : 0)
+  )
+  const signFn = progress.wrap(getSignFn(walletInfo.provider))
+
   const l1ContractAddress = getSwapContractAddress()
   const allowanceCalldata = `0x095ea7b3000000000000000000000000${l1ContractAddress.slice(2).toLowerCase()}ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff`
   const allowanceCalldataCompressed = await compressSmartContractData(allowanceCalldata)
@@ -1646,6 +1665,7 @@ export async function createAndBroadcastDepositOrder(
     throw new Error('Smart wallet not found. Please generate a smart wallet first.')
   }
 
+  progress.next()
   const bip322Signature = await getDepositBIP322Signature({
     btc_address: ordinalsAddress,
     bls_pubkey: swapPubKey,
@@ -2457,12 +2477,14 @@ async function estimateGasWrapOrder(
  *
  * @param btcAmount The amount of BTC to wrap, represented as a bigint in satoshis.
  * @param feeRate The fee rate to use for the transactions, represented in sats/vbyte.
+ * @param options `onSignRequest` is called before each wallet prompt, without `total`: each gas-sizing round adds two prompts, and whether another round is needed is known only after signing.
  *
  * @returns A promise that resolves to an array of transaction IDs related to the wrap order, including the commit transaction, reveal transaction, and the transaction for sending the inscription to OP_RETURN.
  */
 export async function createAndBroadcastWrapOrder(
   btcAmount: bigint,
-  feeRate: number
+  feeRate: number,
+  options: SignProgressOptions = {}
 ): Promise<string[]> {
   const swapInfo = await getSwapInfo()
   // Get connected wallet
@@ -2470,8 +2492,8 @@ export async function createAndBroadcastWrapOrder(
 
   if (!walletInfo || !walletInfo.wallets) throw new Error('Wallets not found')
 
-  // Sign function
-  const signFn = getSignFn(walletInfo.provider)
+  const progress = new SignProgress(options)
+  const signFn = progress.wrap(getSignFn(walletInfo.provider))
   const userPaymentWallet = getPaymentWallet()
   const userOrdinalsWallet = getOrdinalsWallet()
 
@@ -2490,6 +2512,7 @@ export async function createAndBroadcastWrapOrder(
     throw new Error('Smart wallet not found. Please generate a smart wallet first.')
   }
 
+  progress.next()
   const bip322Signature = await getDepositBIP322Signature({
     btc_address: ordinalsAddr,
     bls_pubkey: swapPubkey,
