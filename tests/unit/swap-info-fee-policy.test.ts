@@ -59,7 +59,7 @@ describe('getSwapInfo fee_policy', () => {
       factory_address: '0x0000000000000000000000000000000000001234',
       wbtc_address: WBTC,
       wbtc_handler_address: 'bc1qhandler',
-      fee_policy: FEE_POLICY,
+      fee_policy: { ...FEE_POLICY, token_pair_swap_fee_bps: FEE_POLICY.swap_fee_bps },
       allow_token_token_pairs: false,
     })
     await getSwapInfo()
@@ -181,6 +181,17 @@ describe('getSwapFeesBps', () => {
     assert.deepEqual(await getSwapFeesBps(XYZ, ORDI), { token1FeeBps: 0n, token2FeeBps: 25n })
     assert.deepEqual(await getSwapFeesBps(XYZ, ABC), { token1FeeBps: 13n, token2FeeBps: 12n })
     assert.deepEqual(await getSwapFeesBps(ABC, XYZ), { token1FeeBps: 13n, token2FeeBps: 12n })
+  })
+
+  it('charges WBTC pairs swap_fee_bps and token/token pairs token_pair_swap_fee_bps', async () => {
+    serve(swapInfoBody({ ...FEE_POLICY, token_pair_swap_fee_bps: 50 }))
+    const { getSwapInfo, getSwapFeesBps } = await freshSwapModule()
+
+    assert.equal((await getSwapInfo()).fee_policy?.token_pair_swap_fee_bps, 50)
+    assert.deepEqual(await getSwapFeesBps(WBTC, XYZ), { token1FeeBps: 25n, token2FeeBps: 0n })
+    assert.deepEqual(await getSwapFeesBps(ORDI, WBTC), { token1FeeBps: 0n, token2FeeBps: 25n })
+    assert.deepEqual(await getSwapFeesBps(ORDI, XYZ), { token1FeeBps: 50n, token2FeeBps: 0n })
+    assert.deepEqual(await getSwapFeesBps(XYZ, ABC), { token1FeeBps: 25n, token2FeeBps: 25n })
   })
 
   it('matches addresses case-insensitively', async () => {

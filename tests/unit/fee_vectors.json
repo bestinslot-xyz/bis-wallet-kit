@@ -1,5 +1,5 @@
 {
-  "description": "Swap protocol-fee vectors shared by SwapSequencer (pricing.swapFeeBps) and bis-wallet-kit (getSwapFeesBps). token1 = input token. Keep both copies identical.",
+  "description": "Swap protocol-fee vectors shared by SwapSequencer (pricing.swapFeeBps) and bis-wallet-kit (getSwapFeesBps). token1 = input token. A case's optional token_pair_swap_fee_bps is the rate when neither side is WBTC; absent means equal to swap_fee_bps. Keep both copies identical.",
   "addresses": {
     "WBTC": "0x1111111111111111111111111111111111111111",
     "ORDI": "0x2222222222222222222222222222222222222222",
@@ -22,6 +22,14 @@
     { "name": "12 upper-case addresses still match", "swap_fee_bps": 25, "priority_tokens": ["ORDI"], "token_in": "XYZ_UPPER", "token_out": "ORDI", "expected": { "token1_fee_bps": 0, "token2_fee_bps": 25 } },
     { "name": "13 zero rate", "swap_fee_bps": 0, "priority_tokens": ["WBTC", "ORDI", "NUTKIN"], "token_in": "XYZ", "token_out": "ABC", "expected": { "token1_fee_bps": 0, "token2_fee_bps": 0 } },
     { "name": "14 ORDI not configured as priority", "swap_fee_bps": 25, "priority_tokens": ["WBTC"], "token_in": "ORDI", "token_out": "XYZ", "expected": { "token1_fee_bps": 13, "token2_fee_bps": 12 } },
-    { "name": "15 upper-case non-priority pair splits", "swap_fee_bps": 25, "priority_tokens": ["WBTC"], "token_in": "XYZ_UPPER", "token_out": "ABC", "expected": { "token1_fee_bps": 13, "token2_fee_bps": 12 } }
+    { "name": "15 upper-case non-priority pair splits", "swap_fee_bps": 25, "priority_tokens": ["WBTC"], "token_in": "XYZ_UPPER", "token_out": "ABC", "expected": { "token1_fee_bps": 13, "token2_fee_bps": 12 } },
+    { "name": "16 split rates: WBTC in, token out pays the BTC rate", "swap_fee_bps": 25, "token_pair_swap_fee_bps": 50, "priority_tokens": ["WBTC", "ORDI", "NUTKIN"], "token_in": "WBTC", "token_out": "XYZ", "expected": { "token1_fee_bps": 25, "token2_fee_bps": 0 } },
+    { "name": "17 split rates: token in, WBTC out pays the BTC rate", "swap_fee_bps": 25, "token_pair_swap_fee_bps": 50, "priority_tokens": ["WBTC", "ORDI", "NUTKIN"], "token_in": "XYZ", "token_out": "WBTC", "expected": { "token1_fee_bps": 0, "token2_fee_bps": 25 } },
+    { "name": "18 split rates: ORDI in, WBTC out pays the BTC rate", "swap_fee_bps": 25, "token_pair_swap_fee_bps": 50, "priority_tokens": ["WBTC", "ORDI", "NUTKIN"], "token_in": "ORDI", "token_out": "WBTC", "expected": { "token1_fee_bps": 0, "token2_fee_bps": 25 } },
+    { "name": "19 split rates: ORDI in, token out, priority side pays the token-pair rate", "swap_fee_bps": 25, "token_pair_swap_fee_bps": 50, "priority_tokens": ["WBTC", "ORDI", "NUTKIN"], "token_in": "ORDI", "token_out": "XYZ", "expected": { "token1_fee_bps": 50, "token2_fee_bps": 0 } },
+    { "name": "20 split rates: NUTKIN in, ORDI out (ORDI outranks)", "swap_fee_bps": 25, "token_pair_swap_fee_bps": 50, "priority_tokens": ["WBTC", "ORDI", "NUTKIN"], "token_in": "NUTKIN", "token_out": "ORDI", "expected": { "token1_fee_bps": 0, "token2_fee_bps": 50 } },
+    { "name": "21 split rates: neither priority splits the token-pair rate", "swap_fee_bps": 25, "token_pair_swap_fee_bps": 50, "priority_tokens": ["WBTC", "ORDI", "NUTKIN"], "token_in": "XYZ", "token_out": "ABC", "expected": { "token1_fee_bps": 25, "token2_fee_bps": 25 } },
+    { "name": "22 split rates: odd token-pair rate gives input the odd bp", "swap_fee_bps": 25, "token_pair_swap_fee_bps": 45, "priority_tokens": ["WBTC", "ORDI", "NUTKIN"], "token_in": "XYZ", "token_out": "ABC", "expected": { "token1_fee_bps": 23, "token2_fee_bps": 22 } },
+    { "name": "23 split rates: zero token-pair rate", "swap_fee_bps": 25, "token_pair_swap_fee_bps": 0, "priority_tokens": ["WBTC", "ORDI", "NUTKIN"], "token_in": "XYZ", "token_out": "ABC", "expected": { "token1_fee_bps": 0, "token2_fee_bps": 0 } }
   ]
 }

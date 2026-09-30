@@ -97,6 +97,10 @@ const totalOut = quote.amount_out - quote.fees.token_out_fee
 The protocol fee's rate and placement are set by the swap backend, which serves them as `fee_policy`
 from `getSwapInfo()`; the kit reads them from there and hard-codes neither:
 
+- The rate depends on the pair. A swap where either side is WBTC pays `fee_policy.swap_fee_bps`; a
+  token/token swap (neither side WBTC) pays `fee_policy.token_pair_swap_fee_bps`. A backend that
+  serves no separate token-pair rate charges `swap_fee_bps` on every pair, and the kit fills
+  `token_pair_swap_fee_bps` with that value.
 - If either side is a priority token (WBTC first, then any the backend lists), the higher-priority
   side pays the whole rate. So a WBTC pair charges it on the WBTC leg, in `token_in_fee_bps` when
   you spend WBTC and in `token_out_fee_bps` when you receive it, and an `ORDI`/`NUTKIN` pair charges
