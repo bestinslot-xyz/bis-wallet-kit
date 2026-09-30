@@ -85,6 +85,28 @@ describe('ensureSwapWallet', () => {
     assert.equal(result.wallet.swapPubkey, created.swapPubkey)
   })
 
+  it('reports each of the two prompts just before it is raised', async () => {
+    const seen: { step: number; total?: number; promptsSoFar: number }[] = []
+
+    await ensureSwapWallet({
+      onSignRequest: r => seen.push({ ...r, promptsSoFar: signCount }),
+    })
+
+    assert.deepEqual(seen, [
+      { step: 1, total: 2, promptsSoFar: 0 },
+      { step: 2, total: 2, promptsSoFar: 1 },
+    ])
+  })
+
+  it('reports nothing when the wallet already exists', async () => {
+    await ensureSwapWallet()
+    const seen: unknown[] = []
+
+    await ensureSwapWallet({ onSignRequest: r => seen.push(r) })
+
+    assert.deepEqual(seen, [])
+  })
+
   it('throws when no ordinals wallet is connected', async () => {
     clearWalletInfo()
 

@@ -1,3 +1,4 @@
+import type { SignProgressOptions } from '../core/sign-progress'
 import {
   createAndBroadcastDepositOrder,
   createAndBroadcastWrapOrder,
@@ -64,6 +65,7 @@ export type {
   WalletActivityEntry,
 } from '../core/bis_swap' // Export types related to wallet activities
 export type { AllBalanceDetails } from '../core/helpers' // Export the AllBalanceDetails type from the core helpers module
+export type { SignProgressOptions, SignRequest } from '../core/sign-progress' // Per-prompt progress for multi-signature flows
 export type { BISSwapWalletInfo } from '../core/store' // Export the BISSwapWalletInfo type from the core store module
 export type { FeePolicy } from '../lib/fee-policy' // The backend-owned swap fee policy carried on SwapInfo
 export type { SwapFees } from '../lib/swap-reporting' // The fee breakdown carried on swap quote results
@@ -270,6 +272,7 @@ export async function unwrapBtc(pkscript: string, amount: bigint) {
  * @param feeRate - The fee rate for the deposit operation.
  * @param createAllowanceIfNeeded - Whether to create an allowance if needed.
  * @param reclaimInscriptions - Optional transfer inscriptions to reclaim toward the deposit, each with `inscriptionId` and `amount` (bigint, 18 decimals).
+ * @param options - `onSignRequest` is called before each wallet prompt with `{ step, total }`. `total` is 3, 5 or 7.
  * @returns A promise that resolves to an array of transaction IDs related to the deposit operation.
  */
 export async function deposit(
@@ -277,14 +280,16 @@ export async function deposit(
   amount: bigint,
   feeRate: number,
   createAllowanceIfNeeded: boolean = true,
-  reclaimInscriptions?: { inscriptionId: string; amount: bigint }[]
+  reclaimInscriptions?: { inscriptionId: string; amount: bigint }[],
+  options?: SignProgressOptions
 ): Promise<string[]> {
   return await createAndBroadcastDepositOrder(
     tokenAddress,
     amount,
     feeRate,
     createAllowanceIfNeeded,
-    reclaimInscriptions
+    reclaimInscriptions,
+    options
   )
 }
 
@@ -294,10 +299,15 @@ export async function deposit(
  *
  * @param btcAmount - The amount of BTC to wrap, in sats, specified as a bigint.
  * @param feeRate - The fee rate (sats/vByte) for the wrap transaction.
+ * @param options - `onSignRequest` is called before each wallet prompt with `{ step }` and no `total`: gas-sizing rounds can add prompts, 3 at least and 11 at most.
  * @returns A promise that resolves to an array of transaction IDs related to the wrap operation.
  */
-export async function wrapBtc(btcAmount: bigint, feeRate: number): Promise<string[]> {
-  return await createAndBroadcastWrapOrder(btcAmount, feeRate)
+export async function wrapBtc(
+  btcAmount: bigint,
+  feeRate: number,
+  options?: SignProgressOptions
+): Promise<string[]> {
+  return await createAndBroadcastWrapOrder(btcAmount, feeRate, options)
 }
 
 /**
