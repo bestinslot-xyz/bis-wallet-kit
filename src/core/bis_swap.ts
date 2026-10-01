@@ -2174,6 +2174,11 @@ export async function getMinerFeesOfDepositOrder(
     depositContent
   )
 
+  // Every commit and OP_RETURN send below funds from the payer's cardinal UTXOs, so one
+  // fetch serves them all; each later step sees the earlier spends and change through the
+  // extras.
+  const cardinalUtxos = await fetchCardinalUtxos(payerAddr)
+
   let baseDepositInscriptionId = null
   let baseDepositCommitTxHex = null
   let baseDepositRevealTxHex = null
@@ -2207,7 +2212,8 @@ export async function getMinerFeesOfDepositOrder(
         baseDepositInscriptionDetails,
         reclaimInputs,
         feeRate,
-        null
+        null,
+        cardinalUtxos
       )
     } else {
       baseDepositMintRes = await mintAllCheckFees(
@@ -2215,7 +2221,8 @@ export async function getMinerFeesOfDepositOrder(
         feeRate,
         null,
         null,
-        0
+        0,
+        cardinalUtxos
       )
     }
     baseDepositCommitTxHex = baseDepositMintRes.unsigned_commit_tx_hex
@@ -2252,7 +2259,8 @@ export async function getMinerFeesOfDepositOrder(
         targetWallet,
         1,
         extraOutputs,
-        feeRate
+        feeRate,
+        cardinalUtxos
       )
     } finally {
       clearExtraUtxos()
@@ -2289,7 +2297,8 @@ export async function getMinerFeesOfDepositOrder(
         feeRate,
         null,
         null,
-        0
+        0,
+        cardinalUtxos
       )
       allowanceCommitTxHex = allowanceMintRes.unsigned_commit_tx_hex
       allowanceRevealTxHex = allowanceMintRes.signed_reveal_tx_hex
@@ -2327,7 +2336,8 @@ export async function getMinerFeesOfDepositOrder(
         targetWallet,
         1,
         extraOutputs,
-        feeRate
+        feeRate,
+        cardinalUtxos
       )
     } finally {
       clearExtraUtxos()
@@ -2387,7 +2397,8 @@ export async function getMinerFeesOfDepositOrder(
       feeRate,
       null,
       null,
-      0
+      0,
+      cardinalUtxos
     )
     const depositCommitTxHex = depositMintRes.unsigned_commit_tx_hex
     const depositRevealTxHex = depositMintRes.signed_reveal_tx_hex
@@ -2409,7 +2420,8 @@ export async function getMinerFeesOfDepositOrder(
       targetWallet,
       1,
       [],
-      feeRate
+      feeRate,
+      cardinalUtxos
     )
   } finally {
     clearExtraUtxos()

@@ -1,5 +1,6 @@
 import type { APIOrdinalUtxoInfo, APIUtxoInfo } from '../../src/core/helpers.ts'
 import { Buffer } from 'node:buffer'
+import { Buff } from '@cmdcode/buff-utils'
 import * as bitcoinjs from 'bitcoinjs-lib'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import {
@@ -8,9 +9,15 @@ import {
   getCardinalUtxos,
   getOrdinalUtxos,
   saveExtraUtxos,
+  txHexByIdCache,
 } from '../../src/core/helpers.ts'
-import { getInscriptionDetails } from '../../src/core/mint.ts'
+import {
+  getInscriptionDetails,
+  mintAllCheckFees,
+  mintWithReclaimsCheckFees,
+} from '../../src/core/mint.ts'
 import { wallet } from '../../src/node.ts'
+import { InscriptionDetails } from '../../src/types/inscription.ts'
 import { WalletInfo } from '../../src/types/wallet.ts'
 
 // A dry run registers its simulated commit/reveal txs as extra UTXOs. These tests stub
@@ -196,5 +203,74 @@ describe('getCardinalUtxos with a fetched response', () => {
     first.pop()!.value = 1
 
     expect(await getCardinalUtxos(addr, fetched)).toEqual(backend)
+  })
+})
+
+describe('fee dry runs funded from a fetched cardinal list', () => {
+  const transfer = new InscriptionDetails(
+    Buff.str('text/plain'),
+    null,
+    null,
+    null,
+    null,
+    Buff.str('{"p":"brc-20","op":"transfer","tick":"sats","amt":"1000"}')
+  )
+
+  // Coin selection looks up each spent input's prevout tx; seed the cache so it stays offline.
+  function seedPrevout(utxo: string, value: number) {
+    const [txid, vout] = utxo.split(':')
+    const tx = new bitcoinjs.Transaction()
+    tx.addInput(Buffer.alloc(32), 0)
+    for (let i = 0; i <= Number(vout); i++)
+      tx.addOutput(i === Number(vout) ? script : Buffer.alloc(0), i === Number(vout) ? value : 0)
+    txHexByIdCache[txid!] = tx.toHex()
+  }
+
+  function inputsOf(txHex: string) {
+    return bitcoinjs.Transaction.fromHex(txHex).ins.map(
+      i => `${Buffer.from(i.hash).reverse().toString('hex')}:${i.index}`
+    )
+  }
+
+  // The backend list: unsorted, so a call that sorted the shared list in place would show.
+  const backend = () => [
+    cardinalUtxo(FUNDING_UTXO, 60000),
+    cardinalUtxo(OTHER_CARDINAL_UTXO, 8000),
+    cardinalUtxo(`${'bb'.repeat(32)}:2`, 30000),
+  ]
+
+  it('mintAllCheckFees prices the same commit as with a fresh fetch, without fetching', async () => {
+    for (const u of backend()) seedPrevout(u.utxo, u.value)
+    const calls = stubBackend({ cardinal: backend() })
+    const fetched = await fetchCardinalUtxos(addr)
+
+    const fresh = await mintAllCheckFees(transfer, 5, null, null, 0)
+    const reused = await mintAllCheckFees(transfer, 5, null, null, 0, fetched)
+    const again = await mintAllCheckFees(transfer, 5, null, null, 0, fetched)
+
+    expect(calls).toHaveLength(2)
+    for (const r of [reused, again]) {
+      expect(r.total_fee).toBe(fresh.total_fee)
+      expect(inputsOf(r.unsigned_commit_tx_hex)).toEqual(inputsOf(fresh.unsigned_commit_tx_hex))
+    }
+  })
+
+  it('mintWithReclaimsCheckFees prices the same commit as with a fresh fetch, without fetching', async () => {
+    const reclaims = [
+      { utxo: `${'ab'.repeat(32)}:0`, value: 546, script_type: 'witness_v1_taproot' as const },
+    ]
+    for (const u of [...backend(), ...reclaims]) seedPrevout(u.utxo, u.value)
+    const calls = stubBackend({ cardinal: backend() })
+    const fetched = await fetchCardinalUtxos(addr)
+
+    const fresh = await mintWithReclaimsCheckFees(transfer, reclaims, 5, null)
+    const reused = await mintWithReclaimsCheckFees(transfer, reclaims, 5, null, fetched)
+    const again = await mintWithReclaimsCheckFees(transfer, reclaims, 5, null, fetched)
+
+    expect(calls).toHaveLength(2)
+    for (const r of [reused, again]) {
+      expect(r.total_fee).toBe(fresh.total_fee)
+      expect(inputsOf(r.unsigned_commit_tx_hex)).toEqual(inputsOf(fresh.unsigned_commit_tx_hex))
+    }
   })
 })

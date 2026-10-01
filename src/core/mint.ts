@@ -1520,13 +1520,15 @@ export async function mintWithReclaimsAll(
 /**
  * Estimates the fees for a reclaim mint by building the unsigned reclaim
  * commit tx (Task 1) and a fee-sizing reveal tx offline, without signing or
- * broadcasting. Mirrors mintWithExtraInputInCommitFeeRate.
+ * broadcasting. Mirrors mintWithExtraInputInCommitFeeRate. `fetchedCardinalUtxos`, the
+ * payer's `fetchCardinalUtxos` response, funds the commit in place of a new fetch.
  */
 export async function mintWithReclaimsCheckFees(
   inscriptionDetails: InscriptionDetails,
   reclaimInputs: ReclaimInput[],
   feeRate: number,
-  postage: number | null
+  postage: number | null,
+  fetchedCardinalUtxos?: APIUtxoInfo[]
 ): Promise<{
   unsigned_commit_tx_hex: string
   signed_reveal_tx_hex: string
@@ -1557,7 +1559,7 @@ export async function mintWithReclaimsCheckFees(
     postage = getDustValue(inscriptionWallet)
   }
 
-  const cardinalUtxos = await getCardinalUtxos(payerWallet.addr!)
+  const cardinalUtxos = await getCardinalUtxos(payerWallet.addr!, fetchedCardinalUtxos)
 
   const secret = createSecretToken()
   const commit = await buildReclaimCommitTx(
@@ -3157,6 +3159,7 @@ interface InscribeCheckFeesResult {
  * @param postage - postage amount in satoshis to use for the transactions
  * @param paymentAddr - address to send the payment to (if payment is not null)
  * @param payment - amount to pay (if payment is not null)
+ * @param fetchedCardinalUtxos - the payer's `fetchCardinalUtxos` response to fund the commit from in place of a new fetch
  *
  * @returns an object containing the estimated commit fee, reveal fee, total fee, unsigned commit transaction hex, signed reveal transaction hex, inscription ID, and postage used
  */
@@ -3165,7 +3168,8 @@ export async function mintAllCheckFees(
   feeRate: number,
   postage: number | null,
   paymentAddr: string | null,
-  payment: number | null
+  payment: number | null,
+  fetchedCardinalUtxos?: APIUtxoInfo[]
 ): Promise<InscribeCheckFeesResult> {
   // Get connected wallet
   const userPaymentWallet = getPaymentWallet()
@@ -3204,7 +3208,8 @@ export async function mintAllCheckFees(
     postage,
     paymentWallet,
     payment,
-    []
+    [],
+    fetchedCardinalUtxos
   )
   const dummyCommitTxid = commitTx.unsigned_commit_tx.getId()
   const revealTx = await buildRevealTx(
