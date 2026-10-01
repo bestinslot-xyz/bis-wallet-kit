@@ -29,7 +29,12 @@ import {
 import { InscriptionDetails } from '../types/inscription'
 import { WalletInfo } from '../types/wallet'
 import { compressSmartContractData } from './brc20'
-import { clearExtraUtxos, saveExtraUtxos, utxoOutputTypeFromOutputScript } from './helpers'
+import {
+  clearExtraUtxos,
+  fetchCardinalUtxos,
+  saveExtraUtxos,
+  utxoOutputTypeFromOutputScript,
+} from './helpers'
 import {
   mintAll,
   mintAllCheckFees,
@@ -2736,6 +2741,10 @@ export async function getMinerFeesOfWrapOrder(
     depositContent
   )
 
+  // The commit and the OP_RETURN send both fund from the payer's cardinal UTXOs, so one
+  // fetch serves both; the send sees the commit's spends and change through the extras.
+  const cardinalUtxos = await fetchCardinalUtxos(userPaymentWallet.address)
+
   let depositFeesTotal = 0
   const depositMintRes = await mintWithExtraInputInCommitFeeRate(
     depositInscriptionDetails,
@@ -2743,7 +2752,8 @@ export async function getMinerFeesOfWrapOrder(
     feeRate,
     null,
     null,
-    0
+    0,
+    cardinalUtxos
   )
   const depositCommitTxHex = depositMintRes.unsigned_commit_tx_hex
   const depositRevealTxHex = depositMintRes.signed_reveal_tx_hex
@@ -2777,7 +2787,8 @@ export async function getMinerFeesOfWrapOrder(
       targetWallet,
       1,
       extraOutputUtxos,
-      feeRate
+      feeRate,
+      cardinalUtxos
     )
   } finally {
     clearExtraUtxos()

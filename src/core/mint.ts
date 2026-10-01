@@ -1,4 +1,4 @@
-import type { APIOrdinalUtxoInfo } from '../core/helpers'
+import type { APIOrdinalUtxoInfo, APIUtxoInfo } from '../core/helpers'
 import type { SignFunction, SignResponse } from '../provider/api'
 import type { PaymentOpts } from '../types/common'
 import type {
@@ -19,6 +19,7 @@ import {
   broadcastTxes,
   clearExtraUtxos,
   getCardinalUtxos,
+  getExtraOrdinalUtxos,
   getOrdinalUtxos,
   getTxhex,
   saveExtraUtxos,
@@ -1156,14 +1157,15 @@ async function buildCommitTx(
   postage: number,
   paymentWallet: WalletInfo | null,
   payment: number | null,
-  forceInUtxos: UtxoInfoWithWallet[]
+  forceInUtxos: UtxoInfoWithWallet[],
+  fetchedCardinalUtxos?: APIUtxoInfo[]
 ): Promise<BuildCommitTxResult> {
   if (payment == null || payment < 0) payment = 0
   const changeWallet = payerWallet
 
   if (!payerWallet.addr) throw new Error('Payer wallet address is not set.')
 
-  const cardinalUtxos = await getCardinalUtxos(payerWallet.addr)
+  const cardinalUtxos = await getCardinalUtxos(payerWallet.addr, fetchedCardinalUtxos)
 
   const seckey = get_seckey(secret)
   const pubkey = get_pubkey(seckey, true)
@@ -2307,7 +2309,7 @@ export async function sendInscriptionAll(
   }
 }
 
-interface InscriptionUTXODetails {
+export interface InscriptionUTXODetails {
   satpoint: string
   value: number
   script_type:
@@ -2325,18 +2327,28 @@ interface InscriptionUTXODetails {
   block_height: number | null
   utxo: string
 }
-async function getInscriptionDetails(
+/**
+ * Locates an inscription's UTXO on `inscriptionAddr`. Searches `ordinalUtxos` when given.
+ * Otherwise an inscription created by the saved extra transactions resolves from them
+ * directly, and any other inscription is looked up in the backend's `ordinal_utxos` list.
+ */
+export async function getInscriptionDetails(
   inscriptionId: string,
   inscriptionAddr: string,
   ordinalUtxos?: APIOrdinalUtxoInfo[]
 ): Promise<InscriptionUTXODetails | null> {
-  let utxos = null
-  if (ordinalUtxos) {
-    utxos = ordinalUtxos
-  } else {
-    utxos = await getOrdinalUtxos(inscriptionAddr)
-  }
+  if (ordinalUtxos) return findInscriptionDetails(inscriptionId, ordinalUtxos)
 
+  return (
+    findInscriptionDetails(inscriptionId, getExtraOrdinalUtxos(inscriptionAddr)) ??
+    findInscriptionDetails(inscriptionId, await getOrdinalUtxos(inscriptionAddr))
+  )
+}
+
+function findInscriptionDetails(
+  inscriptionId: string,
+  utxos: APIOrdinalUtxoInfo[]
+): InscriptionUTXODetails | null {
   for (const utxo of utxos) {
     for (let i = 0; i < utxo.inscription_ids.length; i++) {
       if (utxo.inscription_ids[i]! === inscriptionId) {
@@ -3724,6 +3736,7 @@ interface SendInscriptionFeeRateResult {
  * @param targetPostage - postage amount in satoshis to include in the target output
  * @param extraOutputUtxos - array of extra output UTXOs to include in the transaction, each with its associated wallet information and value
  * @param feeRate - fee rate in sat/vbyte to use for the transaction
+ * @param fetchedCardinalUtxos - the payer's `fetchCardinalUtxos` response to fund from in place of a new fetch
  *
  * @returns an object containing the transaction ID, unsigned transaction hex, and calculated transaction fee
  */
@@ -3733,7 +3746,8 @@ export async function sendInscriptionToOpReturnWithExtraInputsAndExtraOutputFeeR
   targetWallet: WalletInfo,
   targetPostage: number,
   extraOutputUtxos: OutputUtxoInfo[],
-  feeRate: number
+  feeRate: number,
+  fetchedCardinalUtxos?: APIUtxoInfo[]
 ): Promise<SendInscriptionFeeRateResult> {
   // Get connected wallet
   const userPaymentWallet = getPaymentWallet()
@@ -3766,7 +3780,7 @@ export async function sendInscriptionToOpReturnWithExtraInputsAndExtraOutputFeeR
 
   if (!payerWallet.addr) throw new Error('Payer wallet address is not set.')
 
-  const cardinalUtxos = await getCardinalUtxos(payerWallet.addr)
+  const cardinalUtxos = await getCardinalUtxos(payerWallet.addr, fetchedCardinalUtxos)
 
   if (targetPostage <= 0 || targetPostage == null) {
     targetPostage = 1 // 1 sat for inscription
@@ -3936,6 +3950,7 @@ export async function mintWithExtraInputInCommitAll(
  * @param postage - postage amount in satoshis to use for the transactions
  * @param paymentAddr - address to send the payment to (if payment is not null)
  * @param payment - amount to pay (if payment is not null)
+ * @param fetchedCardinalUtxos - the payer's `fetchCardinalUtxos` response to fund the commit from in place of a new fetch
  *
  * @returns an object containing the estimated commit fee, reveal fee, total fee, unsigned commit transaction hex, signed reveal transaction hex, inscription ID, and postage used
  */
@@ -3945,7 +3960,8 @@ export async function mintWithExtraInputInCommitFeeRate(
   feeRate: number,
   postage: number | null,
   paymentAddr: string | null,
-  payment: number | null
+  payment: number | null,
+  fetchedCardinalUtxos?: APIUtxoInfo[]
 ): Promise<InscribeCheckFeesResult> {
   // Get connected wallet
   const userPaymentWallet = getPaymentWallet()
@@ -3984,7 +4000,8 @@ export async function mintWithExtraInputInCommitFeeRate(
     postage,
     paymentWallet,
     payment,
-    extraInputUtxos
+    extraInputUtxos,
+    fetchedCardinalUtxos
   )
   const dummyCommitTxId = commitTx.unsigned_commit_tx.getId()
   const revealTx = await buildRevealTx(
