@@ -280,8 +280,6 @@ function fixCardinalUtxos(utxos: APIUtxoInfo[], addr: string): APIUtxoInfo[] {
 function fixOrdinalUtxos(utxos: APIOrdinalUtxoInfo[], addr: string): APIOrdinalUtxoInfo[] {
   if (currentExtraTxHexes.length === 0) return utxos
 
-  const network = getBitcoinNetwork()
-
   const newUtxos = []
   for (const utxo of utxos) {
     const utxoInner = utxo.utxo
@@ -290,6 +288,25 @@ function fixOrdinalUtxos(utxos: APIOrdinalUtxoInfo[], addr: string): APIOrdinalU
     if (checkIfUtxoUsedInExtras(txid, vout)) continue
     newUtxos.push(utxo)
   }
+  newUtxos.push(...getExtraOrdinalUtxos(addr))
+
+  return newUtxos
+}
+
+/**
+ * Returns the ordinal UTXOs that the saved extra transactions create for `addr`: the
+ * output carrying the saved extra inscription, unless another extra transaction spends it.
+ * These are the entries `getOrdinalUtxos` appends to the backend's list.
+ *
+ * @param addr The address the inscription output must pay to.
+ * @returns The extra ordinal UTXOs for `addr`, empty when no extras are saved.
+ */
+export function getExtraOrdinalUtxos(addr: string): APIOrdinalUtxoInfo[] {
+  if (currentExtraTxHexes.length === 0) return []
+
+  const network = getBitcoinNetwork()
+
+  const newUtxos = []
   for (const txhex of currentExtraTxHexes) {
     const tx = bitcoinjs.Transaction.fromHex(txhex)
     const txid = tx.getId()
@@ -396,12 +413,27 @@ export interface APIUtxoInfo {
  * Fetches the UTXOs associated with a given address from the backend API and applies fixes to include any extra UTXOs that are currently in the process of being used in transactions but not yet confirmed on the blockchain.
  *
  * @param addr The address for which to fetch the UTXOs.
+ * @param fetchedUtxos A response from `fetchCardinalUtxos(addr)` to use in place of a new fetch. Each call works on its own copy, since coin selection sorts and splices the list it is given.
  * @returns A promise that resolves to an array of UTXO information objects.
  */
-export async function getCardinalUtxos(addr: string): Promise<APIUtxoInfo[]> {
+export async function getCardinalUtxos(
+  addr: string,
+  fetchedUtxos?: APIUtxoInfo[]
+): Promise<APIUtxoInfo[]> {
+  const utxos = fetchedUtxos ? structuredClone(fetchedUtxos) : await fetchCardinalUtxos(addr)
+  return fixCardinalUtxos(utxos, addr)
+}
+
+/**
+ * Fetches the backend's cardinal UTXO list for an address as served, without the saved extra UTXOs applied. A dry run that prices several transactions fetches this once and passes it to each `getCardinalUtxos` call.
+ *
+ * @param addr The address for which to fetch the UTXOs.
+ * @returns A promise that resolves to the backend's array of UTXO information objects.
+ */
+export async function fetchCardinalUtxos(addr: string): Promise<APIUtxoInfo[]> {
   const url = getBackendUrl(`cardinal_utxos/${addr}`)
   const json = await fetchWithErrors<{ data: APIUtxoInfo[] }>(url, { method: 'GET' })
-  return fixCardinalUtxos(json.data, addr)
+  return json.data
 }
 
 /**
