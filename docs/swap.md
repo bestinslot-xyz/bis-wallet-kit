@@ -263,10 +263,11 @@ BTC pools) must reach the backend's `fee_policy.min_btc_exposure_sats`. Below th
 `null` as zero. Likewise `SwapBalance.price_sats` is `null` for a token with no BTC price.
 
 `PairInfo.market_cap` is the base token's market cap in WBTC sats: its circulating BRC-20 supply
-(max minus unminted minus burned) at the pair's price. A token/token pair values the base at the
-lower of its own BTC pool and the quote token's BTC pool, each counted only when that pool holds at
-least `min_btc_exposure_sats`. It is `null` for a token with unlimited supply, a token that is not a
-wrapped BRC-20, or one no such pool prices. Sort by it with `market_cap_asc` / `market_cap_desc`.
+(max minus unminted minus burned) at the pair's price. Every valuation needs a BTC pool holding at
+least `min_btc_exposure_sats`: a WBTC pair's own pool, or for a token/token pair the lower of the
+base's own BTC pool and the quote token's BTC pool. It is `null` for a token with unlimited supply,
+a token that is not a wrapped BRC-20, or one no such pool prices. Sort by it with `market_cap_asc` /
+`market_cap_desc`.
 
 Prices are quoted in `price_quote_token` (on `PairInfo` and `GetKlinesResponse`): WBTC for a WBTC
 pair; for a token/token pair, the higher-priority fee token if either side is one, else `token_b`. A
