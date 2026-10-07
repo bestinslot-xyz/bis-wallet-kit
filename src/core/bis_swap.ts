@@ -1264,6 +1264,19 @@ export async function getActivityOfPair(
   return result
 }
 
+/** A kind of wallet activity that `getWalletActivities` can filter on. */
+export type WalletActivityKind =
+  'swap' | 'add_liq' | 'remove_liq' | 'deposit' | 'withdraw' | 'unwrap'
+
+const WALLET_ACTIVITY_KINDS: readonly WalletActivityKind[] = [
+  'swap',
+  'add_liq',
+  'remove_liq',
+  'deposit',
+  'withdraw',
+  'unwrap',
+]
+
 interface GetWalletActivitiesRequest {
   pubkey: string
   /** Pair to filter activities for. When omitted, the backend returns the wallet's activity across every pair and token. */
@@ -1272,6 +1285,11 @@ interface GetWalletActivitiesRequest {
   limit?: number
   /** Number of activities to skip. The backend defaults to 0 when omitted. */
   offset?: number
+  /**
+   * Kinds to keep; `swap` covers both swap1 and swap2, and `withdraw` covers LP withdraws too.
+   * When omitted, every kind is returned. Paging and `has_more` count only the kept rows.
+   */
+  kinds?: readonly WalletActivityKind[]
 }
 
 export interface WalletActivityEntry {
@@ -1331,9 +1349,9 @@ export interface GetWalletActivitiesResponse {
  * Backends that predate pagination ignore both and return the full list without `has_more`,
  * `limit` or `offset`.
  *
- * @param params An object containing the wallet public key, plus an optional pair address to filter by (omit it for every pair and token), optional `limit` (1-200) and `offset` (>= 0).
+ * @param params An object containing the wallet public key, plus an optional pair address to filter by (omit it for every pair and token), optional `limit` (1-200), `offset` (>= 0) and `kinds` to keep.
  * @returns {Promise<GetWalletActivitiesResponse>} A promise that resolves to an object containing the wallet public key, associated Bitcoin address, pair address (null for the all-pairs feed), and a list of swap activities (deposits, swaps, liquidity changes, withdrawals) related to that wallet, on that pair when one is given.
- * @throws If `limit` is not an integer from 1 to 200, or `offset` is not a non-negative integer.
+ * @throws If `limit` is not an integer from 1 to 200, `offset` is not a non-negative integer, or `kinds` is empty or names an unknown kind.
  */
 export async function getWalletActivities(
   params: GetWalletActivitiesRequest
@@ -1349,12 +1367,22 @@ export async function getWalletActivities(
   if (params.offset !== undefined && (!Number.isInteger(params.offset) || params.offset < 0)) {
     throw new Error('Offset must be a non-negative integer')
   }
+  if (params.kinds !== undefined) {
+    if (params.kinds.length === 0) {
+      throw new Error('Kinds must name at least one kind')
+    }
+    const unknown = params.kinds.find(k => !WALLET_ACTIVITY_KINDS.includes(k))
+    if (unknown !== undefined) {
+      throw new Error(`Unknown activity kind: ${unknown}`)
+    }
+  }
 
   // 2. Prepare and execute the API call
   const query = new URLSearchParams()
   if (params.pairAddress !== undefined) query.set('pairAddress', params.pairAddress)
   if (params.limit !== undefined) query.set('limit', String(params.limit))
   if (params.offset !== undefined) query.set('offset', String(params.offset))
+  if (params.kinds !== undefined) query.set('kinds', params.kinds.join(','))
   const url = getSwapBackendUrl(`wallet-activity/${encodeURIComponent(params.pubkey)}?${query}`)
   const result = await fetchWithErrors<GetWalletActivitiesResponse>(url, {
     method: 'GET',
