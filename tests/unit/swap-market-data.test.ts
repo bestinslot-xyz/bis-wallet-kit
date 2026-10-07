@@ -27,6 +27,7 @@ const BTC_ROW = {
   apr: 5.475,
   price_quote_token: WBTC,
   exposure_sats: '10000000',
+  market_cap: '210000000',
 }
 
 const TOKEN_TOKEN_ROW = {
@@ -46,6 +47,7 @@ const TOKEN_TOKEN_ROW = {
   apr: null,
   price_quote_token: ORDI,
   exposure_sats: '0',
+  market_cap: null,
 }
 
 let fetchMock: ReturnType<typeof vi.fn>
@@ -74,7 +76,22 @@ describe('listPairs', () => {
       volume_7d: 2_000_000n,
       tvl: 20_000_000n,
       exposure_sats: 10_000_000n,
+      market_cap: 210_000_000n,
     })
+  })
+
+  it('reads a market_cap missing from an older backend as null', async () => {
+    const row: Partial<typeof BTC_ROW> = { ...BTC_ROW }
+    delete row.market_cap
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      json: async () => ({ page: 1, count: 20, total: 1, data: [row] }),
+    })
+    const { data } = await listPairs()
+
+    assert.equal(data[0].market_cap, null)
   })
 
   it('passes null volume, TVL and APR through for a token/token pair', async () => {
@@ -86,6 +103,7 @@ describe('listPairs', () => {
       volume_7d: null,
       tvl: null,
       exposure_sats: 0n,
+      market_cap: null,
     })
   })
 })

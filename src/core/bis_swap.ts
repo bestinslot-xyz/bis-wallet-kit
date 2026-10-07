@@ -947,6 +947,8 @@ export type ListPairsOrderBy =
   | 'tvl_desc'
   | 'apr_asc'
   | 'apr_desc'
+  | 'market_cap_asc'
+  | 'market_cap_desc'
 export interface ListPairsRequest {
   order_by?: ListPairsOrderBy
   page?: number
@@ -978,6 +980,11 @@ export interface PairInfo {
   // BTC reserve backing the pair, in sats: a WBTC pair's own WBTC reserve, or for a
   // token/token pair the sum of both tokens' direct BTC pools.
   exposure_sats: bigint
+  // Market cap of the base token in WBTC sats: its circulating BRC-20 supply
+  // (max - unminted - burned) at the pair's price. A token/token pair values it
+  // at the lower of the base's own BTC pool and the quote's BTC pool. null when
+  // the supply is unlimited or unknown, or no BTC pool deep enough prices it.
+  market_cap: bigint | null
 }
 export interface ListPairsResponse {
   page: number
@@ -989,11 +996,12 @@ interface GetTableDataResponse {
   page: number
   count: number
   total: number
-  data: (Omit<PairInfo, 'volume_24h' | 'volume_7d' | 'tvl' | 'exposure_sats'> & {
+  data: (Omit<PairInfo, 'volume_24h' | 'volume_7d' | 'tvl' | 'exposure_sats' | 'market_cap'> & {
     volume_24h: string | null
     volume_7d: string | null
     tvl: string | null
     exposure_sats: string
+    market_cap?: string | null // absent from backends that predate it
   })[]
 }
 
@@ -1006,7 +1014,7 @@ function toBigIntOrNull(value: string | null): bigint | null {
  * This does not require a connected wallet or a smart wallet, so it can be used to populate a market table or pair selector before the user connects.
  *
  * @param params (Optional) An object containing the sort order (defaults to 'tvl_desc'), the page to fetch (defaults to 1), and the number of pairs per page (defaults to 20, max 100).
- * @returns {Promise<ListPairsResponse>} A promise that resolves to an object containing the current page, page size, total number of pairs, and an array of PairInfo objects. Each pair includes both token addresses and symbols, price and the token it is quoted in, 24h/7d price change, 24h/7d volume, LP fee tier, TVL, APR, and BTC exposure. The volumes, TVL and exposure are returned as strings from the API and converted to bigint in this function; volume, TVL and APR are `null` for a token/token pair below the backend's BTC-exposure threshold.
+ * @returns {Promise<ListPairsResponse>} A promise that resolves to an object containing the current page, page size, total number of pairs, and an array of PairInfo objects. Each pair includes both token addresses and symbols, price and the token it is quoted in, 24h/7d price change, 24h/7d volume, LP fee tier, TVL, APR, BTC exposure, and the base token's market cap. The volumes, TVL, exposure and market cap are returned as strings from the API and converted to bigint in this function; volume, TVL and APR are `null` for a token/token pair below the backend's BTC-exposure threshold, and market cap is `null` for a token with unlimited or unknown supply or no trusted BTC price.
  */
 export async function listPairs(params: ListPairsRequest = {}): Promise<ListPairsResponse> {
   const orderBy = params.order_by ?? 'tvl_desc'
@@ -1042,6 +1050,7 @@ export async function listPairs(params: ListPairsRequest = {}): Promise<ListPair
       volume_7d: toBigIntOrNull(pair.volume_7d),
       tvl: toBigIntOrNull(pair.tvl),
       exposure_sats: BigInt(pair.exposure_sats),
+      market_cap: toBigIntOrNull(pair.market_cap ?? null),
     })),
   }
 }
