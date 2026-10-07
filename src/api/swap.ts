@@ -1,3 +1,4 @@
+import type { WalletActivityKind } from '../core/bis_swap'
 import type { SignProgressOptions } from '../core/sign-progress'
 import {
   createAndBroadcastDepositOrder,
@@ -63,6 +64,7 @@ export type {
   TokenInfo,
   TvlPoint,
   WalletActivityEntry,
+  WalletActivityKind,
 } from '../core/bis_swap' // Export types related to wallet activities
 export type { AllBalanceDetails } from '../core/helpers' // Export the AllBalanceDetails type from the core helpers module
 export type { SignProgressOptions, SignRequest } from '../core/sign-progress' // Per-prompt progress for multi-signature flows
@@ -80,26 +82,29 @@ export { calculatePairAddress as getPairAddress } from '../lib/uniswap_ops'
  * through them and read `has_more` on the response to know whether another page exists. Backends
  * that predate pagination ignore both parameters, return the full list, and omit `has_more`.
  * The all-pairs feed (no `pairAddress`) needs a backend that serves it; older backends answer
- * it with a 400.
+ * it with a 400. Backends that predate the `kinds` filter ignore it and return every kind.
  *
  * @param pubkey - The public key of the wallet for which to retrieve activities.
  * @param pairAddress - (Optional) The address of the pair to filter activities for. When omitted, the wallet's activity across every pair and token: deposits, swaps, liquidity changes, withdrawals and unwraps.
  * @param limit - (Optional) Page size, an integer from 1 to 200. When omitted, the backend returns every activity.
  * @param offset - (Optional) Number of activities to skip, a non-negative integer. The backend defaults to 0 when omitted.
+ * @param kinds - (Optional) The kinds to keep: `swap` (swap1 and swap2), `add_liq`, `remove_liq`, `deposit`, `withdraw` (LP withdraws included) and `unwrap`. When omitted, every kind. Paging and `has_more` count only the kept rows.
  * @returns A promise that resolves to the wallet's activities, with pagination fields when the backend supports them.
- * @throws If `limit` or `offset` is out of range, before any request is sent.
+ * @throws If `limit` or `offset` is out of range, or `kinds` is empty or names an unknown kind, before any request is sent.
  */
 export async function getWalletActivities(
   pubkey: string,
   pairAddress?: string,
   limit?: number,
-  offset?: number
+  offset?: number,
+  kinds?: readonly WalletActivityKind[]
 ) {
   return await getWalletActivitiesCore({
     pubkey,
     pairAddress,
     limit,
     offset,
+    kinds,
   })
 }
 

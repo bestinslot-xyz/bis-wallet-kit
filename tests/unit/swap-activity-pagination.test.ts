@@ -1,4 +1,5 @@
 import { afterEach, assert, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { WalletActivityKind } from '../../src/api/swap.ts'
 import { getActivityOfPair, getWalletActivities } from '../../src/api/swap.ts'
 
 // The swap backend pages /wallet-activity and /pair-activity with limit/offset and reports
@@ -89,6 +90,25 @@ describe('getWalletActivities', () => {
     assert.equal(url.searchParams.get('offset'), '40')
     assert.notInclude(url.search, 'undefined')
     assert.isNull(result.pair_address)
+  })
+
+  it('sends kinds as one comma-separated parameter, and none when not given', async () => {
+    await getWalletActivities(PUBKEY, undefined, 50, 0, ['deposit', 'withdraw', 'unwrap'])
+    assert.equal(requestedUrl().searchParams.get('kinds'), 'deposit,withdraw,unwrap')
+
+    fetchMock.mockClear()
+    await getWalletActivities(PUBKEY, undefined, 50, 0)
+    assert.isFalse(requestedUrl().searchParams.has('kinds'))
+  })
+
+  it.each([
+    ['empty', [], /Kinds must name at least one kind/],
+    ['unknown', ['swap', 'mint'], /Unknown activity kind: mint/],
+  ])('rejects a kinds list that is %s before fetching', async (_label, kinds, message) => {
+    await expect(
+      getWalletActivities(PUBKEY, undefined, 50, 0, kinds as WalletActivityKind[])
+    ).rejects.toThrow(message)
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it('accepts the 200 limit boundary', async () => {
