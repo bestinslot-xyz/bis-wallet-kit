@@ -73,23 +73,25 @@ export { satsToBtc, satsToUsd, swapSide } from '../lib/swap-reporting' // Report
 export { calculatePairAddress as getPairAddress } from '../lib/uniswap_ops'
 
 /**
- * Retrieves the wallet activities for a given public key and pair address.
+ * Retrieves the wallet activities for a given public key, on one pair or across every pair.
  *
  *
  * Activities come back unconfirmed first, then newest first. Pass `limit` and `offset` to page
  * through them and read `has_more` on the response to know whether another page exists. Backends
  * that predate pagination ignore both parameters, return the full list, and omit `has_more`.
+ * The all-pairs feed (no `pairAddress`) needs a backend that serves it; older backends answer
+ * it with a 400.
  *
  * @param pubkey - The public key of the wallet for which to retrieve activities.
- * @param pairAddress - The address of the pair for which to retrieve activities.
+ * @param pairAddress - (Optional) The address of the pair to filter activities for. When omitted, the wallet's activity across every pair and token: deposits, swaps, liquidity changes, withdrawals and unwraps.
  * @param limit - (Optional) Page size, an integer from 1 to 200. When omitted, the backend returns every activity.
  * @param offset - (Optional) Number of activities to skip, a non-negative integer. The backend defaults to 0 when omitted.
- * @returns A promise that resolves to the wallet's activities for the pair, with pagination fields when the backend supports them.
+ * @returns A promise that resolves to the wallet's activities, with pagination fields when the backend supports them.
  * @throws If `limit` or `offset` is out of range, before any request is sent.
  */
 export async function getWalletActivities(
   pubkey: string,
-  pairAddress: string,
+  pairAddress?: string,
   limit?: number,
   offset?: number
 ) {

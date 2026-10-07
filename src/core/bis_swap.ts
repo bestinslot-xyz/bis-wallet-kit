@@ -1266,7 +1266,8 @@ export async function getActivityOfPair(
 
 interface GetWalletActivitiesRequest {
   pubkey: string
-  pairAddress: string
+  /** Pair to filter activities for. When omitted, the backend returns the wallet's activity across every pair and token. */
+  pairAddress?: string
   /** Page size, 1-200. When omitted, the backend returns every activity. */
   limit?: number
   /** Number of activities to skip. The backend defaults to 0 when omitted. */
@@ -1311,7 +1312,8 @@ export interface WalletActivityEntry {
 export interface GetWalletActivitiesResponse {
   pubkey: string
   btc_address: string
-  pair_address: string
+  /** The queried pair, or null for the all-pairs feed. */
+  pair_address: string | null
   activities: WalletActivityEntry[]
   /** Page size the backend applied, or null when no `limit` was sent. Absent on older backends. */
   limit?: number | null
@@ -1329,8 +1331,8 @@ export interface GetWalletActivitiesResponse {
  * Backends that predate pagination ignore both and return the full list without `has_more`,
  * `limit` or `offset`.
  *
- * @param params An object containing the wallet public key and pair address to query activities for, plus optional `limit` (1-200) and `offset` (>= 0).
- * @returns {Promise<GetWalletActivitiesResponse>} A promise that resolves to an object containing the wallet public key, associated Bitcoin address, pair address, and a list of swap activities (deposits, swaps, liquidity changes, withdrawals) related to that wallet and pair.
+ * @param params An object containing the wallet public key, plus an optional pair address to filter by (omit it for every pair and token), optional `limit` (1-200) and `offset` (>= 0).
+ * @returns {Promise<GetWalletActivitiesResponse>} A promise that resolves to an object containing the wallet public key, associated Bitcoin address, pair address (null for the all-pairs feed), and a list of swap activities (deposits, swaps, liquidity changes, withdrawals) related to that wallet, on that pair when one is given.
  * @throws If `limit` is not an integer from 1 to 200, or `offset` is not a non-negative integer.
  */
 export async function getWalletActivities(
@@ -1349,7 +1351,8 @@ export async function getWalletActivities(
   }
 
   // 2. Prepare and execute the API call
-  const query = new URLSearchParams({ pairAddress: params.pairAddress })
+  const query = new URLSearchParams()
+  if (params.pairAddress !== undefined) query.set('pairAddress', params.pairAddress)
   if (params.limit !== undefined) query.set('limit', String(params.limit))
   if (params.offset !== undefined) query.set('offset', String(params.offset))
   const url = getSwapBackendUrl(`wallet-activity/${encodeURIComponent(params.pubkey)}?${query}`)
