@@ -233,8 +233,12 @@ await swap.getKlines({/* GetKlinesRequest */})
 await swap.getPairVolumeOverDays(/* … */)
 await swap.getTvlHistory(/* GetTvlHistoryRequest — daily TVL series in WBTC sats */)
 await swap.getActivityOfPair(pairAddress, limit, offset)
-await swap.getWalletActivities(pubkey, pairAddress, limit, offset) // limit, offset optional
+await swap.getWalletActivities(pubkey, pairAddress, limit, offset) // pairAddress, limit, offset optional
 ```
+
+`getWalletActivities` without a `pairAddress` (pass `undefined`) returns the wallet's activity
+across every pair and token, with `pair_address: null` on the response. Each row carries its own
+tokens' symbol and decimals.
 
 Both activity endpoints page with `limit` (max 200) and `offset`. `getActivityOfPair` defaults to 20
 and 0. `getWalletActivities` sends each only when given; without `limit` it returns every activity,

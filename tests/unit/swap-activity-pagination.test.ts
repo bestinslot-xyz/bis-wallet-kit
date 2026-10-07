@@ -77,6 +77,20 @@ describe('getWalletActivities', () => {
     assert.isFalse(url.searchParams.has('x'))
   })
 
+  it('omits pairAddress for the all-pairs feed', async () => {
+    body = { ...OLD_BACKEND_BODY, pair_address: null, limit: 20, offset: 40, has_more: true }
+
+    const result = await getWalletActivities(PUBKEY, undefined, 20, 40)
+
+    const url = requestedUrl()
+    assert.equal(url.pathname, `/wallet-activity/${PUBKEY}`)
+    assert.isFalse(url.searchParams.has('pairAddress'))
+    assert.equal(url.searchParams.get('limit'), '20')
+    assert.equal(url.searchParams.get('offset'), '40')
+    assert.notInclude(url.search, 'undefined')
+    assert.isNull(result.pair_address)
+  })
+
   it('accepts the 200 limit boundary', async () => {
     await getWalletActivities(PUBKEY, PAIR, 200)
 
