@@ -201,14 +201,37 @@ class ReserveMap {
   }
 }
 
+// One ledger for the whole module: each request clears it, reads balances and
+// reserves through its proxy, and writes its debits back across awaits. So
+// requests hold it one at a time (see beginSimulation); two that overlap would
+// read each other's debits.
 const BALANCES = new BalanceMap()
 const RESERVES = new ReserveMap()
-function initializeUniswapOps(proxy: UniswapInfoProxy) {
-  if (wbtcAddress === '' || factoryAddr === '') {
-    throw new Error('Uniswap info not set')
+let ledgerTail: Promise<void> = Promise.resolve()
+
+/**
+ * Waits until no other request holds the ledger, then takes it and resets it
+ * to read through `proxy`. Returns the release, which the request calls once
+ * it has finished with the ledger.
+ */
+async function beginSimulation(proxy: UniswapInfoProxy): Promise<() => void> {
+  const previous = ledgerTail
+  let release!: () => void
+  ledgerTail = new Promise<void>(resolve => {
+    release = resolve
+  })
+  await previous
+  try {
+    if (wbtcAddress === '' || factoryAddr === '') {
+      throw new Error('Uniswap info not set')
+    }
+    BALANCES.clear(proxy)
+    RESERVES.clear(proxy)
+  } catch (e) {
+    release()
+    throw e
   }
-  BALANCES.clear(proxy)
-  RESERVES.clear(proxy)
+  return release
 }
 
 function keyFor(tokenA: string, tokenB: string): string {
@@ -701,7 +724,7 @@ export async function addLiquidityRequest(
   pubkey = pubkey.startsWith('0x') ? pubkey.slice(2) : pubkey
   blsSignature = blsSignature.startsWith('0x') ? blsSignature.slice(2) : blsSignature
 
-  initializeUniswapOps(proxy)
+  const release = await beginSimulation(proxy)
 
   try {
     if (
@@ -769,6 +792,8 @@ export async function addLiquidityRequest(
   } catch (e: any) {
     console.error('Error in add_liquidity_request:', e)
     return { success: false, error_message: e.message }
+  } finally {
+    release()
   }
 }
 
@@ -860,7 +885,7 @@ export async function removeLiquidityRequest(
   pubkey = pubkey.startsWith('0x') ? pubkey.slice(2) : pubkey
   blsSignature = blsSignature.startsWith('0x') ? blsSignature.slice(2) : blsSignature
 
-  initializeUniswapOps(proxy)
+  const release = await beginSimulation(proxy)
 
   try {
     if (
@@ -930,6 +955,8 @@ export async function removeLiquidityRequest(
   } catch (e: any) {
     console.error('Error in remove_liquidity_request:', e)
     return { success: false, error_message: e.message }
+  } finally {
+    release()
   }
 }
 
@@ -1017,7 +1044,7 @@ export async function swapRequest(
   pubkey = pubkey.startsWith('0x') ? pubkey.slice(2) : pubkey
   blsSignature = blsSignature.startsWith('0x') ? blsSignature.slice(2) : blsSignature
 
-  initializeUniswapOps(proxy)
+  const release = await beginSimulation(proxy)
 
   try {
     if (
@@ -1113,6 +1140,8 @@ export async function swapRequest(
   } catch (e: any) {
     console.error('Error in swap_request:', e)
     return { success: false, error_message: e.message }
+  } finally {
+    release()
   }
 }
 
@@ -1200,7 +1229,7 @@ export async function swap2Request(
   pubkey = pubkey.startsWith('0x') ? pubkey.slice(2) : pubkey
   blsSignature = blsSignature.startsWith('0x') ? blsSignature.slice(2) : blsSignature
 
-  initializeUniswapOps(proxy)
+  const release = await beginSimulation(proxy)
 
   try {
     if (
@@ -1292,6 +1321,8 @@ export async function swap2Request(
   } catch (e: any) {
     console.error('Error in swap2_request:', e)
     return { success: false, error_message: e.message }
+  } finally {
+    release()
   }
 }
 
@@ -1367,7 +1398,7 @@ export async function withdrawRequest(
   pubkey = pubkey.startsWith('0x') ? pubkey.slice(2) : pubkey
   blsSignature = blsSignature.startsWith('0x') ? blsSignature.slice(2) : blsSignature
 
-  initializeUniswapOps(proxy)
+  const release = await beginSimulation(proxy)
 
   try {
     if (!checkWithdrawSignature(pubkey, nonce, tokenAddr, targetAddr, amt, btcFee, blsSignature)) {
@@ -1393,6 +1424,8 @@ export async function withdrawRequest(
   } catch (e: any) {
     console.error('Error in withdraw_request:', e)
     return { success: false, error_message: e.message }
+  } finally {
+    release()
   }
 }
 
@@ -1467,7 +1500,7 @@ export async function unwrapRequest(
   pubkey = pubkey.startsWith('0x') ? pubkey.slice(2) : pubkey
   blsSignature = blsSignature.startsWith('0x') ? blsSignature.slice(2) : blsSignature
 
-  initializeUniswapOps(proxy)
+  const release = await beginSimulation(proxy)
 
   try {
     if (!checkUnwrapSignature(pubkey, nonce, pkscript, amt, btcFee, blsSignature)) {
@@ -1493,5 +1526,7 @@ export async function unwrapRequest(
   } catch (e: any) {
     console.error('Error in withdraw_request:', e)
     return { success: false, error_message: e.message }
+  } finally {
+    release()
   }
 }
