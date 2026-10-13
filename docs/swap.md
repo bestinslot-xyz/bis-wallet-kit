@@ -261,6 +261,22 @@ for (;;) {
 `has_more`, `limit` and `offset` are optional on both responses. Older backends omit them and return
 the full list, which ends the loop above after one page.
 
+`getRecentActivity` is the market-wide feed: the newest operations across every pair and wallet,
+newest first by op id. It pages by cursor rather than offset, so rows landing at the top never shift
+a page: pass the last row's `id` as `before` for the next older page, and stop when `has_more` is
+not `true`. `limit` is 1-100 (the backend defaults to 15) and `kinds` keeps only `swap`, `add_liq`,
+`remove_liq`, `withdraw` or `unwrap` operations. Each row carries its tokens' symbol and decimals;
+`token_2` is null for a withdraw or unwrap.
+
+```ts
+const first = await swap.getRecentActivity({ limit: 25, kinds: ['swap', 'add_liq', 'remove_liq'] })
+const older = await swap.getRecentActivity({
+  limit: 25,
+  kinds: ['swap', 'add_liq', 'remove_liq'],
+  before: first.activities.at(-1)?.id,
+})
+```
+
 Volume and TVL are in WBTC sats; APR is a percentage. For a **token/token pair** all three are null
 when the pair doesn't have enough BTC behind it: its `exposure_sats` (the BTC in both tokens' own
 BTC pools) must reach the backend's `fee_policy.min_btc_exposure_sats`. Below that they come back as

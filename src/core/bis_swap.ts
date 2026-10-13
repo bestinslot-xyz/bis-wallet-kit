@@ -1264,6 +1264,105 @@ export async function getActivityOfPair(
   return result
 }
 
+/** A kind of operation `getRecentActivity` can filter on; `swap` covers swap1 and swap2. */
+export type RecentActivityKind = 'swap' | 'add_liq' | 'remove_liq' | 'withdraw' | 'unwrap'
+
+const RECENT_ACTIVITY_KINDS: readonly RecentActivityKind[] = [
+  'swap',
+  'add_liq',
+  'remove_liq',
+  'withdraw',
+  'unwrap',
+]
+
+export interface GetRecentActivityRequest {
+  /** Page size, 1-100. The backend defaults to 15. */
+  limit?: number
+  /** Op-id cursor: only operations with a lower id. Pass the last row's `id` to page back. */
+  before?: string
+  /** Kinds to keep. When omitted, every kind is returned. */
+  kinds?: readonly RecentActivityKind[]
+}
+
+export interface RecentActivityToken {
+  address: string
+  symbol: string
+  decimals: number
+}
+
+export interface RecentActivityEntry {
+  id: string
+  op_type: number
+  type: 'add_liq' | 'remove_liq' | 'swap1' | 'swap2' | 'withdraw' | 'unwrap'
+  /** Milliseconds since the epoch, when the operation was placed. */
+  timestamp: number
+  block_height: number | null
+  executed: boolean
+  success: boolean
+  user_address: string | null
+  user_pubkey: string | null
+  /** A swap's input token, a liquidity change's first token, or a withdraw/unwrap's token. */
+  token_1: RecentActivityToken | null
+  /** A swap's output token or a liquidity change's second token; null for withdraw/unwrap. */
+  token_2: RecentActivityToken | null
+  amount1: string | null
+  amount2: string | null
+  liquidity?: string | null
+  target_address?: string
+  target_pkscript?: string
+}
+
+export interface GetRecentActivityResponse {
+  /** Newest first, across every pair. */
+  activities: RecentActivityEntry[]
+  /** Whether older activity exists past this page. Absent on older backends. */
+  has_more?: boolean
+}
+
+/**
+ * Fetches the newest operations across every pair, newest first by op id.
+ *
+ * @param params Optional page size (1-100), op-id cursor and kinds filter.
+ * @returns {Promise<GetRecentActivityResponse>} The page of activities and whether older ones exist.
+ */
+export async function getRecentActivity(
+  params: GetRecentActivityRequest = {}
+): Promise<GetRecentActivityResponse> {
+  if (params.limit !== undefined) {
+    if (params.limit > 100) {
+      throw new Error('Limit cannot exceed 100')
+    }
+    if (!Number.isInteger(params.limit) || params.limit < 1) {
+      throw new Error('Limit must be an integer of at least 1')
+    }
+  }
+  if (params.before !== undefined && !(/^\d+$/.test(params.before) && BigInt(params.before) > 0n)) {
+    throw new Error('Before must be a positive integer id')
+  }
+  if (params.kinds !== undefined) {
+    if (params.kinds.length === 0) {
+      throw new Error('Kinds must name at least one kind')
+    }
+    const unknown = params.kinds.find(k => !RECENT_ACTIVITY_KINDS.includes(k))
+    if (unknown !== undefined) {
+      throw new Error(`Unknown activity kind: ${unknown}`)
+    }
+  }
+
+  const query = new URLSearchParams()
+  if (params.limit !== undefined) query.set('limit', String(params.limit))
+  if (params.before !== undefined) query.set('before', params.before)
+  if (params.kinds !== undefined) query.set('kinds', params.kinds.join(','))
+  const qs = query.toString()
+  const url = getSwapBackendUrl(`recent-activity${qs ? `?${qs}` : ''}`)
+  return await fetchWithErrors<GetRecentActivityResponse>(url, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  })
+}
+
 /** A kind of wallet activity that `getWalletActivities` can filter on. */
 export type WalletActivityKind =
   'swap' | 'add_liq' | 'remove_liq' | 'deposit' | 'withdraw' | 'unwrap'

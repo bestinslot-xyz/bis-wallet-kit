@@ -1,6 +1,6 @@
 import { afterEach, assert, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WalletActivityKind } from '../../src/api/swap.ts'
-import { getActivityOfPair, getWalletActivities } from '../../src/api/swap.ts'
+import { getActivityOfPair, getRecentActivity, getWalletActivities } from '../../src/api/swap.ts'
 
 // The swap backend pages /wallet-activity and /pair-activity with limit/offset and reports
 // has_more. It rejects a malformed limit/offset (including the literal "undefined") with a 400,
@@ -195,5 +195,41 @@ describe('getActivityOfPair', () => {
 
     assert.isFalse(result.has_more)
     assert.equal(result.offset, 20)
+  })
+})
+
+describe('getRecentActivity', () => {
+  it('sends no params for the default page', async () => {
+    body = { activities: [] }
+    await getRecentActivity()
+    const url = requestedUrl()
+    assert.equal(url.pathname, '/recent-activity')
+    assert.equal(url.search, '')
+  })
+
+  it('sends limit, before and kinds when given', async () => {
+    body = { activities: [], has_more: true }
+    const result = await getRecentActivity({
+      limit: 25,
+      before: '1200',
+      kinds: ['swap', 'add_liq'],
+    })
+    const url = requestedUrl()
+    assert.equal(url.searchParams.get('limit'), '25')
+    assert.equal(url.searchParams.get('before'), '1200')
+    assert.equal(url.searchParams.get('kinds'), 'swap,add_liq')
+    assert.isTrue(result.has_more)
+  })
+
+  it.each([
+    ['limit above 100', { limit: 101 }, /Limit cannot exceed 100/],
+    ['zero limit', { limit: 0 }, /Limit must be an integer of at least 1/],
+    ['non-decimal before', { before: '12a' }, /Before must be a positive integer id/],
+    ['zero before', { before: '0' }, /Before must be a positive integer id/],
+    ['empty kinds', { kinds: [] }, /Kinds must name at least one kind/],
+    ['deposit kind', { kinds: ['deposit'] }, /Unknown activity kind: deposit/],
+  ])('rejects %s before fetching', async (_label, opts, message) => {
+    await expect(getRecentActivity(opts as never)).rejects.toThrow(message)
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 })
