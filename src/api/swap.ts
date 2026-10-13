@@ -1,9 +1,10 @@
-import type { WalletActivityKind } from '../core/bis_swap'
+import type { GetRecentActivityRequest, WalletActivityKind } from '../core/bis_swap'
 import type { SignProgressOptions } from '../core/sign-progress'
 import {
   createAndBroadcastDepositOrder,
   createAndBroadcastWrapOrder,
   getActivityOfPair as getActivityOfPairCore,
+  getRecentActivity as getRecentActivityCore,
   getWalletActivities as getWalletActivitiesCore,
   prepareAndSendAddLiquidityOrder,
   prepareAndSendRemoveLiquidityOrder,
@@ -47,6 +48,8 @@ export type {
   GetKlinesResponse,
   GetPairVolumeRequest,
   GetPairVolumeResponse,
+  GetRecentActivityRequest,
+  GetRecentActivityResponse,
   GetSwapStatusResponse,
   GetTvlHistoryRequest,
   GetTvlHistoryResponse,
@@ -59,6 +62,9 @@ export type {
   PairActivityEntry,
   PairInfo,
   PairReserves,
+  RecentActivityEntry,
+  RecentActivityKind,
+  RecentActivityToken,
   SwapBalance,
   SwapInfo,
   TokenInfo,
@@ -121,6 +127,21 @@ export async function getActivityOfPair(pairAddress: string, limit?: number, off
     limit: limit || 20,
     offset: offset || 0,
   })
+}
+
+/**
+ * Retrieves the newest operations across every pair, newest first.
+ *
+ * Page back by passing the last row's `id` as `before`; `has_more` on the response says whether
+ * older operations exist. Backends that predate the parameters ignore them and return the newest
+ * 15 operations without `has_more`.
+ *
+ * @param opts - (Optional) `limit` (an integer from 1 to 100; the backend defaults to 15), `before` (an op-id cursor) and `kinds` (`swap`, `add_liq`, `remove_liq`, `withdraw`, `unwrap`; every kind when omitted).
+ * @returns A promise that resolves to the page of activities.
+ * @throws If `limit` is out of range, `before` is not a positive integer id, or `kinds` is empty or names an unknown kind, before any request is sent.
+ */
+export async function getRecentActivity(opts?: GetRecentActivityRequest) {
+  return await getRecentActivityCore(opts)
 }
 
 /**

@@ -53,6 +53,7 @@ const SHARED_NAMESPACES: Record<string, string[]> = {
     'getPairAddress',
     'getWalletActivities',
     'getActivityOfPair',
+    'getRecentActivity',
     'addLiquidity',
     'removeLiquidity',
     'swapExactInput',
