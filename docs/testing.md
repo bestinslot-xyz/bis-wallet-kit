@@ -98,6 +98,20 @@ These assume the sequencer settles synchronously — after a swap returns `succe
 balance reflects it without waiting for a block. The test wallet must hold enough deposited balance
 to cover the swaps.
 
+### Composite sends (signet)
+
+`tests/signet/brc20-send.test.ts` runs `brc20.sendAsBrc20` and `brc20.sendAsBrc20Prog` from the p2tr
+wallet to the same key's p2wpkh address and waits for the recipient's balances to move. It needs the
+ticker in both the base BRC-20 and the BRC2.0 balance, and runs only with `SIGNET_SEND=1`:
+
+```
+SIGNET_SEND=1
+SIGNET_SEND_TICKER=<ticker>   # default SIGNET_E2E_TICKER
+SIGNET_SEND_TOKEN=0x…         # default SIGNET_E2E_TOKEN, else resolved from the ticker
+SIGNET_SEND_AMOUNT=1          # optional, units per part
+SIGNET_SEND_FEE_RATE=2        # optional
+```
+
 ### End-to-end lifecycle (signet)
 
 `tests/signet/brc20-lifecycle.test.ts` is a single long-running test that walks the full path — mint
