@@ -192,11 +192,11 @@ export async function getBaseBRC20BalanceOfAddress(
   btcAddress: string,
   tokenAddress: string
 ): Promise<BaseBRC20Balance> {
-  const tokenAddressUpperCase = tokenAddress.toUpperCase()
   const url = await getSwapBackendUrl('check_base_brc20_balance')
+  // The backend takes the hex digits in any case but rejects an uppercase "0X" prefix.
   const body = {
     ordinal_address: btcAddress,
-    token_address: tokenAddressUpperCase,
+    token_address: tokenAddress.toLowerCase(),
   }
 
   const result = await fetchWithErrors<{ result: any }>(url, {
