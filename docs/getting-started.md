@@ -83,6 +83,9 @@ The default network is `mainnet`. Switch before making calls:
 wallet.setNetwork('signet') // 'mainnet' | 'testnet' | 'signet'
 ```
 
+Each network talks to Best in Slot's hosted backends by default. To use your own, see
+[Backend endpoints](./wallet-connection.md#backend-endpoints).
+
 ## Next steps
 
 - [Wallet connection](./wallet-connection.md) — sessions, signing, theme, the Node-only local

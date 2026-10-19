@@ -6,8 +6,8 @@ plus helpers for inscriptions, BRC-2.0 programmable tokens, and swaps.
 ## Guides
 
 - [Getting started](./getting-started.md) — install, connect a wallet, read a balance.
-- [Wallet connection](./wallet-connection.md) — the modal, sessions, networks, signing, the local
-  (Node) wallet.
+- [Wallet connection](./wallet-connection.md) — the modal, sessions, networks and backend endpoints,
+  signing, the local (Node) wallet.
 - [Inscriptions](./inscriptions.md) — build and broadcast ordinal inscriptions (`mint`).
 - [BRC-2.0 programmable](./brc20.md) — deposits, withdrawals, and smart-contract calls (`brc20`).
 - [Swap](./swap.md) — liquidity, swaps, and quotes (`swap`).

@@ -1,17 +1,123 @@
+import type { Endpoints } from './store-network'
 import { Buffer } from 'node:buffer'
 import { Verifier } from 'bip322-js'
 import * as bitcoinjs from 'bitcoinjs-lib'
 import * as varuint from 'varuint-bitcoin'
 import { getBitcoinNetwork } from '../lib/bitcoin'
 import { evmEncodeFunctionCall } from './brc20'
-import { getNetwork } from './store-network'
+import { getEndpoints, getNetwork } from './store-network'
 
 export const txHexByIdCache: { [txid: string]: any } = {}
 let currentExtraTxHexes: string[] = []
 let currentExtraInscriptions: string[] | null = null // [inscr_id, satpoint]
 
-function getBackendUrl(path: string) {
-  return `https://ts-proxy.bestinslot.xyz/v3/${getNetwork()}/${path}`
+/**
+ * Sequencer routes served by the `sequencerRead` endpoint: display reads that
+ * tolerate a short lag. Every other sequencer route goes to `sequencer`.
+ */
+const SEQUENCER_READ_ROUTES = new Set([
+  'get_tokens',
+  'get_table_data',
+  'volume',
+  'klines',
+  'tvl',
+  'pair-activity',
+  'recent-activity',
+  'wallet-activity',
+  'get_token_decimals',
+])
+
+/**
+ * Returns the base URL configured for an endpoint on the selected network.
+ *
+ * @param key The endpoint to resolve.
+ * @returns The base URL, without a trailing slash.
+ * @throws {Error} If the selected network has no such endpoint configured.
+ */
+export function getEndpointBase(key: keyof Endpoints): string {
+  const network = getNetwork()
+  const base = getEndpoints(network)[key]
+  if (!base) {
+    throw new Error(`No '${key}' endpoint configured for ${network}; set one with setEndpoints()`)
+  }
+  return base.replace(/\/+$/, '')
+}
+
+/**
+ * Picks the sequencer endpoint for a route: `sequencerRead` for display reads,
+ * `sequencer` for writes and pre-sign reads.
+ *
+ * @param path The route path, optionally with a sub-path and query string.
+ * @returns The endpoint key that serves the route.
+ */
+export function sequencerEndpointFor(path: string): 'sequencerRead' | 'sequencer' {
+  const route = path.split(/[/?]/, 1)[0] ?? ''
+  return SEQUENCER_READ_ROUTES.has(route) ? 'sequencerRead' : 'sequencer'
+}
+
+// `/v1/info` lookups, one per origin. A failed lookup is dropped so the next
+// request retries it.
+const serviceInfoByOrigin = new Map<string, Promise<{ network?: string }>>()
+
+/**
+ * Confirms that a `/v1` service reports the selected network. Fetches
+ * `<origin>/v1/info` once per origin; bases whose path does not start with
+ * `/v1` pass without a lookup.
+ *
+ * @param base The endpoint base URL.
+ * @throws {Error} If the lookup fails or the service serves another network.
+ */
+async function assertServiceNetwork(base: string): Promise<void> {
+  const url = new URL(base)
+  if (!url.pathname.startsWith('/v1')) {
+    return
+  }
+  let info = serviceInfoByOrigin.get(url.origin)
+  if (!info) {
+    info = fetchWithErrors<{ network?: string }>(new URL('/v1/info', url).toString(), {
+      method: 'GET',
+    })
+    serviceInfoByOrigin.set(url.origin, info)
+    info.catch(() => serviceInfoByOrigin.delete(url.origin))
+  }
+  let served: string | undefined
+  try {
+    served = (await info).network
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    throw new Error(`Could not read ${url.origin}/v1/info: ${message}`)
+  }
+  const network = getNetwork()
+  if (served !== network) {
+    throw new Error(
+      `Endpoint ${url.origin} serves '${served}', but the selected network is '${network}'`
+    )
+  }
+}
+
+/**
+ * Builds the full URL for a route on a configured endpoint, after checking that
+ * a `/v1` service serves the selected network.
+ *
+ * @param key The endpoint that serves the route.
+ * @param path The route path, with any query string, relative to the endpoint base.
+ * @returns The full URL.
+ */
+export async function getEndpointUrl(key: keyof Endpoints, path: string): Promise<string> {
+  const base = getEndpointBase(key)
+  await assertServiceNetwork(base)
+  return `${base}/${path}`
+}
+
+/**
+ * Builds the full URL for a swap sequencer route, routed to `sequencerRead` or
+ * `sequencer` by {@link sequencerEndpointFor}.
+ *
+ * @param path The route path, with any query string.
+ * @returns The full URL.
+ */
+export function getSwapBackendUrl(path: string): Promise<string> {
+  return getEndpointUrl(sequencerEndpointFor(path), path)
 }
 
 function createSigningInput(payload: any, header: any) {
@@ -431,7 +537,7 @@ export async function getCardinalUtxos(
  * @returns A promise that resolves to the backend's array of UTXO information objects.
  */
 export async function fetchCardinalUtxos(addr: string): Promise<APIUtxoInfo[]> {
-  const url = getBackendUrl(`cardinal_utxos/${addr}`)
+  const url = await getEndpointUrl('indexer', `cardinal_utxos/${addr}`)
   const json = await fetchWithErrors<{ data: APIUtxoInfo[] }>(url, { method: 'GET' })
   return json.data
 }
@@ -445,7 +551,7 @@ export async function fetchCardinalUtxos(addr: string): Promise<APIUtxoInfo[]> {
  * @returns The total balance of the address in satoshis.
  */
 export async function getCardinalBalance(address: string): Promise<number> {
-  const url = getBackendUrl(`cardinal_utxos/${address}`)
+  const url = await getEndpointUrl('indexer', `cardinal_utxos/${address}`)
   const json = await fetchWithErrors<{ data: APIUtxoInfo[] }>(url, { method: 'GET' })
   const utxos = fixCardinalUtxos(json.data, address)
   let totalBalance = 0
@@ -467,7 +573,7 @@ export interface AllBalanceDetails {
  * @returns A promise that resolves to an object containing the confirmed balance and mempool balance of the address in satoshis.
  */
 export async function getAllBalanceDetails(addr: string): Promise<AllBalanceDetails> {
-  const url = getBackendUrl(`all_balance_details/${addr}`)
+  const url = await getEndpointUrl('indexer', `all_balance_details/${addr}`)
   return fetchWithErrors<AllBalanceDetails>(url, { method: 'GET' })
 }
 
@@ -509,7 +615,7 @@ export interface APIOrdinalUtxoInfo {
  * @returns A promise that resolves to an array of ordinal UTXO information objects.
  */
 export async function getOrdinalUtxos(addr: string): Promise<APIOrdinalUtxoInfo[]> {
-  const url = getBackendUrl(`ordinal_utxos/${addr}`)
+  const url = await getEndpointUrl('indexer', `ordinal_utxos/${addr}`)
   const json = await fetchWithErrors<{ data: APIOrdinalUtxoInfo[] }>(url, { method: 'GET' })
   return fixOrdinalUtxos(json.data, addr)
 }
@@ -522,7 +628,7 @@ export async function getOrdinalUtxos(addr: string): Promise<APIOrdinalUtxoInfo[
  */
 export async function getTxhex(txid: string): Promise<string> {
   if (!txHexByIdCache[txid]) {
-    const url = getBackendUrl(`gettxhex/${txid}`)
+    const url = await getEndpointUrl('indexer', `gettxhex/${txid}`)
     txHexByIdCache[txid] = await fetchWithErrors<string>(url, { method: 'GET' })
   }
 
@@ -536,8 +642,8 @@ export async function getTxhex(txid: string): Promise<string> {
  * @returns A promise that resolves to the validation result returned by the backend API, or null if the validation request fails.
  */
 export async function validateTxes(txHexes: string[]) {
+  const url = await getEndpointUrl('tx', `testmempoolaccept`)
   try {
-    const url = getBackendUrl(`testmempoolaccept`)
     const response1 = await fetch(url, {
       method: 'POST',
       headers: {
@@ -563,8 +669,8 @@ export async function broadcastTxes(txHexes: string[]) {
     throw new Error('Cannot broadcast txes when extra txes are set')
   }
 
+  const url = await getEndpointUrl('tx', `sendrawtransactions`)
   try {
-    const url = getBackendUrl(`sendrawtransactions`)
     const response1 = await fetch(url, {
       method: 'POST',
       headers: {
@@ -592,8 +698,8 @@ export async function verifySignature(
   signatureHex: string,
   address: string
 ): Promise<boolean> {
+  const url = await getEndpointUrl('indexer', `brc20_verify_bip322`)
   try {
-    const url = getBackendUrl(`brc20_verify_bip322`)
     const network = getBitcoinNetwork()
     const response1 = await fetch(url, {
       method: 'POST',
@@ -635,23 +741,6 @@ export function verifySignatureLocal(
     return validity
   } catch {
     throw new Error('Failed to verify signature.')
-  }
-}
-
-/**
- * Fetches the current chain tip (the latest block height) from the backend API. The function sends a request to the backend to retrieve the current chain tip and returns it as a number. If the request fails, it throws an error indicating that the chain tip could not be retrieved.
- *
- * @returns A promise that resolves to the current chain tip (latest block height) as a number, or throws an error if the request fails.
- * @throws An error if the request to fetch the chain tip fails, indicating that the chain tip could not be retrieved.
- */
-export async function getChainTip(): Promise<number> {
-  try {
-    const url = getBackendUrl(`get_chain_tip`)
-    const response1 = await fetch(url)
-    const result = await response1.json()
-    return result
-  } catch {
-    throw new Error('Failed to get chain tip.')
   }
 }
 
@@ -699,23 +788,19 @@ export async function fetchWithErrors<T>(url: string, options: RequestInit): Pro
 }
 
 /**
- * Retrieves the appropriate BRC2.0 public RPC URL based on the current network (signet or mainnet). The function checks the current network using the getNetwork function and returns the corresponding public RPC URL for that network. If the network is not supported, it throws an error indicating that the network is unsupported for the public RPC URL.
+ * Retrieves the BRC2.0 JSON-RPC URL configured as the `rpc` endpoint for the selected network.
  *
- * @returns The public RPC URL corresponding to the current network (signet or mainnet).
+ * @returns The RPC URL.
+ * @throws {Error} If the selected network has no RPC endpoint configured.
  */
-export function getPublicRpcUrl(): string {
-  const network = getNetwork()
-  if (network === 'signet') {
-    return 'https://rpc-signet.brc20.build'
-  } else if (network === 'mainnet') {
-    return 'https://rpc.brc20.build'
-  } else {
-    throw new Error('Unsupported network for public RPC URL')
-  }
+export async function getPublicRpcUrl(): Promise<string> {
+  const base = getEndpointBase('rpc')
+  await assertServiceNetwork(base)
+  return base
 }
 
 /**
- * Executes an eth_call on the appropriate public RPC URL based on the current network (signet or mainnet). The function constructs the JSON-RPC request payload with the provided data and sends it to the public RPC URL for execution. It returns a promise that resolves to the result of the eth_call, or throws an error if the request fails.
+ * Executes an eth_call on the BRC2.0 RPC configured for the selected network. The function constructs the JSON-RPC request payload with the provided data and sends it to the RPC URL for execution. It returns a promise that resolves to the result of the eth_call, or throws an error if the request fails.
  *
  * @param to The address of the contract to call.
  * @param abi The ABI of the contract to call.
@@ -729,7 +814,7 @@ export async function ethCallOnPublicRpc(
   functionName: string,
   params: any
 ): Promise<string> {
-  const url = getPublicRpcUrl()
+  const url = await getPublicRpcUrl()
   const data = evmEncodeFunctionCall(abi, functionName, params)
 
   return fetchWithErrors<{ result: string }>(url, {
@@ -750,21 +835,4 @@ export async function ethCallOnPublicRpc(
       ],
     }),
   }).then(response => response.result)
-}
-
-/**
- * Constructs the appropriate backend URL for a given API path based on the current network (signet or mainnet). The function checks the current network using the getNetwork function and returns the corresponding URL for the swap backend API. If the network is not supported, it throws an error indicating that the network is unsupported for the orderbook backend URL.
- *
- * @param path The specific API path to append to the base URL for the swap backend.
- * @returns The full URL for the swap backend API corresponding to the current network and the provided path.
- */
-export function getSwapBackendUrl(path: string): string {
-  const network = getNetwork()
-  if (network === 'signet') {
-    return `https://sas-proxy.bestinslot.xyz/${path}`
-  } else if (network === 'mainnet') {
-    return `https://sa-proxy.bestinslot.xyz/${path}`
-  } else {
-    throw new Error('Unsupported network for orderbook backend URL')
-  }
 }

@@ -7,11 +7,13 @@ import type { WalletInfo } from '../types/wallet'
 export {
   getAllBalanceDetails,
   getCardinalBalance,
+  getEndpoints,
   getOrdinalsWallet,
   getPaymentWallet,
   getSession,
   sendBTC,
   sendInscription,
+  setEndpoints,
   setNetwork,
   signMessage,
   signMessageLocalVerify,
@@ -19,7 +21,7 @@ export {
   subscribeToAccountChanges,
   WalletAccountChangedError,
 } from '../core/bis' // Export all wallet-related functions from the core BIS module
-export type { AccountChangeEvent } from '../core/bis'
+export type { AccountChangeEvent, Endpoints, EndpointsConfig } from '../core/bis'
 
 // Re-export wallet-related types
 export type { WalletInfo }

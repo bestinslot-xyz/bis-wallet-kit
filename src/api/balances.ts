@@ -193,7 +193,7 @@ export async function getBaseBRC20BalanceOfAddress(
   tokenAddress: string
 ): Promise<BaseBRC20Balance> {
   const tokenAddressUpperCase = tokenAddress.toUpperCase()
-  const url = getSwapBackendUrl('check_base_brc20_balance')
+  const url = await getSwapBackendUrl('check_base_brc20_balance')
   const body = {
     ordinal_address: btcAddress,
     token_address: tokenAddressUpperCase,
@@ -227,7 +227,7 @@ export async function getBRC20ProgBalanceOfAddress(
   bitcoinAddress: string,
   tokenAddress: string
 ): Promise<bigint> {
-  const url = getSwapBackendUrl('check_brc20_balance')
+  const url = await getSwapBackendUrl('check_brc20_balance')
   const body = {
     ordinal_address: bitcoinAddress,
     token_address: tokenAddress,
