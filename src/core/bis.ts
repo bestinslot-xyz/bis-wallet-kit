@@ -22,7 +22,8 @@ export {
 } from './providers'
 export type { AccountChangeEvent } from './providers'
 export { getWalletInfo as getSession } from './store'
-export { getNetwork, setNetwork } from './store-network'
+export { getEndpoints, getNetwork, setEndpoints, setNetwork } from './store-network'
+export type { Endpoints, EndpointsConfig } from './store-network'
 
 /**
  * Sends an inscription to a target wallet with the specified postage, fee rate, and dry run option. The function determines the appropriate method for sending the inscription based on the target wallet's properties and the specified wallet type. It uses the provided signing function to sign the necessary transactions for sending the inscription.

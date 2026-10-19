@@ -101,6 +101,10 @@ const network = wallet.getNetwork()
 // Set BTC network
 wallet.setNetwork('testnet') // defaults to mainnet
 
+// Point a network at your own backends (any of indexer, tx, sequencerRead, sequencer, rpc)
+wallet.setEndpoints({ mainnet: { rpc: 'https://my-brc20-rpc.example' } })
+const endpoints = wallet.getEndpoints() // effective URLs for the selected network
+
 // Theme - defaults to 'system'
 modal.setTheme('dark') // system, dark, light
 ```

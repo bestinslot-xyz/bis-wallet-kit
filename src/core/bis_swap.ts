@@ -32,6 +32,7 @@ import { compressSmartContractData } from './brc20'
 import {
   clearExtraUtxos,
   fetchCardinalUtxos,
+  getSwapBackendUrl,
   saveExtraUtxos,
   utxoOutputTypeFromOutputScript,
 } from './helpers'
@@ -142,17 +143,6 @@ function getSignatureRequestText(): string {
     return SIGNATURE_REQUEST_TEXT_MAINNET
   } else {
     throw new Error('Unsupported network for swap signature request text')
-  }
-}
-
-function getSwapBackendUrl(path: string): string {
-  const network = getNetwork()
-  if (network === 'signet') {
-    return `https://sas-proxy.bestinslot.xyz/${path}`
-  } else if (network === 'mainnet') {
-    return `https://sa-proxy.bestinslot.xyz/${path}`
-  } else {
-    throw new Error('Unsupported network for orderbook backend URL')
   }
 }
 
@@ -408,7 +398,7 @@ export interface GetSwapStatusResponse {
  */
 export async function getSwapStatus(): Promise<GetSwapStatusResponse> {
   // 2. Prepare and execute the API call
-  const url = getSwapBackendUrl('status')
+  const url = await getSwapBackendUrl('status')
 
   // The helper handles the fetch and error checking.
   // We expect the API to return a string or number that can be converted to BigInt.
@@ -439,7 +429,7 @@ export async function getSwapAllowance(tokenAddress: string): Promise<bigint> {
   }
 
   // 2. Prepare and execute the API call
-  const url = getSwapBackendUrl('check_swap_allowance')
+  const url = await getSwapBackendUrl('check_swap_allowance')
   const body = {
     ordinal_address: userOrdinalsWallet.address,
     token_address: tokenAddress,
@@ -505,7 +495,7 @@ export async function getSwapInfo(): Promise<SwapInfo> {
   }
 
   // Prepare and execute the API call
-  const url = getSwapBackendUrl('get_swap_info')
+  const url = await getSwapBackendUrl('get_swap_info')
 
   // The helper handles the fetch and error checking.
   // We expect the API to return a string or number that can be converted to BigInt.
@@ -586,7 +576,7 @@ export async function getBRC20ProgBalance(tokenAddress: string): Promise<bigint>
   }
 
   // 2. Prepare and execute the API call
-  const url = getSwapBackendUrl('check_brc20_balance')
+  const url = await getSwapBackendUrl('check_brc20_balance')
   const body = {
     ordinal_address: userOrdinalsWallet.address,
     token_address: tokenAddress,
@@ -624,7 +614,7 @@ async function getBaseBRC20Balance(tokenAddress: string): Promise<BaseBRC20Balan
   }
 
   // 2. Prepare and execute the API call
-  const url = getSwapBackendUrl('check_base_brc20_balance')
+  const url = await getSwapBackendUrl('check_base_brc20_balance')
   const body = {
     ordinal_address: userOrdinalsWallet.address,
     token_address: tokenAddress,
@@ -678,7 +668,7 @@ interface GetAllBalancesResponse {
  */
 export async function getSwapBalances(ordinalsAddress: string): Promise<SwapBalance[]> {
   // 2. Prepare and execute the API call
-  const url = getSwapBackendUrl('get_all_balances')
+  const url = await getSwapBackendUrl('get_all_balances')
   const body = {
     ordinal_address: ordinalsAddress,
   }
@@ -714,7 +704,7 @@ export async function getSwapBalance(tokenAddress: string): Promise<bigint> {
   const pubkey = swapWallet.swapPubkey
 
   // 2. Prepare and execute the API call
-  const url = getSwapBackendUrl('get_balance')
+  const url = await getSwapBackendUrl('get_balance')
   const body = {
     pubkey,
     token_addr: tokenAddress,
@@ -734,7 +724,7 @@ export async function getSwapBalance(tokenAddress: string): Promise<bigint> {
 
 async function getSwapBalanceOf(pubkey: string, tokenAddress: string): Promise<bigint> {
   // 2. Prepare and execute the API call
-  const url = getSwapBackendUrl('get_balance')
+  const url = await getSwapBackendUrl('get_balance')
   const body = {
     pubkey,
     token_addr: tokenAddress,
@@ -769,7 +759,7 @@ interface GetPairReservesResponse {
  */
 export async function getPairReserves(pairAddress: string): Promise<PairReserves> {
   // 2. Prepare and execute the API call
-  const url = getSwapBackendUrl('get_pair_reserves')
+  const url = await getSwapBackendUrl('get_pair_reserves')
   const body = {
     pair_address: pairAddress,
   }
@@ -801,7 +791,7 @@ async function getSwapWalletNonce(): Promise<bigint> {
   }
 
   // 2. Prepare and execute the API call
-  const url = getSwapBackendUrl('get_swap_wallet_nonce')
+  const url = await getSwapBackendUrl('get_swap_wallet_nonce')
   const body = {
     pubkey,
   }
@@ -826,7 +816,7 @@ async function getSwapReferrerInfo(
   currentPubkey: string,
   refId: string
 ): Promise<{ referrerPubkey: string; refReturnBps: bigint }> {
-  const url = getSwapBackendUrl('get_swap_referrer_info')
+  const url = await getSwapBackendUrl('get_swap_referrer_info')
   const body = { ref_id: refId }
 
   const result = await fetchWithErrors<GetSwapReferrerInfoResponse>(url, {
@@ -889,7 +879,7 @@ export async function requestMinerFee(
   type: 'add_liquidity' | 'remove_liquidity' | 'swap' | 'withdraw' | 'unwrap'
 ): Promise<bigint> {
   // 2. Prepare and execute the API call
-  const url = getSwapBackendUrl('get_miner_fee')
+  const url = await getSwapBackendUrl('get_miner_fee')
   const body = {
     type,
   }
@@ -924,7 +914,7 @@ interface GetTokensResponse {
 export async function listTokens(): Promise<TokenInfo[]> {
   // 2. Prepare and execute the API call
   // No Content-Type: this GET has no body, and the header would force a CORS preflight.
-  const url = getSwapBackendUrl('get_tokens')
+  const url = await getSwapBackendUrl('get_tokens')
   const result = await fetchWithErrors<GetTokensResponse>(url, {
     method: 'GET',
   })
@@ -1034,7 +1024,7 @@ export async function listPairs(params: ListPairsRequest = {}): Promise<ListPair
     page: String(page),
     count: String(count),
   })
-  const url = getSwapBackendUrl(`get_table_data?${query}`)
+  const url = await getSwapBackendUrl(`get_table_data?${query}`)
   const result = await fetchWithErrors<GetTableDataResponse>(url, {
     method: 'GET',
   })
@@ -1081,12 +1071,9 @@ export async function getPairVolumeOverDays(
   params: GetPairVolumeRequest
 ): Promise<GetPairVolumeResponse> {
   // 2. Prepare and execute the API call
-  const url = getSwapBackendUrl(`volume/${params.pair_address}?days=${params.days}`)
+  const url = await getSwapBackendUrl(`volume/${params.pair_address}?days=${params.days}`)
   const result = await fetchWithErrors<GetPairVolumeResponse>(url, {
     method: 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-    },
   })
 
   return result
@@ -1133,7 +1120,7 @@ export async function getKlines(params: GetKlinesRequest): Promise<GetKlinesResp
   }
 
   // 2. Prepare and execute the API call
-  let url = getSwapBackendUrl(
+  let url = await getSwapBackendUrl(
     `klines/${params.pair_address}?interval=${params.interval}&limit=${params.limit}`
   )
   if (params.startTime !== null) {
@@ -1145,9 +1132,6 @@ export async function getKlines(params: GetKlinesRequest): Promise<GetKlinesResp
 
   const result = await fetchWithErrors<GetKlinesResponse>(url, {
     method: 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-    },
   })
 
   return result
@@ -1183,16 +1167,13 @@ export interface GetTvlHistoryResponse {
 export async function getTvlHistory(params: GetTvlHistoryRequest): Promise<GetTvlHistoryResponse> {
   // Encode the path segment and query so a malformed pair_address/days can't
   // produce a broken URL or leak into the path/query.
-  const url = getSwapBackendUrl(
+  const url = await getSwapBackendUrl(
     `tvl/${encodeURIComponent(params.pair_address)}?${new URLSearchParams({
       days: String(params.days),
     })}`
   )
   const result = await fetchWithErrors<GetTvlHistoryResponse>(url, {
     method: 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-    },
   })
 
   return result
@@ -1251,14 +1232,11 @@ export async function getActivityOfPair(
   }
 
   // 2. Prepare and execute the API call
-  const url = getSwapBackendUrl(
+  const url = await getSwapBackendUrl(
     `pair-activity/${params.pair_address}?limit=${params.limit}&offset=${params.offset}`
   )
   const result = await fetchWithErrors<GetActivityOfPairResponse>(url, {
     method: 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-    },
   })
 
   return result
@@ -1354,12 +1332,9 @@ export async function getRecentActivity(
   if (params.before !== undefined) query.set('before', params.before)
   if (params.kinds !== undefined) query.set('kinds', params.kinds.join(','))
   const qs = query.toString()
-  const url = getSwapBackendUrl(`recent-activity${qs ? `?${qs}` : ''}`)
+  const url = await getSwapBackendUrl(`recent-activity${qs ? `?${qs}` : ''}`)
   return await fetchWithErrors<GetRecentActivityResponse>(url, {
     method: 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-    },
   })
 }
 
@@ -1482,12 +1457,11 @@ export async function getWalletActivities(
   if (params.limit !== undefined) query.set('limit', String(params.limit))
   if (params.offset !== undefined) query.set('offset', String(params.offset))
   if (params.kinds !== undefined) query.set('kinds', params.kinds.join(','))
-  const url = getSwapBackendUrl(`wallet-activity/${encodeURIComponent(params.pubkey)}?${query}`)
+  const url = await getSwapBackendUrl(
+    `wallet-activity/${encodeURIComponent(params.pubkey)}?${query}`
+  )
   const result = await fetchWithErrors<GetWalletActivitiesResponse>(url, {
     method: 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-    },
   })
 
   return result
@@ -1501,7 +1475,7 @@ export async function getWalletActivities(
  */
 export async function getTokenDecimals(tokenAddress: string): Promise<number> {
   // 2. Prepare and execute the API call
-  const url = getSwapBackendUrl('get_token_decimals')
+  const url = await getSwapBackendUrl('get_token_decimals')
   const body = {
     token_address: tokenAddress,
   }
@@ -1616,7 +1590,7 @@ interface DepositSignatureResponse {
 async function getDepositSignature(
   toSend: DepositSignatureRequest
 ): Promise<DepositSignatureResponse> {
-  const url = getSwapBackendUrl('get_deposit_signature')
+  const url = await getSwapBackendUrl('get_deposit_signature')
 
   return fetchWithErrors<DepositSignatureResponse>(url, {
     method: 'POST',
@@ -1658,7 +1632,7 @@ interface BroadcastDepositOrderResponse {
 async function broadcastDepositOrder(
   toSend: BroadcastDepositOrderRequest
 ): Promise<BroadcastDepositOrderResponse> {
-  const url = getSwapBackendUrl('deposit')
+  const url = await getSwapBackendUrl('deposit')
 
   return fetchWithErrors<BroadcastDepositOrderResponse>(url, {
     method: 'POST',
@@ -2600,7 +2574,7 @@ interface BroadcastWrapOrderResponse {
 async function broadcastWrapOrder(
   toSend: BroadcastWrapOrderRequest
 ): Promise<BroadcastWrapOrderResponse> {
-  const url = getSwapBackendUrl('wrap')
+  const url = await getSwapBackendUrl('wrap')
 
   return fetchWithErrors<BroadcastWrapOrderResponse>(url, {
     method: 'POST',
@@ -2618,7 +2592,7 @@ interface EstimateGasWrapOrderResponse {
 async function estimateGasWrapOrder(
   toSend: BroadcastWrapOrderRequest
 ): Promise<EstimateGasWrapOrderResponse> {
-  const url = getSwapBackendUrl('estimate_wrap_gas')
+  const url = await getSwapBackendUrl('estimate_wrap_gas')
 
   return fetchWithErrors<EstimateGasWrapOrderResponse>(url, {
     method: 'POST',
@@ -3122,7 +3096,7 @@ interface AddLiquidityOrderResponse {
 async function sendAddLiquidityOrder(
   toSend: AddLiquidityOrderRequest
 ): Promise<AddLiquidityOrderResponse> {
-  const url = getSwapBackendUrl('add_liq_req')
+  const url = await getSwapBackendUrl('add_liq_req')
 
   return fetchWithErrors<AddLiquidityOrderResponse>(url, {
     method: 'POST',
@@ -3361,7 +3335,7 @@ interface RemoveLiquidityOrderResponse {
 async function sendRemoveLiquidityOrder(
   toSend: RemoveLiquidityOrderRequest
 ): Promise<RemoveLiquidityOrderResponse> {
-  const url = getSwapBackendUrl('remove_liq_req')
+  const url = await getSwapBackendUrl('remove_liq_req')
 
   return fetchWithErrors<RemoveLiquidityOrderResponse>(url, {
     method: 'POST',
@@ -3660,7 +3634,7 @@ interface SwapOrderResponse {
   success: boolean
 }
 async function sendSwapOrder(toSend: SwapOrderRequest): Promise<SwapOrderResponse> {
-  const url = getSwapBackendUrl('swap')
+  const url = await getSwapBackendUrl('swap')
 
   return fetchWithErrors<SwapOrderResponse>(url, {
     method: 'POST',
@@ -3944,7 +3918,7 @@ interface Swap2OrderResponse {
   success: boolean
 }
 async function sendSwap2Order(toSend: Swap2OrderRequest): Promise<Swap2OrderResponse> {
-  const url = getSwapBackendUrl('swap2')
+  const url = await getSwapBackendUrl('swap2')
 
   return fetchWithErrors<Swap2OrderResponse>(url, {
     method: 'POST',
@@ -4233,7 +4207,7 @@ export interface WithdrawOrderResponse {
   success: boolean
 }
 async function sendWithdrawOrder(toSend: WithdrawOrderRequest): Promise<WithdrawOrderResponse> {
-  const url = getSwapBackendUrl('withdraw')
+  const url = await getSwapBackendUrl('withdraw')
 
   return fetchWithErrors<WithdrawOrderResponse>(url, {
     method: 'POST',
@@ -4483,7 +4457,7 @@ interface UnwrapOrderResponse {
   success: boolean
 }
 async function sendUnwrapOrder(toSend: UnwrapOrderRequest): Promise<UnwrapOrderResponse> {
-  const url = getSwapBackendUrl('unwrap')
+  const url = await getSwapBackendUrl('unwrap')
 
   return fetchWithErrors<UnwrapOrderResponse>(url, {
     method: 'POST',

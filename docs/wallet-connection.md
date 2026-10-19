@@ -58,6 +58,43 @@ const current = wallet.getNetwork() // the currently selected network
 Bitcoin-level params follow the network: `mainnet` → bitcoin, `testnet`/`signet` → testnet
 parameters.
 
+### Backend endpoints
+
+Every network has its own set of backend base URLs. `wallet.setEndpoints` overrides any of them, per
+network; keys you leave out keep their defaults:
+
+```ts
+wallet.setEndpoints({
+  mainnet: { rpc: 'https://my-brc20-rpc.example' },
+  signet: {
+    indexer: 'https://signet-api.example/v1/data',
+    sequencerRead: 'https://signet-api.example/v1/data',
+  },
+})
+
+wallet.getEndpoints() // effective URLs for the selected network
+wallet.getEndpoints('signet') // ...or for a given one
+```
+
+Each call replaces the previous overrides, so `wallet.setEndpoints({})` restores the defaults.
+Unknown keys and non-http(s) URLs throw.
+
+| Key             | Serves                                                                                                                                                             | Default (mainnet / signet)                                             |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
+| `indexer`       | UTXOs, balances, raw transactions, BIP-322 verification                                                                                                            | `https://ts-proxy.bestinslot.xyz/v3/<network>`                         |
+| `tx`            | `testmempoolaccept`, `sendrawtransactions`                                                                                                                         | `https://ts-proxy.bestinslot.xyz/v3/<network>`                         |
+| `sequencerRead` | Swap display reads: tokens, pairs table, volume, klines, TVL, pair / recent / wallet activity, token decimals                                                      | `https://sa-proxy.bestinslot.xyz` / `https://sas-proxy.bestinslot.xyz` |
+| `sequencer`     | Every other swap route: status, swap info, miner fee, nonce, balances, reserves, referrer info, allowance checks, deposit, wrap, liquidity, swap, withdraw, unwrap | `https://sa-proxy.bestinslot.xyz` / `https://sas-proxy.bestinslot.xyz` |
+| `rpc`           | BRC2.0 JSON-RPC (`eth_call`)                                                                                                                                       | `https://rpc.brc20.build` / `https://rpc-signet.brc20.build`           |
+
+Requests go to `<base>/<route>`; a trailing slash on the base is ignored. `testnet` has `indexer`
+and `tx` (under `/v3/testnet`) and no swap sequencer or RPC unless you configure them.
+
+When a base URL's path starts with `/v1`, the kit reads `<origin>/v1/info` once per origin before
+the first request to it and checks that the `network` it reports matches `wallet.getNetwork()`. On a
+mismatch the request throws (`Endpoint … serves 'mainnet', but the selected network is 'signet'`)
+instead of reaching the wrong network's service.
+
 ## Signing
 
 ```ts

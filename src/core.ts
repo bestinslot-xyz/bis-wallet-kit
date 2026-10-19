@@ -14,7 +14,14 @@ export * as balances from './api/balances'
 export * from './api/helpers'
 
 // Network store (framework-agnostic) for adapters and headless consumers.
-export { getNetwork, setNetwork, subscribeToNetwork } from './core/store-network'
+export {
+  getEndpoints,
+  getNetwork,
+  setEndpoints,
+  setNetwork,
+  subscribeToNetwork,
+} from './core/store-network'
+export type { Endpoints, EndpointsConfig } from './core/store-network'
 
 export type { PaymentOpts } from './types/common'
 
