@@ -53,21 +53,15 @@ describe('brc20 composite sends (signet, moves funds)', () => {
       const one = 10n ** 18n * BigInt(PART)
       console.warn({ sender, recipient, ticker: TICKER, token, tickerToken })
 
-      // The sequencer's check_base_brc20_balance takes the lowercase token address.
+      // The backend answers an address that never held the ticker with an error, not a zero.
       const baseBalance = async (address: string) => {
-        const url = `${wallet.getEndpoints('signet').sequencer}/check_base_brc20_balance`
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ordinal_address: address, token_address: token.toLowerCase() }),
-        })
-        const json = (await res.json()) as {
-          result?: { available_balance_in_18_dec: string }
-          error?: string
+        try {
+          const b = await balances.getBaseBRC20BalanceOfAddress(address, token)
+          return b.availableBalanceIn18Decimals
+        } catch (e) {
+          if (String(e).includes('No available balance')) return 0n
+          throw e
         }
-        if (json.error?.startsWith('No available balance')) return 0n
-        if (!json.result) throw new Error(`base balance read failed: ${json.error}`)
-        return BigInt(json.result.available_balance_in_18_dec)
       }
       const read = async () => {
         const [senderBase, senderProg, recipientBase, recipientProg] = await Promise.all([
