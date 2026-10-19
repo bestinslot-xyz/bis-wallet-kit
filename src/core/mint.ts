@@ -68,7 +68,7 @@ function convertInscriptionIdToBuffer(inscriptionId: string): Buff {
   return reversedTxId.append(inscriptionIdxBufferTrimmed)
 }
 
-function getDustValue(wallet: WalletInfo): number {
+export function getDustValue(wallet: WalletInfo): number {
   if (wallet.isOpReturn) return 0
   else if (wallet.addr == null) throw new Error('Wallet address is null')
   else if (Address.decode(wallet.addr).type === 'p2sh') return DUST_VALUE_P2SH
