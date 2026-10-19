@@ -1,3 +1,10 @@
+import type {
+  Brc20SendQuote,
+  SendAsBrc20Args,
+  SendAsBrc20ProgArgs,
+  SendAsBrc20ProgResult,
+  SendAsBrc20Result,
+} from '../core/brc20-send'
 import type { BISWalletPurpose, PaymentOpts } from '../types/common'
 import {
   callSmartContract as callSmartContractFromOrdinalsWallet,
@@ -6,6 +13,10 @@ import {
   evmEncodeFunctionCall,
   withdrawFromBrc20Prog as withdrawFromBrc20ProgCore,
 } from '../core/brc20'
+import {
+  sendAsBrc20 as sendAsBrc20Core,
+  sendAsBrc20Prog as sendAsBrc20ProgCore,
+} from '../core/brc20-send'
 
 // Pure builders for base BRC-20 inscription payloads (deploy / mint / transfer
 // and the 6-byte namespace predeploy → deploy pair). These generate content
@@ -25,6 +36,67 @@ export {
   predeployInscriptions,
   transferBrc20Inscription,
 } from '../core/brc20-inscriptions'
+
+export type {
+  Brc20SendPart,
+  Brc20SendQuote,
+  Brc20SendStepName,
+  Brc20SendStepQuote,
+  SendAsBrc20Args,
+  SendAsBrc20ProgArgs,
+  SendAsBrc20ProgResult,
+  SendAsBrc20Result,
+} from '../core/brc20-send'
+
+/**
+ * Sends a ticker so the recipient receives plain BRC-20. `fromBrc20Amount` is sent as a BRC-20
+ * transfer inscription and `fromProgAmount` as a BRC2.0 withdraw inscription, both to `recipient`.
+ * Every transaction is signed as one chain (each step spends the previous step's output) and the chain
+ * is broadcast at the end, so the parts never compete for a UTXO.
+ *
+ * With `dryRun: true` nothing is signed or broadcast and the result is a fee quote: total sats,
+ * wallet prompts, and a per-step breakdown. `onSignRequest` is called before each wallet prompt with
+ * `{ step, total }`; `total` is 2 per part.
+ *
+ * @param args - `tick`, `fromBrc20Amount` and `fromProgAmount` (decimal strings, either may be `"0"`), `recipient`, `feeRate` (sats/vB), `dryRun`, and optional `onSignRequest`.
+ * @returns The quote for a dry run; otherwise the transaction ids of each part plus every txid in chain order.
+ */
+export function sendAsBrc20(args: SendAsBrc20Args & { dryRun: true }): Promise<Brc20SendQuote>
+export function sendAsBrc20(args: SendAsBrc20Args & { dryRun: false }): Promise<SendAsBrc20Result>
+export function sendAsBrc20(args: SendAsBrc20Args): Promise<Brc20SendQuote | SendAsBrc20Result>
+export async function sendAsBrc20(
+  args: SendAsBrc20Args
+): Promise<Brc20SendQuote | SendAsBrc20Result> {
+  return await sendAsBrc20Core(args)
+}
+
+/**
+ * Sends a ticker so the recipient receives BRC2.0. When `topUpFromBrc20` is above 0, that much base
+ * BRC-20 is first deposited into the sender's own BRC2.0 balance; then an ERC-20
+ * `transfer(recipientEvm, amount)` call on `contractAddress` moves `amount` to the EVM address of
+ * `recipient`. Both are inscribed from the ordinals identity, which owns the BRC2.0 balance, and the
+ * call spends the deposit's output so the deposit is indexed first.
+ *
+ * With `dryRun: true` nothing is signed or broadcast and the result is a fee quote. `onSignRequest` is
+ * called before each wallet prompt with `{ step, total }`; `total` is 2, or 4 with a top-up.
+ *
+ * @param args - `tick`, `contractAddress`, `topUpFromBrc20` (decimal string, may be `"0"`), `amount` (bigint, 18 decimals, as in `swap.deposit`), `recipient`, `feeRate` (sats/vB), `dryRun`, and optional `onSignRequest`.
+ * @returns The quote for a dry run; otherwise the transaction ids of each part plus every txid in chain order.
+ */
+export function sendAsBrc20Prog(
+  args: SendAsBrc20ProgArgs & { dryRun: true }
+): Promise<Brc20SendQuote>
+export function sendAsBrc20Prog(
+  args: SendAsBrc20ProgArgs & { dryRun: false }
+): Promise<SendAsBrc20ProgResult>
+export function sendAsBrc20Prog(
+  args: SendAsBrc20ProgArgs
+): Promise<Brc20SendQuote | SendAsBrc20ProgResult>
+export async function sendAsBrc20Prog(
+  args: SendAsBrc20ProgArgs
+): Promise<Brc20SendQuote | SendAsBrc20ProgResult> {
+  return await sendAsBrc20ProgCore(args)
+}
 
 /**
  * Interface representing the result of an inscription and send to OP_RETURN operation, including transaction IDs, signed transaction hexes, inscription ID, postage, and secret used in the minting process. This interface is used to encapsulate the details of the deploy, call and deposit operations in the BRC2.0 programmable module.

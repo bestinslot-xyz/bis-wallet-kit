@@ -46,6 +46,82 @@ const result = await brc20.withdrawFromBrc20Prog(
 )
 ```
 
+## Send to another address
+
+A sender can hold a ticker in two places: the base BRC-20 balance and the BRC2.0 balance. The two
+composite sends fill a payment from both and deliver it in the form the recipient asks for. Each one
+signs its steps as a single chain, where every step's commit spends an output of the previous step's
+send, and broadcasts the chain at the end. The steps never compete for a UTXO, and on-chain they
+confirm and index in order.
+
+### Recipient receives BRC-20
+
+```ts
+const res = await brc20.sendAsBrc20({
+  tick: 'ordi',
+  fromBrc20Amount: '5', // from the base BRC-20 balance, decimal string, may be '0'
+  fromProgAmount: '2.5', // from the BRC2.0 balance, decimal string, may be '0'
+  recipient: 'bc1p…',
+  feeRate: 2,
+  dryRun: false,
+  onSignRequest: ({ step, total }) => showProgress(`Sign ${step} of ${total}`),
+})
+// res.brc20Transfer / res.progWithdraw: { commitTxId, revealTxId, sendTxId, inscriptionId } or null
+// res.txIds: every txid in chain order
+```
+
+- `fromBrc20Amount` is a BRC-20 transfer inscription sent to `recipient`.
+- `fromProgAmount` is a `brc20-module` withdraw inscription sent to `recipient`, which credits the
+  recipient's base BRC-20 balance.
+
+### Recipient receives BRC2.0
+
+```ts
+const res = await brc20.sendAsBrc20Prog({
+  tick: 'ordi',
+  contractAddress: '0x…', // the token's BRC2.0 contract
+  topUpFromBrc20: '1', // deposited from the base balance first, decimal string, may be '0'
+  amount: 3n * 10n ** 18n, // total the recipient receives, bigint in 18 decimals (as in swap.deposit)
+  recipient: 'bc1p…',
+  feeRate: 2,
+  dryRun: false,
+})
+// res.progDeposit (or null) and res.progTransfer: { commitTxId, revealTxId, sendTxId, inscriptionId }
+```
+
+- `topUpFromBrc20` is deposited into the **sender's** BRC2.0 balance (a transfer inscription sent to
+  `OP_RETURN "BRC20PROG"`). It must not exceed `amount`.
+- Then an ERC-20 `transfer(recipientEvm, amount)` call on `contractAddress` moves `amount` to
+  `getEvmAddressFromBitcoinAddress(recipient)`. The call is inscribed from the ordinals identity,
+  which owns the sender's BRC2.0 balance, and its commit spends the deposit's output, so the deposit
+  is indexed first.
+- BRC2.0 grants each call `content bytes × 12000` gas. The transfer inscription is about 150 bytes,
+  which covers the 100,000-gas ceiling the kit reserves for an ERC-20 transfer many times over.
+
+The caller sizes the split from the sender's balances (`balances.getBaseBRC20BalanceOfAddress`,
+`balances.getBRC20ProgBalanceOfAddress`).
+
+### Fee quote
+
+`dryRun: true` builds the same chain without signing or broadcasting and returns a quote for a
+review screen:
+
+```ts
+const quote = await brc20.sendAsBrc20({ ...args, dryRun: true })
+// {
+//   totalSats,      // minerFeeSats + postageSats
+//   minerFeeSats,   // commit + reveal + send fees of every step
+//   postageSats,    // sats left on target outputs: recipient dust, or 1 per OP_RETURN
+//   walletPrompts,  // 2 per step
+//   feeRate,
+//   steps: [{ step: 'brc20Transfer' | 'progWithdraw' | 'progDeposit' | 'progTransfer',
+//             minerFeeSats, postageSats, walletPrompts }],
+// }
+```
+
+`onSignRequest` fires before each wallet prompt of a real send with `{ step, total }`; `total`
+matches the quote's `walletPrompts` (2 per step).
+
 ## Call a smart contract
 
 By raw calldata:
