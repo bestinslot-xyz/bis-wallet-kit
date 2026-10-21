@@ -5,6 +5,7 @@ import type {
   SendAsBrc20ProgResult,
   SendAsBrc20Result,
 } from '../core/brc20-send'
+import type { FrBtcResult, UnwrapBtcFromBrc20ProgArgs, WrapBtcToBrc20ProgArgs } from '../core/frbtc'
 import type { BISWalletPurpose, PaymentOpts } from '../types/common'
 import {
   callSmartContract as callSmartContractFromOrdinalsWallet,
@@ -17,6 +18,10 @@ import {
   sendAsBrc20 as sendAsBrc20Core,
   sendAsBrc20Prog as sendAsBrc20ProgCore,
 } from '../core/brc20-send'
+import {
+  unwrapBtcFromBrc20Prog as unwrapBtcFromBrc20ProgCore,
+  wrapBtcToBrc20Prog as wrapBtcToBrc20ProgCore,
+} from '../core/frbtc'
 
 // Pure builders for base BRC-20 inscription payloads (deploy / mint / transfer
 // and the 6-byte namespace predeploy → deploy pair). These generate content
@@ -96,6 +101,65 @@ export async function sendAsBrc20Prog(
   args: SendAsBrc20ProgArgs
 ): Promise<Brc20SendQuote | SendAsBrc20ProgResult> {
   return await sendAsBrc20ProgCore(args)
+}
+
+export type { FrBtcResult, UnwrapBtcFromBrc20ProgArgs, WrapBtcToBrc20ProgArgs } from '../core/frbtc'
+export { getFrBtcAddress } from '../core/frbtc'
+
+/**
+ * Wraps BTC into frBTC held by the wallet's own BRC2.0 address, with no smart wallet involved. One
+ * call inscription runs `wrap()` on Subfrost's frBTC contract; its send transaction pays `amount`
+ * sats to the frBTC signer, and the contract mints frBTC, less its `premium()` fee, to the ordinals
+ * address's BRC2.0 address.
+ *
+ * With `dryRun: true` nothing is signed or broadcast and the result is a fee quote whose
+ * `paymentSats` is the wrapped amount. `onSignRequest` is called before each wallet prompt with
+ * `{ step, total }`; `total` is 2.
+ *
+ * @param args - `amount` (bigint sats, at least 546), `feeRate` (sats/vB), `dryRun`, and optional `onSignRequest`.
+ * @returns The quote for a dry run; otherwise the call's transaction ids plus every txid in chain order.
+ */
+export function wrapBtcToBrc20Prog(
+  args: WrapBtcToBrc20ProgArgs & { dryRun: true }
+): Promise<Brc20SendQuote>
+export function wrapBtcToBrc20Prog(
+  args: WrapBtcToBrc20ProgArgs & { dryRun: false }
+): Promise<FrBtcResult>
+export function wrapBtcToBrc20Prog(
+  args: WrapBtcToBrc20ProgArgs
+): Promise<Brc20SendQuote | FrBtcResult>
+export async function wrapBtcToBrc20Prog(
+  args: WrapBtcToBrc20ProgArgs
+): Promise<Brc20SendQuote | FrBtcResult> {
+  return await wrapBtcToBrc20ProgCore(args)
+}
+
+/**
+ * Unwraps frBTC held by the wallet's own BRC2.0 address into BTC paid to `recipient`, with no smart
+ * wallet involved. One call inscription runs `unwrap2` on Subfrost's frBTC contract, which burns the
+ * frBTC and queues the payment; its send transaction pays a 546-sat marker to the frBTC signer, which
+ * pays the BTC out in a later Bitcoin transaction.
+ *
+ * With `dryRun: true` nothing is signed or broadcast and the result is a fee quote. `onSignRequest` is
+ * called before each wallet prompt with `{ step, total }`; `total` is 2.
+ *
+ * @param args - `amount` (bigint sats), `recipient` (Bitcoin address), `feeRate` (sats/vB), `dryRun`, and optional `onSignRequest`.
+ * @returns The quote for a dry run; otherwise the call's transaction ids plus every txid in chain order.
+ * @throws {Error} When the BRC2.0 frBTC balance is below `amount`, before anything is signed.
+ */
+export function unwrapBtcFromBrc20Prog(
+  args: UnwrapBtcFromBrc20ProgArgs & { dryRun: true }
+): Promise<Brc20SendQuote>
+export function unwrapBtcFromBrc20Prog(
+  args: UnwrapBtcFromBrc20ProgArgs & { dryRun: false }
+): Promise<FrBtcResult>
+export function unwrapBtcFromBrc20Prog(
+  args: UnwrapBtcFromBrc20ProgArgs
+): Promise<Brc20SendQuote | FrBtcResult>
+export async function unwrapBtcFromBrc20Prog(
+  args: UnwrapBtcFromBrc20ProgArgs
+): Promise<Brc20SendQuote | FrBtcResult> {
+  return await unwrapBtcFromBrc20ProgCore(args)
 }
 
 /**

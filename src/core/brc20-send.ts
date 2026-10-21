@@ -74,36 +74,58 @@ export interface Brc20SendStepQuote {
   minerFeeSats: number
   /** Sats the send leaves on its target output (the recipient's postage, or 1 sat on OP_RETURN). */
   postageSats: number
+  /** Sats the send pays to its extra outputs, such as the BTC an frBTC wrap sends to the signer. */
+  paymentSats: number
   /** Wallet prompts this step raises. */
   walletPrompts: number
 }
 
 /** What a composite send costs, built without signing or broadcasting. */
 export interface Brc20SendQuote {
-  /** Sats the wallet spends in all: miner fees plus postage. */
+  /** Sats the wallet spends in all: miner fees, postage and payments. */
   totalSats: number
   minerFeeSats: number
   postageSats: number
+  paymentSats: number
   /** Wallet prompts the real send raises; `onSignRequest` reports each of them. */
   walletPrompts: number
   feeRate: number
   steps: Brc20SendStepQuote[]
 }
 
-export type Brc20SendStepName = 'brc20Transfer' | 'progWithdraw' | 'progDeposit' | 'progTransfer'
+export type Brc20SendStepName =
+  'brc20Transfer' | 'progWithdraw' | 'progDeposit' | 'progTransfer' | 'frBtcWrap' | 'frBtcUnwrap'
 
-interface ChainStep {
+/** An output the send transaction carries right after the target, at vout 1, 2, …. */
+export interface ChainExtraOutput {
+  wallet: WalletInfo
+  value: number
+}
+
+export interface ChainStep {
   name: Brc20SendStepName
   inscription: InscriptionDetails
   target: WalletInfo
+  extraOutputs?: ChainExtraOutput[]
+  /** Most inputs the send may spend; the chain is refused before broadcast when it spends more. */
+  maxSendInputs?: number
 }
 
-interface ChainResult {
+function assertSendInputs(step: ChainStep, sendTxHex: string): void {
+  if (step.maxSendInputs == null) return
+  const inputs = bitcoinjs.Transaction.fromHex(sendTxHex).ins.length
+  if (inputs > step.maxSendInputs)
+    throw new Error(
+      `${step.name} send spends ${inputs} inputs, more than the ${step.maxSendInputs} its gas covers; consolidate the wallet's UTXOs first`
+    )
+}
+
+export interface ChainResult {
   parts: Record<string, Brc20SendPart>
   txIds: string[]
 }
 
-function opReturnTarget(): WalletInfo {
+export function opReturnTarget(): WalletInfo {
   return new WalletInfo(
     true,
     Buffer.from(Script.encode(['OP_RETURN', Buff.str('BRC20PROG')], false)),
@@ -122,6 +144,40 @@ function targetPostage(target: WalletInfo): number {
 }
 
 /**
+ * Builds a `brc20-prog` call inscription. BRC2.0 grants `content bytes × GAS_PER_BYTE` gas, so the
+ * content is padded with spaces when its bytes alone fall short of `gasCeiling`.
+ */
+export async function callInscription(
+  contractAddress: string,
+  calldata: string,
+  gasCeiling: number
+): Promise<InscriptionDetails> {
+  let content = Buff.str(
+    `{"p":"brc20-prog","op":"c","c":"${contractAddress}","b":"${await compressSmartContractData(calldata)}"}`
+  )
+  if (content.length * GAS_PER_BYTE < gasCeiling) {
+    const padding = Math.ceil((gasCeiling - content.length * GAS_PER_BYTE) / GAS_PER_BYTE)
+    content = content.append('20'.repeat(padding))
+  }
+  return textInscription(content)
+}
+
+/**
+ * The send's outputs after the target: the step's extra outputs, then the link output the next
+ * step's commit spends (none on the last step).
+ */
+function sendOutputs(
+  step: ChainStep,
+  isLast: boolean,
+  payerWallet: WalletInfo
+): { outputs: ChainExtraOutput[]; linkVout: number } {
+  const outputs = [...(step.extraOutputs ?? [])]
+  const linkVout = 1 + outputs.length
+  if (!isLast) outputs.push({ wallet: payerWallet, value: CHAIN_LINK_VALUE })
+  return { outputs, linkVout }
+}
+
+/**
  * Parses a BRC-20 decimal amount string into an 18-decimal bigint.
  *
  * @param value - A non-negative decimal string with at most 18 fractional digits, such as `"0"` or `"12.5"`.
@@ -134,7 +190,7 @@ export function parseBrc20Amount(value: string, label: string): bigint {
   return BigInt(whole!) * 10n ** 18n + BigInt(frac.padEnd(18, '0'))
 }
 
-function assertRecipient(recipient: string): void {
+export function assertRecipient(recipient: string): void {
   if (typeof recipient !== 'string' || recipient.length === 0)
     throw new Error('recipient must be a Bitcoin address')
   try {
@@ -144,7 +200,7 @@ function assertRecipient(recipient: string): void {
   }
 }
 
-function assertFeeRate(feeRate: number): void {
+export function assertFeeRate(feeRate: number): void {
   if (typeof feeRate !== 'number' || !Number.isFinite(feeRate) || feeRate <= 0)
     throw new Error('feeRate must be a positive number')
 }
@@ -210,18 +266,20 @@ async function signChain(
       txHexes.push(minted.signedCommitTxHex, minted.signedRevealTxHex)
       saveExtraUtxos(txHexes, [minted.inscriptionId, `${minted.revealTxId}:0:0`])
 
+      const { outputs, linkVout } = sendOutputs(step, isLast, payerWallet)
       const sent = await sendInscriptionToOpReturnWithExtraInputsAndExtraOutputAll(
         minted.inscriptionId,
         [],
         step.target,
         targetPostage(step.target),
-        isLast ? [] : [{ wallet: payerWallet, value: CHAIN_LINK_VALUE }],
+        outputs,
         feeRate,
         true,
         signFn
       )
+      assertSendInputs(step, sent.signedTxHex)
       txHexes.push(sent.signedTxHex)
-      link = { utxo: `${sent.txId}:1` }
+      link = { utxo: `${sent.txId}:${linkVout}` }
       parts[step.name] = {
         commitTxId: minted.commitTxId,
         revealTxId: minted.revealTxId,
@@ -275,21 +333,24 @@ async function quoteChain(steps: ChainStep[], feeRate: number): Promise<Brc20Sen
       saveExtraUtxos(txHexes, [minted.inscription_id, `${revealTxId}:0:0`])
 
       const postage = targetPostage(step.target)
+      const { outputs, linkVout } = sendOutputs(step, isLast, payerWallet)
       const sent = await sendInscriptionToOpReturnWithExtraInputsAndExtraOutputFeeRate(
         minted.inscription_id,
         [],
         step.target,
         postage,
-        isLast ? [] : [{ wallet: payerWallet, value: CHAIN_LINK_VALUE }],
+        outputs,
         feeRate,
         cardinalUtxos
       )
+      assertSendInputs(step, sent.unsigned_tx_hex)
       txHexes.push(sent.unsigned_tx_hex)
-      link = { utxo: `${sent.txid}:1` }
+      link = { utxo: `${sent.txid}:${linkVout}` }
       stepQuotes.push({
         step: step.name,
         minerFeeSats: minted.total_fee + sent.tx_fee,
         postageSats: postage,
+        paymentSats: (step.extraOutputs ?? []).reduce((sum, o) => sum + o.value, 0),
         walletPrompts: 2,
       })
     }
@@ -299,17 +360,19 @@ async function quoteChain(steps: ChainStep[], feeRate: number): Promise<Brc20Sen
 
   const minerFeeSats = stepQuotes.reduce((sum, s) => sum + s.minerFeeSats, 0)
   const postageSats = stepQuotes.reduce((sum, s) => sum + s.postageSats, 0)
+  const paymentSats = stepQuotes.reduce((sum, s) => sum + s.paymentSats, 0)
   return {
-    totalSats: minerFeeSats + postageSats,
+    totalSats: minerFeeSats + postageSats + paymentSats,
     minerFeeSats,
     postageSats,
+    paymentSats,
     walletPrompts: stepQuotes.reduce((sum, s) => sum + s.walletPrompts, 0),
     feeRate,
     steps: stepQuotes,
   }
 }
 
-async function runChain(
+export async function runChain(
   steps: ChainStep[],
   feeRate: number,
   dryRun: boolean,
@@ -455,18 +518,9 @@ export async function sendAsBrc20Prog(
     getEvmAddressFromBitcoinAddress(recipient),
     amount.toString(),
   ])
-  let content = Buff.str(
-    `{"p":"brc20-prog","op":"c","c":"${contractAddress}","b":"${await compressSmartContractData(calldata)}"}`
-  )
-  if (content.length * GAS_PER_BYTE < ERC20_TRANSFER_GAS_CEILING) {
-    const padding = Math.ceil(
-      (ERC20_TRANSFER_GAS_CEILING - content.length * GAS_PER_BYTE) / GAS_PER_BYTE
-    )
-    content = content.append('20'.repeat(padding))
-  }
   steps.push({
     name: 'progTransfer',
-    inscription: textInscription(content),
+    inscription: await callInscription(contractAddress, calldata, ERC20_TRANSFER_GAS_CEILING),
     target: opReturnTarget(),
   })
 

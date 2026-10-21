@@ -76,6 +76,9 @@ const SHARED_NAMESPACES: Record<string, string[]> = {
     'withdrawFromBrc20Prog',
     'sendAsBrc20',
     'sendAsBrc20Prog',
+    'getFrBtcAddress',
+    'wrapBtcToBrc20Prog',
+    'unwrapBtcFromBrc20Prog',
     'deployBrc20Inscription',
     'mintBrc20Inscription',
     'transferBrc20Inscription',
@@ -95,6 +98,7 @@ const SHARED_NAMESPACES: Record<string, string[]> = {
     'getBRC20ProgBalanceOfAddress',
     'getBRC20ProgBalanceOfTicker',
     'getBRC20ProgTokenAddressOfTicker',
+    'getFrBtcBalanceOfAddress',
   ],
 }
 
