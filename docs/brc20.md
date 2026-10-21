@@ -109,18 +109,67 @@ review screen:
 ```ts
 const quote = await brc20.sendAsBrc20({ ...args, dryRun: true })
 // {
-//   totalSats,      // minerFeeSats + postageSats
+//   totalSats,      // minerFeeSats + postageSats + paymentSats
 //   minerFeeSats,   // commit + reveal + send fees of every step
 //   postageSats,    // sats left on target outputs: recipient dust, or 1 per OP_RETURN
+//   paymentSats,    // sats paid to extra outputs (the frBTC signer below; 0 for these sends)
 //   walletPrompts,  // 2 per step
 //   feeRate,
-//   steps: [{ step: 'brc20Transfer' | 'progWithdraw' | 'progDeposit' | 'progTransfer',
-//             minerFeeSats, postageSats, walletPrompts }],
+//   steps: [{ step: 'brc20Transfer' | 'progWithdraw' | 'progDeposit' | 'progTransfer'
+//                 | 'frBtcWrap' | 'frBtcUnwrap',
+//             minerFeeSats, postageSats, paymentSats, walletPrompts }],
 // }
 ```
 
 `onSignRequest` fires before each wallet prompt of a real send with `{ step, total }`; `total`
 matches the quote's `walletPrompts` (2 per step).
+
+## Wrap and unwrap BTC on the BRC2.0 address
+
+frBTC is Subfrost's wrapped BTC on BRC2.0, an ERC-20 with 8 decimals (1 frBTC unit = 1 sat). The
+wallet's BRC2.0 address can hold it directly and wrap or unwrap it with no smart wallet involved.
+This is separate from `swap.wrapBtc` / `swap.unwrapBtc`, which move BTC in and out of the swap smart
+wallet.
+
+```ts
+brc20.getFrBtcAddress() // frBTC contract on the selected network (mainnet, signet)
+
+const ordinals = wallet.getOrdinalsWallet()!.address!
+const held = await balances.getFrBtcBalanceOfAddress(ordinals) // bigint sats
+
+// BTC → frBTC held by the ordinals address's BRC2.0 address
+await brc20.wrapBtcToBrc20Prog({ amount: 10_000n, feeRate: 2, dryRun: false })
+
+// frBTC → BTC paid to any Bitcoin address
+await brc20.unwrapBtcFromBrc20Prog({
+  amount: 10_000n,
+  recipient: 'bc1p…',
+  feeRate: 2,
+  dryRun: false,
+})
+// both return { call: { commitTxId, revealTxId, sendTxId, inscriptionId }, txIds }
+```
+
+Each is one call inscription on the frBTC contract, sent to `OP_RETURN "BRC20PROG"` from the
+ordinals identity. The send transaction also pays the frBTC signer (read from the contract's
+`getSignerAddress()`) at vout 1:
+
+- **Wrap** calls `wrap()` and pays `amount` sats to the signer. The contract mints the frBTC to the
+  caller, less its fee (`premium()` on the contract: 0 on signet, non-zero on mainnet). The quote's
+  `paymentSats` is the BTC sent. `amount` is at least 546 sats.
+- **Unwrap** calls `unwrap2(amount, 1, recipientScript)` and pays a 546-sat marker to the signer.
+  The contract burns the frBTC at once and queues the payment, which the signer pays out to
+  `recipient` in a later Bitcoin transaction. The kit reads the BRC2.0 balance first and refuses an
+  `amount` above it, so a quote or send fails before anything is signed.
+- The signer pays its own miner fee out of each payout, so `recipient` receives `amount` minus that
+  fee. The fee follows the network fee rate (recent signet payouts paid about 15,000 sats), so an
+  unwrap that small leaves little or nothing to pay out. Unwrap well above it.
+
+Both calls read their own send transaction through the BRC2.0 tx-details precompile, which charges
+400,000 gas plus 400,000 per input. The kit pads each call inscription to cover a send of up to 8
+inputs (about 4M gas, roughly 85 vB of padding) and refuses a send that would spend more, before
+broadcast. A call short of gas reverts on BRC2.0 while its Bitcoin transactions still confirm, so
+the BTC paid to the signer would not be credited.
 
 ## Call a smart contract
 

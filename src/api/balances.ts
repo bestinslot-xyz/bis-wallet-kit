@@ -1,4 +1,5 @@
 import { Buffer } from 'node:buffer'
+import { getFrBtcBalanceOfAddress as getFrBtcBalanceOfAddressCore } from '../core/frbtc'
 import { ethCallOnPublicRpc, fetchWithErrors, getSwapBackendUrl } from '../core/helpers'
 import { getEvmAddressFromBitcoinAddress } from './helpers'
 
@@ -266,6 +267,20 @@ export async function getBRC20ProgBalanceOfTicker(
   )
 
   return BigInt(result)
+}
+
+/**
+ * Reads the frBTC balance held by a Bitcoin address's BRC2.0 (EVM) address, straight from the frBTC
+ * contract on the public RPC. frBTC is an ERC-20 with no BRC-20 ticker, so the ticker reads above do
+ * not cover it. Use the ordinals address for a connected wallet: that is the address
+ * `brc20.wrapBtcToBrc20Prog` mints to and `brc20.unwrapBtcFromBrc20Prog` burns from.
+ *
+ * @param bitcoinAddress The Bitcoin address whose BRC2.0 balance to read.
+ *
+ * @returns {Promise<bigint>} The balance in sats (frBTC has 8 decimals).
+ */
+export async function getFrBtcBalanceOfAddress(bitcoinAddress: string): Promise<bigint> {
+  return await getFrBtcBalanceOfAddressCore(bitcoinAddress)
 }
 
 /**
