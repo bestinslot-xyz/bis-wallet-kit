@@ -161,6 +161,9 @@ ordinals identity. The send transaction also pays the frBTC signer (read from th
   The contract burns the frBTC at once and queues the payment, which the signer pays out to
   `recipient` in a later Bitcoin transaction. The kit reads the BRC2.0 balance first and refuses an
   `amount` above it, so a quote or send fails before anything is signed.
+- The signer pays its own miner fee out of each payout, so `recipient` receives `amount` minus that
+  fee. The fee follows the network fee rate (recent signet payouts paid about 15,000 sats), so an
+  unwrap that small leaves little or nothing to pay out. Unwrap well above it.
 
 Both calls read their own send transaction through the BRC2.0 tx-details precompile, which charges
 400,000 gas plus 400,000 per input. The kit pads each call inscription to cover a send of up to 8
