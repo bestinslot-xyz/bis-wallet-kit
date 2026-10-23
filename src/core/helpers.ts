@@ -4,6 +4,7 @@ import { Verifier } from 'bip322-js'
 import * as bitcoinjs from 'bitcoinjs-lib'
 import * as varuint from 'varuint-bitcoin'
 import { getBitcoinNetwork } from '../lib/bitcoin'
+import { BackendError, backendErrorFromBody, backendErrorFromResponse } from './backend-error'
 import { evmEncodeFunctionCall } from './brc20'
 import { getEndpoints, getNetwork } from './store-network'
 
@@ -745,46 +746,45 @@ export function verifySignatureLocal(
 }
 
 /**
- * A generic helper function to handle fetch requests with consistent error handling.
- * It automatically checks for non-ok HTTP responses and for an 'error' field
- * in the JSON response body, throwing a descriptive error in either case.
+ * Fetches a backend JSON route.
  *
  * @param url The URL to fetch.
  * @param options The standard RequestInit options for the fetch call.
  * @returns A promise that resolves with the parsed JSON data of type T.
- * @throws {Error} Throws an error if the network request fails, the HTTP
- * status is not ok, or the response body contains an error field.
+ * @throws {BackendError} When the request does not complete, the HTTP status is not ok, the body
+ * is not JSON, or the body carries an `error` field. It holds the status and the backend's `code`.
  */
 export async function fetchWithErrors<T>(url: string, options: RequestInit): Promise<T> {
+  let response: Response
   try {
-    const response = await fetch(url, options)
-
-    // Handle HTTP errors (e.g., 404, 500)
-    if (!response.ok) {
-      let errorDetails = `HTTP Error: ${response.status} ${response.statusText}`
-      try {
-        // Attempt to get a more specific error message from the response body
-        const errorBody = await response.json()
-        errorDetails = errorBody.error || JSON.stringify(errorBody)
-      } catch {
-        // Body is not JSON or is empty, fall back to the status text
-      }
-      throw new Error(errorDetails)
-    }
-
-    const data = await response.json()
-
-    // Handle API-level errors returned in a 200 OK response
-    if (data && data.error) {
-      throw new Error(String(data.error))
-    }
-
-    return data as T
+    response = await fetch(url, options)
   } catch (error) {
-    // Re-throw with a consistent prefix to identify the source of the error
-    const errorMessage = error instanceof Error ? error.message : String(error)
-    throw new Error(`API Request Failed: ${errorMessage}`)
+    throw new BackendError(
+      error instanceof Error ? error.message : String(error),
+      undefined,
+      undefined,
+      url
+    )
   }
+
+  if (!response.ok) throw await backendErrorFromResponse(response, url)
+
+  let data: any
+  try {
+    data = await response.json()
+  } catch (error) {
+    throw new BackendError(
+      error instanceof Error ? error.message : String(error),
+      response.status,
+      undefined,
+      url
+    )
+  }
+
+  // An API-level error inside a 2xx response.
+  if (data && data.error) throw backendErrorFromBody(data, response.status, url)
+
+  return data as T
 }
 
 /**
