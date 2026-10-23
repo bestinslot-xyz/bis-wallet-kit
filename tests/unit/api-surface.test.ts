@@ -103,6 +103,7 @@ const SHARED_NAMESPACES: Record<string, string[]> = {
 }
 
 const SHARED_TOP_LEVEL_FNS = [
+  'BackendError',
   'getEvmAddressFromBitcoinAddress',
   'getEvmAddressFromPkScript',
   'delegateInscription',

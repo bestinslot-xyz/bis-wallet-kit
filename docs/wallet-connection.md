@@ -95,6 +95,27 @@ the first request to it and checks that the `network` it reports matches `wallet
 mismatch the request throws (`Endpoint … serves 'mainnet', but the selected network is 'signet'`)
 instead of reaching the wrong network's service.
 
+### Backend errors
+
+A failed backend request throws `BackendError` (exported at the top level). It carries the HTTP
+`status` (`undefined` when no response arrived), the backend's `code` when the body has one, the
+backend's own text as `detail`, the requested `url`, and the backend's request ID as `ref` (its logs
+carry the same ID, so quote it when reporting a failure). `message` is
+`API Request Failed: <detail>`. Branch on `code`: the swap sequencer sends stable codes such as
+`WALLET_KEY_MISMATCH`, `FEES_INSUFFICIENT`, `ORDER_REJECTED`, `TX_MISMATCH`, `BROADCAST_FAILED`,
+`SEQUENCER_HALTED` and `SEQUENCER_BUSY`, and a status-based default (`INVALID_REQUEST`, `NOT_FOUND`,
+`INTERNAL_ERROR`, ...) for every other error.
+
+```ts
+try {
+  await swap.deposit(/* ... */)
+} catch (e) {
+  if (e instanceof BackendError && e.code === 'WALLET_KEY_MISMATCH') {
+    // Ask the user to sign in with the wallet app they first deposited with.
+  }
+}
+```
+
 ## Signing
 
 ```ts

@@ -32,6 +32,7 @@ import { compressSmartContractData } from './brc20'
 import {
   clearExtraUtxos,
   fetchCardinalUtxos,
+  fetchWithErrors,
   getSwapBackendUrl,
   saveExtraUtxos,
   utxoOutputTypeFromOutputScript,
@@ -91,49 +92,6 @@ Signing this message outside official BiS interfaces may result in unauthorized 
 By signing, you acknowledge that the BiS Terms of Service also apply: https://bestinslot.xyz/legal/terms.
 
 Current Network: Bitcoin Mainnet`
-
-/**
- * A generic helper function to handle fetch requests with consistent error handling.
- * It automatically checks for non-ok HTTP responses and for an 'error' field
- * in the JSON response body, throwing a descriptive error in either case.
- *
- * @param url The URL to fetch.
- * @param options The standard RequestInit options for the fetch call.
- * @returns A promise that resolves with the parsed JSON data of type T.
- * @throws {Error} Throws an error if the network request fails, the HTTP
- * status is not ok, or the response body contains an error field.
- */
-async function fetchWithErrors<T>(url: string, options: RequestInit): Promise<T> {
-  try {
-    const response = await fetch(url, options)
-
-    // Handle HTTP errors (e.g., 404, 500)
-    if (!response.ok) {
-      let errorDetails = `HTTP Error: ${response.status} ${response.statusText}`
-      try {
-        // Attempt to get a more specific error message from the response body
-        const errorBody = await response.json()
-        errorDetails = errorBody.error || JSON.stringify(errorBody)
-      } catch {
-        // Body is not JSON or is empty, fall back to the status text
-      }
-      throw new Error(errorDetails)
-    }
-
-    const data = await response.json()
-
-    // Handle API-level errors returned in a 200 OK response
-    if (data && data.error) {
-      throw new Error(String(data.error))
-    }
-
-    return data as T
-  } catch (error) {
-    // Re-throw with a consistent prefix to identify the source of the error
-    const errorMessage = error instanceof Error ? error.message : String(error)
-    throw new Error(`API Request Failed: ${errorMessage}`)
-  }
-}
 
 function getSignatureRequestText(): string {
   const network = getNetwork()
