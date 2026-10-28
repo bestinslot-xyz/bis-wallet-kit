@@ -1,5 +1,6 @@
 import type { FeePolicy } from '../lib/fee-policy'
 import type { SwapFees } from '../lib/swap-reporting'
+import type { RawSwapRoute, SwapBLSMessageFields, SwapRoute } from '../lib/swap-route'
 import type { UniswapInfoProxy } from '../lib/uniswap_ops'
 import type { BISNetwork } from '../types/common'
 import type { SignProgressOptions } from './sign-progress'
@@ -16,6 +17,13 @@ import * as ethers from 'ethers'
 import { getBitcoinNetwork } from '../lib/bitcoin'
 import { MISSING_FEE_POLICY_ERROR, parseFeePolicy, swapFeeBps } from '../lib/fee-policy'
 import { buildSwapFees, quotedPrice } from '../lib/swap-reporting'
+import {
+  parseSwapRoute,
+  resolveSwapPath,
+  swap2OrderSignatureText,
+  swapBLSMessage,
+  swapOrderSignatureText,
+} from '../lib/swap-route'
 import {
   addLiquidityRequest,
   calculatePairAddress,
@@ -80,7 +88,6 @@ const SWAP_ABI_MAINNET = SWAP_ABI_SIGNET
 
 const DUMMY_UTXO_VALUE = 1000
 const GAS_PER_BYTE = 12000
-const REFERRER_FEE_BPS = 2500n // 25% of the swap fee is paid out to the referrer.
 
 const SIGNATURE_REQUEST_TEXT_SIGNET = `Sign this message only on official BiS interfaces.
 This signature is required to generate your session-specific swap key.
@@ -418,12 +425,17 @@ export interface SwapInfo {
   // it; a UI reads it to offer token/token pool creation only where it succeeds.
   // False when the backend does not serve it.
   allow_token_token_pairs: boolean
+  // Whether the backend routes swaps through a middle token: getSwapRoute can
+  // return a 3-token path and the swap functions accept one. False when the
+  // backend does not serve it; swaps then use the direct pool only.
+  allow_multi_hop_routes: boolean
 }
 interface SwapInfoResponse {
   success: boolean
-  result: Omit<SwapInfo, 'fee_policy' | 'allow_token_token_pairs'> & {
+  result: Omit<SwapInfo, 'fee_policy' | 'allow_token_token_pairs' | 'allow_multi_hop_routes'> & {
     fee_policy?: unknown
     allow_token_token_pairs?: unknown
+    allow_multi_hop_routes?: unknown
   }
 }
 // Keyed by network: each network has its own swap backend and therefore its own
@@ -443,7 +455,7 @@ const feePolicyParseErrors = new Map<BISNetwork, string>()
  *
  * This does not require a connected wallet or a smart wallet.
  *
- * @returns {Promise<SwapInfo>} A promise that resolves to a SwapInfo object containing the factory address, the WBTC token address, the WBTC handler address, the fee policy (`null` if the backend does not serve one), and whether the backend accepts new token/token pools.
+ * @returns {Promise<SwapInfo>} A promise that resolves to a SwapInfo object containing the factory address, the WBTC token address, the WBTC handler address, the fee policy (`null` if the backend does not serve one), whether the backend accepts new token/token pools, and whether it routes swaps through a middle token.
  */
 export async function getSwapInfo(): Promise<SwapInfo> {
   const network = getNetwork()
@@ -480,6 +492,7 @@ export async function getSwapInfo(): Promise<SwapInfo> {
     wbtc_handler_address: result.result.wbtc_handler_address,
     fee_policy: feePolicy,
     allow_token_token_pairs: result.result.allow_token_token_pairs === true,
+    allow_multi_hop_routes: result.result.allow_multi_hop_routes === true,
   }
   if (swapInfo.fee_policy !== null) {
     swapInfoCache.set(network, { info: swapInfo, fetchedAt: Date.now() })
@@ -3485,75 +3498,93 @@ export async function getSwapResult(
   }
 }
 
-interface SwapOrderSignatureRequest {
-  token1_addr: string
-  token2_addr: string
-  in_amt: string
-  min_out_amt: string
-  token1FeeBps: string
-  token2FeeBps: string
-  btc_fee: string
-  referrer_pubkey?: string
-  ref_return_bps?: string
-}
-async function getSwapOrderSignature(orderParams: SwapOrderSignatureRequest): Promise<string> {
-  orderParams.token1_addr = orderParams.token1_addr.toLowerCase()
-  orderParams.token2_addr = orderParams.token2_addr.toLowerCase()
-  orderParams.referrer_pubkey = orderParams.referrer_pubkey?.startsWith('0x')
-    ? orderParams.referrer_pubkey.slice(2)
-    : orderParams.referrer_pubkey
-
-  const signatureText = `Swap Order:
-Token 1 Address: ${orderParams.token1_addr}
-Token 2 Address: ${orderParams.token2_addr}
-Input Amount: ${orderParams.in_amt}
-Minimum Output Amount: ${orderParams.min_out_amt}
-Token 1 Fee Bps: ${orderParams.token1FeeBps}
-Token 2 Fee Bps: ${orderParams.token2FeeBps}
-BTC Fee: ${orderParams.btc_fee}
-${orderParams.referrer_pubkey ? `Referrer Pubkey: ${orderParams.referrer_pubkey}\n` : ''}${orderParams.ref_return_bps && BigInt(orderParams.ref_return_bps) > 0n ? `Referrer Return Bps: ${orderParams.ref_return_bps}\n` : ''}
-By signing this message, you authorize the creation of a swap order with the above parameters.`
-
-  const signature = await signMessageLocalVerify(signatureText, 'ordinals')
-  return signature
+function strip0x(hex: string): string
+function strip0x(hex: string | undefined): string | undefined
+function strip0x(hex: string | undefined): string | undefined {
+  return hex?.startsWith('0x') ? hex.slice(2) : hex
 }
 
-interface SwapBLSSignatureRequest {
-  pubkey: string
-  nonce: bigint
-  token1_addr: string
-  token2_addr: string
-  in_amt: bigint
-  min_out_amt: bigint
-  token1FeeBps: bigint
-  token2FeeBps: bigint
-  btc_fee: bigint
-  referrer_pubkey?: string
-  ref_return_bps?: bigint
-}
-async function getSwapBLSSignature(params: SwapBLSSignatureRequest): Promise<string> {
-  params.pubkey = params.pubkey.startsWith('0x') ? params.pubkey.slice(2) : params.pubkey
-  params.referrer_pubkey = params.referrer_pubkey?.startsWith('0x')
-    ? params.referrer_pubkey.slice(2)
-    : params.referrer_pubkey
-
-  let msg = ethers.keccak256(Buffer.from(params.pubkey, 'hex')).slice(2)
-  msg += params.nonce.toString(16).padStart(8, '0')
-  msg += '03' // swap1
-  msg += params.token1_addr.slice(2).padStart(64, '0') // NOTE: these are padded to 64 not 40 because address[] has padding bug address, address does not
-  msg += params.token2_addr.slice(2).padStart(64, '0') // NOTE: these are padded to 64 not 40 because address[] has padding bug address, address does not
-  msg += params.in_amt.toString(16).padStart(64, '0')
-  msg += params.min_out_amt.toString(16).padStart(64, '0')
-  msg += params.token1FeeBps.toString(16).padStart(64, '0')
-  msg += params.token2FeeBps.toString(16).padStart(64, '0')
-  msg += params.btc_fee.toString(16).padStart(64, '0')
-  if (params.referrer_pubkey) {
-    msg += ethers.keccak256(Buffer.from(params.referrer_pubkey, 'hex')).slice(2)
-    msg += REFERRER_FEE_BPS.toString(16).padStart(8, '0')
-    if (params.ref_return_bps && params.ref_return_bps > 0n) {
-      msg += params.ref_return_bps.toString(16).padStart(8, '0')
-    }
+/**
+ * The swap backend's best route for swapping `tokenInAddr` to `tokenOutAddr` at current reserves:
+ * the most output for an exact input, or the least input for an exact output. Routes go through a
+ * middle token only while the backend allows multi-hop routes (`SwapInfo.allow_multi_hop_routes`);
+ * otherwise the route is the direct pool.
+ *
+ * This does not require a connected wallet or a smart wallet.
+ *
+ * @param tokenInAddr The address of the token being swapped from.
+ * @param tokenOutAddr The address of the token being swapped to.
+ * @param amount The exact input amount, or the exact output amount when `exactOut` is true.
+ * @param options Route options.
+ * @param options.exactOut Treat `amount` as the exact output (defaults to false).
+ * @returns The route: its path, the amount at each token, each hop's pool and LP fee, the total
+ *   LP fee and the protocol fee bps on each endpoint.
+ * @throws {BackendError} With code `PAIR_NOT_FOUND` when no route can fill the amount.
+ */
+export async function getSwapRoute(
+  tokenInAddr: string,
+  tokenOutAddr: string,
+  amount: bigint,
+  options: { exactOut?: boolean } = {}
+): Promise<SwapRoute> {
+  if (amount <= 0n) {
+    throw new Error('The swap amount must be positive.')
   }
+  const swapInfo = await getSwapInfo()
+  const url = await getSwapBackendUrl('get_swap_route')
+  const result = await fetchWithErrors<{ success: boolean; result: RawSwapRoute }>(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      token_in: tokenInAddr.toLowerCase(),
+      token_out: tokenOutAddr.toLowerCase(),
+      amount: amount.toString(),
+      exact_out: options.exactOut === true,
+    }),
+  })
+  const route = parseSwapRoute(result.result, tokenInAddr, tokenOutAddr)
+  if (route.path.length > 2 && !swapInfo.allow_multi_hop_routes) {
+    throw new Error('The swap backend returned a multi-hop route while multi-hop routes are off.')
+  }
+  return route
+}
+
+/**
+ * Resolves the path a swap order signs and checks that its pools exist: the direct pool, or every
+ * hop's pool for a routed path, which needs multi-hop routes on at the backend.
+ */
+async function resolveSwapOrderPath(
+  token1Addr: string,
+  token2Addr: string,
+  path: readonly string[] | undefined
+): Promise<string[]> {
+  const resolved = resolveSwapPath(path, token1Addr, token2Addr)
+  if (resolved.length > 2 && !(await getSwapInfo()).allow_multi_hop_routes) {
+    throw new Error('The swap backend does not accept multi-hop routes yet; swap directly.')
+  }
+  for (let i = 0; i < resolved.length - 1; i++) {
+    await assertPoolExists(resolved[i]!, resolved[i + 1]!)
+  }
+  return resolved
+}
+
+/** The `path` field of a swap order request: sent only for a routed (3-token) path. */
+function swapOrderPathField(path: string[]): string[] | undefined {
+  return path.length > 2 ? path : undefined
+}
+
+/** Signs a swap op's BLS message (see `swapBLSMessage`) with the smart wallet's key. */
+async function signSwapBLSMessage(
+  opType: '03' | '04',
+  fields: SwapBLSMessageFields
+): Promise<string> {
+  const msg = swapBLSMessage(opType, {
+    ...fields,
+    pubkey: strip0x(fields.pubkey),
+    referrer_pubkey: strip0x(fields.referrer_pubkey),
+  })
 
   const msgBuf = Buffer.from(msg, 'hex')
   const P = bls12_381.G1.hashToCurve(msgBuf, {
@@ -3578,6 +3609,7 @@ interface SwapOrderRequest {
   pubkey: string
   token1_addr: string
   token2_addr: string
+  path?: string[]
   in_amt: string
   min_out_amt: string
   bls_signature: string
@@ -3612,6 +3644,7 @@ async function sendSwapOrder(toSend: SwapOrderRequest): Promise<SwapOrderRespons
  * @param amt2 The amount of the output token expected from the swap, represented as a bigint.
  * @param slippageBPS The slippage in basis points to be applied when calculating the minimum amounts for the liquidity order.
  * @param referrerId An optional referral ID. When provided and valid, a share of the swap fee is credited to the referrer; an invalid referral is ignored and the swap proceeds normally.
+ * @param path Optional token addresses from `token1Addr` to `token2Addr`, as `getSwapRoute` returns them. A 3-token path routes the swap through its middle token and needs `SwapInfo.allow_multi_hop_routes`; omitted, the swap uses the direct pool.
  *
  * @returns A promise that resolves to an object indicating the success of the swap order request.
  */
@@ -3621,14 +3654,15 @@ export async function prepareAndSendSwapOrder(
   amt1: bigint,
   amt2: bigint,
   slippageBPS: bigint,
-  referrerId?: string
+  referrerId?: string,
+  path?: readonly string[]
 ): Promise<SwapOrderResponse> {
   const pubkey = (await getSwapWalletFromDB())?.swapPubkey
   if (!pubkey) {
     throw new Error('Smart wallet not found. Please generate a smart wallet first.')
   }
 
-  await assertPoolExists(token1Addr, token2Addr)
+  const swapPath = await resolveSwapOrderPath(token1Addr, token2Addr, path)
 
   const minOutAmt = (amt2 * (10000n - slippageBPS)) / 10000n
 
@@ -3639,25 +3673,26 @@ export async function prepareAndSendSwapOrder(
   const { referrerPubkey, refReturnBps } = referrerId
     ? await tryGetSwapReferrerInfo(pubkey, referrerId)
     : { referrerPubkey: undefined, refReturnBps: undefined }
-  const bip322Signature = await getSwapOrderSignature({
-    token1_addr: token1Addr,
-    token2_addr: token2Addr,
-    in_amt: amt1.toString(),
-    min_out_amt: minOutAmt.toString(),
-    token1FeeBps: token1FeeBps.toString(),
-    token2FeeBps: token2FeeBps.toString(),
-    btc_fee: btcFee.toString(),
-    referrer_pubkey: referrerPubkey,
-    ref_return_bps: refReturnBps ? refReturnBps.toString() : undefined,
-  })
+  const bip322Signature = await signMessageLocalVerify(
+    swapOrderSignatureText({
+      path: swapPath,
+      in_amt: amt1.toString(),
+      min_out_amt: minOutAmt.toString(),
+      token1FeeBps: token1FeeBps.toString(),
+      token2FeeBps: token2FeeBps.toString(),
+      btc_fee: btcFee.toString(),
+      referrer_pubkey: strip0x(referrerPubkey),
+      ref_return_bps: refReturnBps ? refReturnBps.toString() : undefined,
+    }),
+    'ordinals'
+  )
 
-  const blsSignature = await getSwapBLSSignature({
+  const blsSignature = await signSwapBLSMessage('03', {
     pubkey,
     nonce,
-    token1_addr: token1Addr,
-    token2_addr: token2Addr,
-    in_amt: amt1,
-    min_out_amt: minOutAmt,
+    path: swapPath,
+    amount1: amt1,
+    amount2: minOutAmt,
     token1FeeBps,
     token2FeeBps,
     btc_fee: btcFee,
@@ -3669,6 +3704,7 @@ export async function prepareAndSendSwapOrder(
     pubkey,
     token1_addr: token1Addr,
     token2_addr: token2Addr,
+    path: swapOrderPathField(swapPath),
     in_amt: amt1.toString(),
     min_out_amt: minOutAmt.toString(),
     bls_signature: blsSignature,
@@ -3769,99 +3805,11 @@ export async function getSwap2Result(
   }
 }
 
-interface Swap2OrderSignatureRequest {
-  token1_addr: string
-  token2_addr: string
-  max_in_amt: string
-  out_amt: string
-  token1FeeBps: string
-  token2FeeBps: string
-  btc_fee: string
-  referrer_pubkey?: string
-  ref_return_bps?: string
-}
-async function getSwap2OrderSignature(orderParams: Swap2OrderSignatureRequest): Promise<string> {
-  orderParams.token1_addr = orderParams.token1_addr.toLowerCase()
-  orderParams.token2_addr = orderParams.token2_addr.toLowerCase()
-  orderParams.referrer_pubkey = orderParams.referrer_pubkey?.startsWith('0x')
-    ? orderParams.referrer_pubkey.slice(2)
-    : orderParams.referrer_pubkey
-
-  const signatureText = `Swap Order:
-Token 1 Address: ${orderParams.token1_addr}
-Token 2 Address: ${orderParams.token2_addr}
-Maximum Input Amount: ${orderParams.max_in_amt}
-Output Amount: ${orderParams.out_amt}
-Token 1 Fee Bps: ${orderParams.token1FeeBps}
-Token 2 Fee Bps: ${orderParams.token2FeeBps}
-BTC Fee: ${orderParams.btc_fee}
-${orderParams.referrer_pubkey ? `Referrer Pubkey: ${orderParams.referrer_pubkey}\n` : ''}${orderParams.ref_return_bps && BigInt(orderParams.ref_return_bps) > 0n ? `Referrer Return Bps: ${orderParams.ref_return_bps}\n` : ''}
-By signing this message, you authorize the creation of a swap order with the above parameters.`
-
-  const signature = await signMessageLocalVerify(signatureText, 'ordinals')
-  return signature
-}
-
-interface Swap2BLSSignatureRequest {
-  pubkey: string
-  nonce: bigint
-  token1_addr: string
-  token2_addr: string
-  max_in_amt: bigint
-  out_amt: bigint
-  token1FeeBps: bigint
-  token2FeeBps: bigint
-  btc_fee: bigint
-  referrer_pubkey?: string
-  ref_return_bps?: bigint
-}
-async function getSwap2BLSSignature(params: Swap2BLSSignatureRequest): Promise<string> {
-  params.pubkey = params.pubkey.startsWith('0x') ? params.pubkey.slice(2) : params.pubkey
-  params.referrer_pubkey = params.referrer_pubkey?.startsWith('0x')
-    ? params.referrer_pubkey.slice(2)
-    : params.referrer_pubkey
-
-  let msg = ethers.keccak256(Buffer.from(params.pubkey, 'hex')).slice(2)
-  msg += params.nonce.toString(16).padStart(8, '0')
-  msg += '04' // swap2
-  msg += params.token1_addr.slice(2).padStart(64, '0') // NOTE: these are padded to 64 not 40 because address[] has padding bug address, address does not
-  msg += params.token2_addr.slice(2).padStart(64, '0') // NOTE: these are padded to 64 not 40 because address[] has padding bug address, address does not
-  msg += params.max_in_amt.toString(16).padStart(64, '0')
-  msg += params.out_amt.toString(16).padStart(64, '0')
-  msg += params.token1FeeBps.toString(16).padStart(64, '0')
-  msg += params.token2FeeBps.toString(16).padStart(64, '0')
-  msg += params.btc_fee.toString(16).padStart(64, '0')
-  if (params.referrer_pubkey) {
-    msg += ethers.keccak256(Buffer.from(params.referrer_pubkey, 'hex')).slice(2)
-    msg += REFERRER_FEE_BPS.toString(16).padStart(8, '0')
-    if (params.ref_return_bps && params.ref_return_bps > 0n) {
-      msg += params.ref_return_bps.toString(16).padStart(8, '0')
-    }
-  }
-
-  const msgBuf = Buffer.from(msg, 'hex')
-  const P = bls12_381.G1.hashToCurve(msgBuf, {
-    DST: 'BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_NUL_',
-  })
-
-  const swapWallet = await getSwapWalletFromDB()
-  if (!swapWallet?.swapPrivkey) {
-    throw new Error('Smart wallet not found. Please generate a smart wallet first.')
-  }
-  const blsPrivateKey = swapWallet.swapPrivkey.startsWith('0x')
-    ? swapWallet.swapPrivkey.slice(2)
-    : swapWallet.swapPrivkey
-  const blsPrivateKeyBuffer = Buffer.from(blsPrivateKey, 'hex')
-
-  const blsSignature = bls12_381.shortSignatures.sign(P, blsPrivateKeyBuffer)
-
-  return `0x${blsSignature.x.toString(16).padStart(128, '0')}${blsSignature.y.toString(16).padStart(128, '0')}`
-}
-
 interface Swap2OrderRequest {
   pubkey: string
   token1_addr: string
   token2_addr: string
+  path?: string[]
   max_in_amt: string
   out_amt: string
   bls_signature: string
@@ -3896,6 +3844,7 @@ async function sendSwap2Order(toSend: Swap2OrderRequest): Promise<Swap2OrderResp
  * @param amt2 The amount of the output token expected from the swap, represented as a bigint.
  * @param slippageBPS The slippage in basis points to be applied when calculating the maximum input amount for the swap order.
  * @param referrerId An optional referral ID. When provided and valid, a share of the swap fee is credited to the referrer; an invalid referral is ignored and the swap proceeds normally.
+ * @param path Optional token addresses from `token1Addr` to `token2Addr`, as `getSwapRoute` returns them. A 3-token path routes the swap through its middle token and needs `SwapInfo.allow_multi_hop_routes`; omitted, the swap uses the direct pool.
  *
  * @returns A promise that resolves to an object indicating the success of the swap order request.
  */
@@ -3905,14 +3854,15 @@ export async function prepareAndSendSwap2Order(
   amt1: bigint,
   amt2: bigint,
   slippageBPS: bigint,
-  referrerId?: string
+  referrerId?: string,
+  path?: readonly string[]
 ): Promise<Swap2OrderResponse> {
   const pubkey = (await getSwapWalletFromDB())?.swapPubkey
   if (!pubkey) {
     throw new Error('Smart wallet not found. Please generate a smart wallet first.')
   }
 
-  await assertPoolExists(token1Addr, token2Addr)
+  const swapPath = await resolveSwapOrderPath(token1Addr, token2Addr, path)
 
   const maxInAmt = (amt1 * (10000n + slippageBPS)) / 10000n
 
@@ -3923,25 +3873,26 @@ export async function prepareAndSendSwap2Order(
   const { referrerPubkey, refReturnBps } = referrerId
     ? await tryGetSwapReferrerInfo(pubkey, referrerId)
     : { referrerPubkey: undefined, refReturnBps: undefined }
-  const bip322Signature = await getSwap2OrderSignature({
-    token1_addr: token1Addr,
-    token2_addr: token2Addr,
-    max_in_amt: maxInAmt.toString(),
-    out_amt: amt2.toString(),
-    token1FeeBps: token1FeeBps.toString(),
-    token2FeeBps: token2FeeBps.toString(),
-    btc_fee: btcFee.toString(),
-    referrer_pubkey: referrerPubkey,
-    ref_return_bps: refReturnBps ? refReturnBps.toString() : undefined,
-  })
+  const bip322Signature = await signMessageLocalVerify(
+    swap2OrderSignatureText({
+      path: swapPath,
+      max_in_amt: maxInAmt.toString(),
+      out_amt: amt2.toString(),
+      token1FeeBps: token1FeeBps.toString(),
+      token2FeeBps: token2FeeBps.toString(),
+      btc_fee: btcFee.toString(),
+      referrer_pubkey: strip0x(referrerPubkey),
+      ref_return_bps: refReturnBps ? refReturnBps.toString() : undefined,
+    }),
+    'ordinals'
+  )
 
-  const blsSignature = await getSwap2BLSSignature({
+  const blsSignature = await signSwapBLSMessage('04', {
     pubkey,
     nonce,
-    token1_addr: token1Addr,
-    token2_addr: token2Addr,
-    max_in_amt: maxInAmt,
-    out_amt: amt2,
+    path: swapPath,
+    amount1: maxInAmt,
+    amount2: amt2,
     token1FeeBps,
     token2FeeBps,
     btc_fee: btcFee,
@@ -3953,6 +3904,7 @@ export async function prepareAndSendSwap2Order(
     pubkey,
     token1_addr: token1Addr,
     token2_addr: token2Addr,
+    path: swapOrderPathField(swapPath),
     max_in_amt: maxInAmt.toString(),
     out_amt: amt2.toString(),
     bls_signature: blsSignature,

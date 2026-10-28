@@ -61,6 +61,7 @@ describe('getSwapInfo fee_policy', () => {
       wbtc_handler_address: 'bc1qhandler',
       fee_policy: { ...FEE_POLICY, token_pair_swap_fee_bps: FEE_POLICY.swap_fee_bps },
       allow_token_token_pairs: false,
+      allow_multi_hop_routes: false,
     })
     await getSwapInfo()
     assert.equal(fetchMock.mock.calls.length, 1)
@@ -80,6 +81,25 @@ describe('getSwapInfo fee_policy', () => {
       const { getSwapInfo } = await freshSwapModule()
       assert.equal(
         (await getSwapInfo()).allow_token_token_pairs,
+        expected,
+        `served ${String(served)}`
+      )
+    }
+  })
+
+  it('reads allow_multi_hop_routes, treating anything but true as false', async () => {
+    for (const [served, expected] of [
+      [true, true],
+      [false, false],
+      ['true', false],
+      [undefined, false],
+    ] as const) {
+      const body = swapInfoBody(FEE_POLICY)
+      if (served !== undefined) Object.assign(body.result, { allow_multi_hop_routes: served })
+      serve(body)
+      const { getSwapInfo } = await freshSwapModule()
+      assert.equal(
+        (await getSwapInfo()).allow_multi_hop_routes,
         expected,
         `served ${String(served)}`
       )
@@ -106,6 +126,7 @@ describe('getSwapInfo fee_policy', () => {
       wbtc_handler_address: 'bc1qhandler',
       fee_policy: null,
       allow_token_token_pairs: false,
+      allow_multi_hop_routes: false,
     })
     await assertRejects(getSwapFeesBps(WBTC, XYZ), /Invalid fee_policy/)
   })

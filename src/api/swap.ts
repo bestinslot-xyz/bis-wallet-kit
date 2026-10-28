@@ -31,6 +31,7 @@ export {
   getSwapResult as getSwapExactInputResult,
   getSwap2Result as getSwapExactOutputResult,
   getSwapInfo,
+  getSwapRoute,
   getSwapStatus,
   getSwapWalletSecurityCode,
   getTokenDecimals,
@@ -78,6 +79,7 @@ export type { BISSwapWalletInfo } from '../core/store' // Export the BISSwapWall
 export type { FeePolicy } from '../lib/fee-policy' // The backend-owned swap fee policy carried on SwapInfo
 export type { SwapFees } from '../lib/swap-reporting' // The fee breakdown carried on swap quote results
 export { satsToBtc, satsToUsd, swapSide } from '../lib/swap-reporting' // Reporting helpers (buy/sell side, sat→BTC/USD)
+export type { SwapRoute, SwapRouteHop } from '../lib/swap-route' // The route quote getSwapRoute returns
 export { calculatePairAddress as getPairAddress } from '../lib/uniswap_ops'
 
 /**
@@ -223,6 +225,7 @@ export async function removeLiquidity(
  * @param amountOutMin - The expected (quoted) output amount. The enforced minimum is derived from this by applying `slippageBPS` — pass the quote, not an already slippage-adjusted value, to avoid double-applying slippage.
  * @param slippageBPS - The slippage tolerance in basis points.
  * @param referrerId - An optional referral ID. When valid, a share of the swap fee is credited to the referrer; an invalid referral is ignored and the swap proceeds normally.
+ * @param path - (Optional) The route to execute: `getSwapRoute(...).path`, token addresses from `tokenInAddress` to `tokenOutAddress`. A 3-token path swaps through its middle token and needs `SwapInfo.allow_multi_hop_routes`. When omitted, the swap uses the direct pool.
  * @returns A promise that resolves to a boolean indicating the success of the swap operation.
  */
 export async function swapExactInput(
@@ -231,7 +234,8 @@ export async function swapExactInput(
   amountIn: bigint,
   amountOutMin: bigint,
   slippageBPS: bigint,
-  referrerId?: string
+  referrerId?: string,
+  path?: readonly string[]
 ) {
   return (
     await prepareAndSendSwapOrder(
@@ -240,7 +244,8 @@ export async function swapExactInput(
       amountIn,
       amountOutMin,
       slippageBPS,
-      referrerId
+      referrerId,
+      path
     )
   ).success
 }
@@ -256,6 +261,7 @@ export async function swapExactInput(
  * @param amountOut - The exact amount of the output token to receive.
  * @param slippageBPS - The slippage tolerance in basis points.
  * @param referrerId - An optional referral ID. When valid, a share of the swap fee is credited to the referrer; an invalid referral is ignored and the swap proceeds normally.
+ * @param path - (Optional) The route to execute: `getSwapRoute(..., { exactOut: true }).path`, token addresses from `tokenInAddress` to `tokenOutAddress`. A 3-token path swaps through its middle token and needs `SwapInfo.allow_multi_hop_routes`. When omitted, the swap uses the direct pool.
  * @returns A promise that resolves to a boolean indicating the success of the swap operation.
  */
 export async function swapExactOutput(
@@ -264,7 +270,8 @@ export async function swapExactOutput(
   amountIn: bigint,
   amountOut: bigint,
   slippageBPS: bigint,
-  referrerId?: string
+  referrerId?: string,
+  path?: readonly string[]
 ) {
   return (
     await prepareAndSendSwap2Order(
@@ -273,7 +280,8 @@ export async function swapExactOutput(
       amountIn,
       amountOut,
       slippageBPS,
-      referrerId
+      referrerId,
+      path
     )
   ).success
 }
