@@ -70,9 +70,13 @@ const res = await brc20.sendAsBrc20({
 // res.txIds: every txid in chain order
 ```
 
-- `fromBrc20Amount` is a BRC-20 transfer inscription sent to `recipient`.
-- `fromProgAmount` is a `brc20-module` withdraw inscription sent to `recipient`, which credits the
-  recipient's base BRC-20 balance.
+- To another address, `fromProgAmount` is first a `brc20-module` withdraw inscription sent to the
+  sender's own ordinals address, which moves it into the sender's base balance. Then one BRC-20
+  transfer inscription of `fromBrc20Amount + fromProgAmount` goes to `recipient`. Exchanges and
+  wallets credit incoming BRC-20 only from transfer inscriptions, so the recipient never receives
+  the withdraw itself.
+- To the sender's own ordinals address, the withdraw goes straight to it and the transfer carries
+  only `fromBrc20Amount`.
 
 ### Recipient receives BRC2.0
 

@@ -8,11 +8,14 @@ import { brc20, getEvmAddressFromBitcoinAddress, wallet } from '../../src/node.t
 // Fixed testnet key (see local-wallet.test.ts). Never use for real funds.
 const WIF = 'cN9spWsvaxA8taS7DFMxnk1yJD2gaF2PX1npuTpy3vuZFJdwavaw'
 const PAYER = 'tb1ql3e9pgs3mmwuwrh95fecme0s0qtn28804khrk8'
+// A p2wpkh local wallet uses one address for payments and ordinals.
+const ORDINALS = PAYER
 const RECIPIENT = 'tb1p9fjtrm3nwhemkjek0wxtswz2glmneu33w9lcylrvd7alttk0psmqds9pcj'
 const CONTRACT = '0x1111111111111111111111111111111111111111'
 
 const net = bitcoin.networks.testnet
 const payerScript = bitcoin.address.toOutputScript(PAYER, net)
+const ordinalsScript = bitcoin.address.toOutputScript(ORDINALS, net)
 const recipientScript = bitcoin.address.toOutputScript(RECIPIENT, net)
 const opReturnScript = bitcoin.script.compile([
   bitcoin.opcodes.OP_RETURN!,
@@ -106,7 +109,7 @@ describe('brc20 composite sends', () => {
     vi.unstubAllGlobals()
   })
 
-  it('sendAsBrc20 chains a BRC-20 transfer and a prog withdraw to the recipient', async () => {
+  it('sendAsBrc20 withdraws to the sender, then sends one transfer of the total to the recipient', async () => {
     const prompts: { step: number; total?: number }[] = []
     const res = await brc20.sendAsBrc20({
       tick: 'ordi',
@@ -127,21 +130,21 @@ describe('brc20 composite sends', () => {
       txes.map(t => t.getId())
     )
 
-    // Each send delivers the inscription to the recipient.
-    assert.ok(txes[2]!.outs[0]!.script.equals(recipientScript))
+    // The withdraw credits the sender's own base balance; only the transfer reaches the recipient.
+    assert.ok(txes[2]!.outs[0]!.script.equals(ordinalsScript))
     assert.ok(txes[5]!.outs[0]!.script.equals(recipientScript))
-    assert.equal(res.brc20Transfer?.sendTxId, txes[2]!.getId())
-    assert.equal(res.progWithdraw?.sendTxId, txes[5]!.getId())
+    assert.equal(res.progWithdraw?.sendTxId, txes[2]!.getId())
+    assert.equal(res.brc20Transfer?.sendTxId, txes[5]!.getId())
 
     assert.include(
       witnessHex(txes[1]!),
-      Buffer.from('{"p":"brc-20","op":"transfer","tick":"ordi","amt":"5"}').toString('hex')
-    )
-    assert.include(
-      witnessHex(txes[4]!),
       Buffer.from(
         '{"p":"brc20-module","op":"withdraw","tick":"ordi","amt":"2.5","module":"BRC20PROG"}'
       ).toString('hex')
+    )
+    assert.include(
+      witnessHex(txes[4]!),
+      Buffer.from('{"p":"brc-20","op":"transfer","tick":"ordi","amt":"7.5"}').toString('hex')
     )
 
     assert.deepEqual(
@@ -151,12 +154,36 @@ describe('brc20 composite sends', () => {
     assert.ok(prompts.every(p => p.total === 4))
   })
 
-  it('sendAsBrc20 with one part sends only that part', async () => {
+  it('sendAsBrc20 from the BRC2.0 balance alone still delivers a transfer inscription', async () => {
+    const res = await brc20.sendAsBrc20({
+      tick: 'ordi',
+      fromBrc20Amount: '0',
+      fromProgAmount: '0.000000000000000019',
+      recipient: RECIPIENT,
+      feeRate: 2,
+      dryRun: false,
+    })
+    const txes = broadcastBodies[0]!.map(h => bitcoin.Transaction.fromHex(h))
+    assert.equal(txes.length, 6)
+    assertChained(txes, 2)
+    assert.ok(txes[2]!.outs[0]!.script.equals(ordinalsScript))
+    assert.ok(txes[5]!.outs[0]!.script.equals(recipientScript))
+    assert.include(
+      witnessHex(txes[4]!),
+      Buffer.from(
+        '{"p":"brc-20","op":"transfer","tick":"ordi","amt":"0.000000000000000019"}'
+      ).toString('hex')
+    )
+    assert.ok(res.progWithdraw)
+    assert.ok(res.brc20Transfer)
+  })
+
+  it('sendAsBrc20 to the sender itself is the withdraw alone', async () => {
     const res = await brc20.sendAsBrc20({
       tick: 'ordi',
       fromBrc20Amount: '0',
       fromProgAmount: '1',
-      recipient: RECIPIENT,
+      recipient: ORDINALS,
       feeRate: 2,
       dryRun: false,
     })
@@ -164,8 +191,25 @@ describe('brc20 composite sends', () => {
     assert.ok(res.progWithdraw)
     const txes = broadcastBodies[0]!.map(h => bitcoin.Transaction.fromHex(h))
     assert.equal(txes.length, 3)
+    assert.ok(txes[2]!.outs[0]!.script.equals(ordinalsScript))
     // The last send carries no link output.
     assert.equal(txes[2]!.outs.filter(o => o.value === 1000).length, 0)
+  })
+
+  it('sendAsBrc20 from the base balance alone is the transfer alone', async () => {
+    const res = await brc20.sendAsBrc20({
+      tick: 'ordi',
+      fromBrc20Amount: '1',
+      fromProgAmount: '0',
+      recipient: RECIPIENT,
+      feeRate: 2,
+      dryRun: false,
+    })
+    assert.equal(res.progWithdraw, null)
+    assert.ok(res.brc20Transfer)
+    const txes = broadcastBodies[0]!.map(h => bitcoin.Transaction.fromHex(h))
+    assert.equal(txes.length, 3)
+    assert.ok(txes[2]!.outs[0]!.script.equals(recipientScript))
   })
 
   it('sendAsBrc20Prog deposits the top-up, then calls transfer from the same chain', async () => {
@@ -251,7 +295,7 @@ describe('brc20 composite sends', () => {
     assert.equal(quote.feeRate, 2)
   })
 
-  it('dryRun quote for sendAsBrc20 counts the recipient postage', async () => {
+  it('dryRun quote for sendAsBrc20 counts the withdraw and recipient postage', async () => {
     const quote = await brc20.sendAsBrc20({
       tick: 'ordi',
       fromBrc20Amount: '1',
@@ -261,8 +305,12 @@ describe('brc20 composite sends', () => {
       dryRun: true,
     })
     assert.equal(broadcastBodies.length, 0)
-    // p2tr recipient dust is 330 sats per inscription.
-    assert.equal(quote.postageSats, 660)
+    assert.deepEqual(
+      quote.steps.map(s => s.step),
+      ['progWithdraw', 'brc20Transfer']
+    )
+    // p2wpkh dust (294) on the sender's withdraw, p2tr dust (330) on the recipient's transfer.
+    assert.equal(quote.postageSats, 294 + 330)
     assert.equal(quote.walletPrompts, 4)
   })
 
