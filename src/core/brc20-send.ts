@@ -190,6 +190,20 @@ export function parseBrc20Amount(value: string, label: string): bigint {
   return BigInt(whole!) * 10n ** 18n + BigInt(frac.padEnd(18, '0'))
 }
 
+/** Formats an 18-decimal bigint as the shortest BRC-20 decimal string, such as `"7.5"`. */
+export function formatBrc20Amount(value: bigint): string {
+  const whole = value / 10n ** 18n
+  const frac = (value % 10n ** 18n).toString().padStart(18, '0').replace(/0+$/, '')
+  return frac ? `${whole}.${frac}` : `${whole}`
+}
+
+function sameAddress(a: string, b: string): boolean {
+  const network = getBitcoinNetwork()
+  return bitcoinjs.address
+    .toOutputScript(a, network)
+    .equals(bitcoinjs.address.toOutputScript(b, network))
+}
+
 export function assertRecipient(recipient: string): void {
   if (typeof recipient !== 'string' || recipient.length === 0)
     throw new Error('recipient must be a Bitcoin address')
@@ -215,6 +229,7 @@ function connectedWallets() {
   return {
     provider: walletInfo.provider,
     payerWallet: new WalletInfo(false, null, payment.address, null, payment.pubkey),
+    ordinalsAddress: ordinals.address,
   }
 }
 
@@ -402,9 +417,16 @@ export interface SendAsBrc20Args extends SignProgressOptions {
 }
 
 export interface SendAsBrc20Result {
-  /** The BRC-20 transfer inscription sent to the recipient, or null when `fromBrc20Amount` is 0. */
+  /**
+   * The BRC-20 transfer inscription sent to the recipient. It carries both parts when the recipient
+   * is another address, and only `fromBrc20Amount` when the recipient is the sender's own ordinals
+   * address. Null when it would carry nothing.
+   */
   brc20Transfer: Brc20SendPart | null
-  /** The BRC2.0 withdraw inscription sent to the recipient, or null when `fromProgAmount` is 0. */
+  /**
+   * The BRC2.0 withdraw inscription, sent to the sender's own ordinals address (the recipient's, when
+   * that is the sender), or null when `fromProgAmount` is 0.
+   */
   progWithdraw: Brc20SendPart | null
   /** Every broadcast transaction id, in chain order. */
   txIds: string[]
@@ -412,9 +434,11 @@ export interface SendAsBrc20Result {
 
 /**
  * Sends a ticker so the recipient receives plain BRC-20, drawing on the sender's base BRC-20 balance
- * first and its BRC2.0 balance second. The base part is a BRC-20 transfer inscription sent to the
- * recipient; the BRC2.0 part is a `brc20-module` withdraw inscription sent to the recipient. Both
- * parts are signed as one chain and broadcast together.
+ * and its BRC2.0 balance. To another address, a `brc20-module` withdraw first moves the BRC2.0 part
+ * into the sender's own base balance, then one BRC-20 transfer inscription of both parts goes to the
+ * recipient: exchanges and other wallets credit only transfer inscriptions. To the sender's own
+ * ordinals address, the withdraw alone credits it. All steps are signed as one chain and broadcast
+ * together, and the chain order makes the withdraw index before the transfer is inscribed.
  */
 export async function sendAsBrc20(
   args: SendAsBrc20Args
@@ -428,15 +452,10 @@ export async function sendAsBrc20(
   if (fromBrc20 === 0n && fromProg === 0n)
     throw new Error('fromBrc20Amount and fromProgAmount cannot both be 0')
 
+  const { ordinalsAddress } = connectedWallets()
+  const toSelf = sameAddress(recipient, ordinalsAddress)
   const recipientWallet = new WalletInfo(false, null, recipient, null, null)
   const steps: ChainStep[] = []
-  if (fromBrc20 > 0n) {
-    steps.push({
-      name: 'brc20Transfer',
-      inscription: transferBrc20Inscription({ tick, amt: fromBrc20Amount }),
-      target: recipientWallet,
-    })
-  }
   if (fromProg > 0n) {
     steps.push({
       name: 'progWithdraw',
@@ -445,6 +464,14 @@ export async function sendAsBrc20(
           `{"p":"brc20-module","op":"withdraw","tick":"${tick}","amt":"${fromProgAmount}","module":"BRC20PROG"}`
         )
       ),
+      target: toSelf ? recipientWallet : new WalletInfo(false, null, ordinalsAddress, null, null),
+    })
+  }
+  const transferAmount = toSelf ? fromBrc20 : fromBrc20 + fromProg
+  if (transferAmount > 0n) {
+    steps.push({
+      name: 'brc20Transfer',
+      inscription: transferBrc20Inscription({ tick, amt: formatBrc20Amount(transferAmount) }),
       target: recipientWallet,
     })
   }
