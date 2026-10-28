@@ -56,14 +56,70 @@ Quote before sending with `getSwapExactInputResult` (for `swapExactInput`) and
 `getSwapExactOutputResult` (for `swapExactOutput`).
 
 Any two tokens with a pool between them can be swapped, including token/token pairs with no WBTC
-side (e.g. `ORDI` → `NUTKIN`). Only direct pools are used, there is no routing through WBTC, so
-swaps and quotes fail fast with a clear `No swap pool with liquidity for …` error when the two
-tokens have no pool of their own, rather than failing deeper in the swap math. The miner fee is
-always debited in WBTC, so a token/token trader still needs a little WBTC in the smart wallet.
+side (e.g. `ORDI` → `NUTKIN`). Where the swap backend allows multi-hop routes, two tokens without a
+pool of their own can also swap through a middle token they both pool with (see [Routes](#routes)).
+A swap without a `path` uses the direct pool, and it and its quotes fail fast with a clear
+`No swap pool with liquidity for …` error when the two tokens have no pool of their own. The miner
+fee is always debited in WBTC, so a token/token trader still needs a little WBTC in the smart
+wallet.
 
 The quotes' `quoted_price` is sats per whole token when either side is WBTC. For a token/token swap
 it is the output token's **base units** per whole input token (not scaled by the output's decimals:
 1 XYZ in for 2 ABC out, both 18 decimals, quotes `2e18`).
+
+## Routes
+
+`getSwapRoute` asks the swap backend for the best route at current reserves: the most output for an
+exact input, or the least input for an exact output. A route is the direct pool or, where the
+backend allows it, two hops through a middle token (`A -> X -> B`). A path lists at most 3 tokens,
+because a swap op carries at most three token indexes.
+
+```ts
+const route = await swap.getSwapRoute(tokenIn, tokenOut, amountIn)
+// or, for an exact output: swap.getSwapRoute(tokenIn, tokenOut, amountOut, { exactOut: true })
+route
+// {
+//   path: ['0xa…', '0xx…', '0xb…'],      // lowercased, input first
+//   amounts: [1000n, 498n, 247n],        // the amount at each token of path
+//   hops: [
+//     { pair_address, token_in, token_out, amount_in, amount_out, lp_fee_bps: 30n },
+//     { pair_address, token_in, token_out, amount_in, amount_out, lp_fee_bps: 30n },
+//   ],
+//   lp_fee_bps_total: 60n,               // every hop's LP fee added up
+//   token1FeeBps: 25n,                   // protocol fee on the input token
+//   token2FeeBps: 0n,                    // protocol fee on the output token
+// }
+
+// Execute it by passing the path as the swap's last argument:
+const amountOut = route.amounts[route.amounts.length - 1]
+await swap.swapExactInput(
+  tokenIn,
+  tokenOut,
+  amountIn,
+  amountOut,
+  slippageBPS,
+  referrerId,
+  route.path
+)
+```
+
+Fees on a routed swap:
+
+- **LP fee:** each hop pays its pool's fee (30 bps), already reflected in `amounts`, like
+  `pool_fee_bps` on a direct quote. `lp_fee_bps_total` adds them up for display.
+- **Protocol fee:** charged once, on the endpoints only, as on a direct swap between the same two
+  tokens: `token1FeeBps` in the input token, `token2FeeBps` in the output token. The middle token
+  pays none.
+- **Miner fee:** the same flat `getMinerFee('swap')` amount for any path length.
+
+Multi-hop routing is a backend switch. `getSwapInfo().allow_multi_hop_routes` reports it; while it
+is off, `getSwapRoute` returns the direct pool (or `PAIR_NOT_FOUND`) and the swap functions refuse a
+3-token `path` before asking for a signature. `getSwapRoute` throws a `BackendError` with code
+`PAIR_NOT_FOUND` when no route can fill the amount.
+
+What the wallet signs: a routed swap adds a `Route: a -> x -> b` line after `Token 2 Address` in the
+BIP322 text, and its BLS message lists every path address in order. A direct swap (no `path`, or a
+2-token one) signs exactly the messages it always has and sends no `path`.
 
 ## Quote fees
 
@@ -119,10 +175,10 @@ meaningful only as an absolute number; use `satsToBtc`/`satsToUsd` to display it
 
 ## Referrals
 
-Both swap functions take an optional final `referrerId`. When a valid referral ID is supplied, a
-share of the swap fee is credited to the referrer's smart wallet (and, where the referrer has
-configured a return rate, part of that is rebated back to the swapper). An unknown or expired
-referral is ignored — the swap still goes through as a normal swap.
+Both swap functions take an optional `referrerId` (before the optional `path`). When a valid
+referral ID is supplied, a share of the swap fee is credited to the referrer's smart wallet (and,
+where the referrer has configured a return rate, part of that is rebated back to the swapper). An
+unknown or expired referral is ignored — the swap still goes through as a normal swap.
 
 ```ts
 await swap.swapExactInput(

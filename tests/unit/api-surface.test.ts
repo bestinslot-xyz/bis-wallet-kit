@@ -47,6 +47,7 @@ const SHARED_NAMESPACES: Record<string, string[]> = {
     'getSwapBalances',
     'getSwapExactInputResult',
     'getSwapInfo',
+    'getSwapRoute',
     'getSwapStatus',
     'getTokenDecimals',
     'getUnwrapBtcResult',
