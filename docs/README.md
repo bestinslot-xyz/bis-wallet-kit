@@ -12,6 +12,8 @@ plus helpers for inscriptions, BRC-2.0 programmable tokens, and swaps.
 - [BRC-2.0 programmable](./brc20.md) — deposits, withdrawals, and smart-contract calls (`brc20`).
 - [Swap](./swap.md) — liquidity, swaps, and quotes (`swap`).
 - [Balances](./balances.md) — base BRC-20 and BRC-2.0 balances (`balances`).
+- [Chain data providers](./chain-providers.md): supply your own source of UTXOs, raw transactions,
+  mempool tests, broadcasts and BRC-2.0 RPC reads (`wallet.setProviders`).
 - [Testing](./testing.md) — running the offline unit suite and the network integration suites.
 
 ## API reference

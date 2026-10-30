@@ -25,6 +25,8 @@ Run with no setup. They cover the parts that don't touch the network:
 - **Storage & network** (`storage.test.ts`) — in-memory store and network params.
 - **Local wallet** (`local-wallet.test.ts`) — WIF → address derivation (p2wpkh / p2tr), session
   storage, and offline BIP-322 signing.
+- **Chain data providers** (`chain-providers.test.ts`): inscription and send-to-OP_RETURN dry runs
+  against the in-memory providers in `in-memory-providers.ts`, with `fetch` stubbed to throw.
 
 ### About the golden vectors
 

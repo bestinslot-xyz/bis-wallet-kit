@@ -20,6 +20,7 @@ Full guides and an API reference live in [`docs/`](./docs/README.md):
 - [Wallet connection](./docs/wallet-connection.md)
 - [Inscriptions](./docs/inscriptions.md) · [BRC-2.0](./docs/brc20.md) · [Swap](./docs/swap.md) ·
   [Balances](./docs/balances.md)
+- [Chain data providers](./docs/chain-providers.md): read chain data from your own node or API
 - [Testing](./docs/testing.md)
 
 The full **API reference** is published at <https://bestinslot-xyz.github.io/bis-wallet-kit/>

@@ -9,6 +9,8 @@ import {
 import { getSignFn } from './providers'
 import { getWalletInfo } from './store'
 
+export { getProviders, setProviders } from './chain-providers'
+export type { NetworkProviders, ProvidersConfig } from './chain-providers'
 export { getAllBalanceDetails, getCardinalBalance } from './helpers'
 export {
   getOrdinalsWallet,

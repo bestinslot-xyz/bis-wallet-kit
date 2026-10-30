@@ -1,3 +1,4 @@
+import type { MempoolAcceptResult, OrdinalUtxo, Utxo } from './chain-providers'
 import type { Endpoints } from './store-network'
 import { Buffer } from 'node:buffer'
 import { Verifier } from 'bip322-js'
@@ -6,6 +7,7 @@ import * as varuint from 'varuint-bitcoin'
 import { getBitcoinNetwork } from '../lib/bitcoin'
 import { BackendError, backendErrorFromBody, backendErrorFromResponse } from './backend-error'
 import { evmEncodeFunctionCall } from './brc20'
+import { getBrc20RpcProvider, getChainProvider } from './chain-providers'
 import { getEndpoints, getNetwork } from './store-network'
 
 export const txHexByIdCache: { [txid: string]: any } = {}
@@ -102,12 +104,17 @@ async function assertServiceNetwork(base: string): Promise<void> {
  *
  * @param key The endpoint that serves the route.
  * @param path The route path, with any query string, relative to the endpoint base.
+ * @param base A base URL to use in place of the configured `key` endpoint.
  * @returns The full URL.
  */
-export async function getEndpointUrl(key: keyof Endpoints, path: string): Promise<string> {
-  const base = getEndpointBase(key)
-  await assertServiceNetwork(base)
-  return `${base}/${path}`
+export async function getEndpointUrl(
+  key: keyof Endpoints,
+  path: string,
+  base?: string
+): Promise<string> {
+  const resolved = base === undefined ? getEndpointBase(key) : base.replace(/\/+$/, '')
+  await assertServiceNetwork(resolved)
+  return `${resolved}/${path}`
 }
 
 /**
@@ -331,17 +338,41 @@ export function utxoOutputTypeFromOutputScript(
   throw new Error(`Unknown output type: ${wallet.name}`)
 }
 
-function fixCardinalUtxos(utxos: APIUtxoInfo[], addr: string): APIUtxoInfo[] {
-  if (currentExtraTxHexes.length === 0) return utxos
+/** The output types wallet-kit can spend, named as in Bitcoin Core's `scriptPubKey.type`. */
+export type UtxoScriptType = APIUtxoInfo['script_type']
+
+/** A cardinal UTXO with the outpoint string and script type wallet-kit's transaction builders read. */
+export type CardinalUtxoInfo = Utxo & { utxo: string; script_type: UtxoScriptType }
+
+/** An ordinal UTXO with the outpoint string and script type wallet-kit's transaction builders read. */
+export type OrdinalUtxoInfo = OrdinalUtxo & { utxo: string; script_type: UtxoScriptType }
+
+/**
+ * Adds the `txid:vout` outpoint string and the address's script type to each provider output.
+ * Every output of one address shares the address's output script, so its type follows from it.
+ */
+function withOutpoints<T extends Utxo>(
+  utxos: T[],
+  addr: string
+): (T & { utxo: string; script_type: UtxoScriptType })[] {
+  if (utxos.length === 0) return []
+  const network = getBitcoinNetwork()
+  const scriptType = utxoOutputTypeFromOutputScript(
+    bitcoinjs.address.toOutputScript(addr, network),
+    network
+  )
+  return utxos.map(u => ({ ...u, utxo: `${u.txid}:${u.vout}`, script_type: scriptType }))
+}
+
+function fixCardinalUtxos(utxos: Utxo[], addr: string): CardinalUtxoInfo[] {
+  const withIds = withOutpoints(utxos, addr)
+  if (currentExtraTxHexes.length === 0) return withIds
 
   const network = getBitcoinNetwork()
 
-  const newUtxos = []
-  for (const utxo of utxos) {
-    const utxoInner = utxo.utxo
-    const txid = utxoInner.split(':')[0]!
-    const vout = Number.parseInt(utxoInner.split(':')[1]!)
-    if (checkIfUtxoUsedInExtras(txid, vout)) continue
+  const newUtxos: CardinalUtxoInfo[] = []
+  for (const utxo of withIds) {
+    if (checkIfUtxoUsedInExtras(utxo.txid, utxo.vout)) continue
     newUtxos.push(utxo)
   }
   for (const txhex of currentExtraTxHexes) {
@@ -356,23 +387,13 @@ function fixCardinalUtxos(utxos: APIUtxoInfo[], addr: string): APIUtxoInfo[] {
         // vout.script might be an OP_RETURN or a script without wallet address so this part may fail which is ok
         const voutAddress = bitcoinjs.address.fromOutputScript(vout.script, network)
         if (voutAddress === addr) {
-          const utxo: APIUtxoInfo = {
-            address: addr,
-            amounts: null,
-            block_height: null,
-            inscription_ids: null,
-            rune_ids: null,
-            satpoints: null,
-            script: tx.outs[i]!.script.toString('hex'),
-            script_type: utxoOutputTypeFromOutputScript(vout.script, network),
-            txfee: null,
+          newUtxos.push({
             txid,
-            utxo: `${txid}:${i}`,
-            value: vout.value,
             vout: i,
-            vsize: null,
-          }
-          newUtxos.push(utxo)
+            value: vout.value,
+            utxo: `${txid}:${i}`,
+            script_type: utxoOutputTypeFromOutputScript(vout.script, network),
+          })
         }
       } catch (e) {
         console.error(`Error processing output script for txid ${txid}, vout ${i}`)
@@ -384,15 +405,13 @@ function fixCardinalUtxos(utxos: APIUtxoInfo[], addr: string): APIUtxoInfo[] {
   return newUtxos
 }
 
-function fixOrdinalUtxos(utxos: APIOrdinalUtxoInfo[], addr: string): APIOrdinalUtxoInfo[] {
-  if (currentExtraTxHexes.length === 0) return utxos
+function fixOrdinalUtxos(utxos: OrdinalUtxo[], addr: string): OrdinalUtxoInfo[] {
+  const withIds = withOutpoints(utxos, addr)
+  if (currentExtraTxHexes.length === 0) return withIds
 
-  const newUtxos = []
-  for (const utxo of utxos) {
-    const utxoInner = utxo.utxo
-    const txid = utxoInner.split(':')[0]!
-    const vout = Number.parseInt(utxoInner.split(':')[1]!)
-    if (checkIfUtxoUsedInExtras(txid, vout)) continue
+  const newUtxos: OrdinalUtxoInfo[] = []
+  for (const utxo of withIds) {
+    if (checkIfUtxoUsedInExtras(utxo.txid, utxo.vout)) continue
     newUtxos.push(utxo)
   }
   newUtxos.push(...getExtraOrdinalUtxos(addr))
@@ -408,12 +427,12 @@ function fixOrdinalUtxos(utxos: APIOrdinalUtxoInfo[], addr: string): APIOrdinalU
  * @param addr The address the inscription output must pay to.
  * @returns The extra ordinal UTXOs for `addr`, empty when no extras are saved.
  */
-export function getExtraOrdinalUtxos(addr: string): APIOrdinalUtxoInfo[] {
+export function getExtraOrdinalUtxos(addr: string): OrdinalUtxoInfo[] {
   if (currentExtraTxHexes.length === 0) return []
 
   const network = getBitcoinNetwork()
 
-  const newUtxos = []
+  const newUtxos: OrdinalUtxoInfo[] = []
   for (const txhex of currentExtraTxHexes) {
     const tx = bitcoinjs.Transaction.fromHex(txhex)
     const txid = tx.getId()
@@ -431,24 +450,16 @@ export function getExtraOrdinalUtxos(addr: string): APIOrdinalUtxoInfo[] {
         // vout.script might be an OP_RETURN or a script without wallet address so this part may fail which is ok
         const voutAddress = bitcoinjs.address.fromOutputScript(vout.script, network)
         if (voutAddress === addr) {
-          const utxo: APIOrdinalUtxoInfo = {
-            address: addr,
-            amounts: null,
-            block_height: null,
-            inscription_ids: [inscriptionId],
-            rune_ids: null,
-            satpoints: [satpoint],
-            script: tx.outs[i]!.script.toString('hex'),
-            script_type: utxoOutputTypeFromOutputScript(vout.script, network),
-            txfee: null,
+          newUtxos.push({
             txid,
-            utxo: `${txid}:${i}`,
-            value: vout.value,
             vout: i,
-            vsize: null,
-          }
-
-          newUtxos.push(utxo)
+            value: vout.value,
+            inscription_ids: [inscriptionId],
+            satpoints: [satpoint],
+            block_height: null,
+            utxo: `${txid}:${i}`,
+            script_type: utxoOutputTypeFromOutputScript(vout.script, network),
+          })
         }
       } catch (e) {
         console.error(`Error processing output script for txid ${txid}, vout ${i}`)
@@ -488,6 +499,7 @@ export function witnessStackToScriptWitness(witness: any[]): any {
   return buffer
 }
 
+/** A cardinal UTXO as the Best in Slot API's `cardinal_utxos` route serves it. */
 export interface APIUtxoInfo {
   address: string
   amounts: number[] | null
@@ -517,7 +529,7 @@ export interface APIUtxoInfo {
 }
 
 /**
- * Fetches the UTXOs associated with a given address from the backend API and applies fixes to include any extra UTXOs that are currently in the process of being used in transactions but not yet confirmed on the blockchain.
+ * Lists the cardinal UTXOs of an address from the chain provider (see `setProviders`), with the saved extra transactions applied: outputs they spend are dropped and outputs they create for the address are added.
  *
  * @param addr The address for which to fetch the UTXOs.
  * @param fetchedUtxos A response from `fetchCardinalUtxos(addr)` to use in place of a new fetch. Each call works on its own copy, since coin selection sorts and splices the list it is given.
@@ -525,36 +537,30 @@ export interface APIUtxoInfo {
  */
 export async function getCardinalUtxos(
   addr: string,
-  fetchedUtxos?: APIUtxoInfo[]
-): Promise<APIUtxoInfo[]> {
+  fetchedUtxos?: Utxo[]
+): Promise<CardinalUtxoInfo[]> {
   const utxos = fetchedUtxos ? structuredClone(fetchedUtxos) : await fetchCardinalUtxos(addr)
   return fixCardinalUtxos(utxos, addr)
 }
 
 /**
- * Fetches the backend's cardinal UTXO list for an address as served, without the saved extra UTXOs applied. A dry run that prices several transactions fetches this once and passes it to each `getCardinalUtxos` call.
+ * Fetches the chain provider's cardinal UTXO list for an address as served, without the saved extra UTXOs applied. A dry run that prices several transactions fetches this once and passes it to each `getCardinalUtxos` call.
  *
  * @param addr The address for which to fetch the UTXOs.
- * @returns A promise that resolves to the backend's array of UTXO information objects.
+ * @returns A promise that resolves to the provider's array of UTXOs.
  */
-export async function fetchCardinalUtxos(addr: string): Promise<APIUtxoInfo[]> {
-  const url = await getEndpointUrl('indexer', `cardinal_utxos/${addr}`)
-  const json = await fetchWithErrors<{ data: APIUtxoInfo[] }>(url, { method: 'GET' })
-  return json.data
+export async function fetchCardinalUtxos(addr: string): Promise<Utxo[]> {
+  return getChainProvider().cardinalUtxos(addr)
 }
 
 /**
- * This function gets the balance of a given address by fetching its UTXOs from the backend and summing
- * their values. It also applies fixes to include any extra UTXOs that are currently in the process of
- * being used in transactions but not yet confirmed on the blockchain.
+ * Sums the values of an address's cardinal UTXOs, with the saved extra transactions applied as in `getCardinalUtxos`.
  *
  * @param address The address for which to fetch the balance.
  * @returns The total balance of the address in satoshis.
  */
 export async function getCardinalBalance(address: string): Promise<number> {
-  const url = await getEndpointUrl('indexer', `cardinal_utxos/${address}`)
-  const json = await fetchWithErrors<{ data: APIUtxoInfo[] }>(url, { method: 'GET' })
-  const utxos = fixCardinalUtxos(json.data, address)
+  const utxos = await getCardinalUtxos(address)
   let totalBalance = 0
   for (const utxo of utxos) {
     totalBalance += utxo.value
@@ -568,19 +574,17 @@ export interface AllBalanceDetails {
 }
 
 /**
- * Fetches the balance details of a given address from the backend API, including both confirmed and mempool balances. It also applies fixes to include any extra UTXOs that are currently in the process of being used in transactions but not yet confirmed on the blockchain.
+ * Reads the confirmed and mempool balances of an address from the chain provider (see `setProviders`).
  *
  * @param addr The address for which to fetch the balance details.
  * @returns A promise that resolves to an object containing the confirmed balance and mempool balance of the address in satoshis.
  */
 export async function getAllBalanceDetails(addr: string): Promise<AllBalanceDetails> {
-  const url = await getEndpointUrl('indexer', `all_balance_details/${addr}`)
-  return fetchWithErrors<AllBalanceDetails>(url, { method: 'GET' })
+  const balance = await getChainProvider().balance(addr)
+  return { confirmed_balance: balance.confirmed, mempool_balance: balance.mempool }
 }
 
-/**
- * Represents the structure of UTXO information returned by the backend API for ordinal UTXOs. It includes details such as the address, amounts, block height, inscription IDs, rune IDs, satpoints, script, script type, transaction fee, transaction ID, UTXO identifier, value, vout index, and virtual size of the UTXO.
- */
+/** An ordinal UTXO as the Best in Slot API's `ordinal_utxos` route serves it. */
 export interface APIOrdinalUtxoInfo {
   address: string
   amounts: number[] | null
@@ -609,79 +613,62 @@ export interface APIOrdinalUtxoInfo {
   vsize: number | null
 }
 /**
- * Fetches the ordinal UTXOs associated with a given address from the backend API and applies fixes to include any extra UTXOs that are currently in the process of being used in transactions but not yet confirmed on the blockchain.
+ * Lists the ordinal UTXOs of an address from the chain provider (see `setProviders`), with the saved extra transactions applied: outputs they spend are dropped and the output carrying the saved extra inscription is added.
  *
  * @param addr The address for which to fetch the ordinal UTXOs.
  *
  * @returns A promise that resolves to an array of ordinal UTXO information objects.
  */
-export async function getOrdinalUtxos(addr: string): Promise<APIOrdinalUtxoInfo[]> {
-  const url = await getEndpointUrl('indexer', `ordinal_utxos/${addr}`)
-  const json = await fetchWithErrors<{ data: APIOrdinalUtxoInfo[] }>(url, { method: 'GET' })
-  return fixOrdinalUtxos(json.data, addr)
+export async function getOrdinalUtxos(addr: string): Promise<OrdinalUtxoInfo[]> {
+  return fixOrdinalUtxos(await getChainProvider().ordinalUtxos(addr), addr)
 }
 
 /**
- * Fetches the raw transaction hex for a given transaction ID from the backend API. It caches the result to avoid redundant network requests.
+ * Returns the raw transaction hex for a transaction ID. Transactions the kit built or fetched before come from a cache; any other is read from the chain provider (see `setProviders`).
  *
  * @param txid The transaction ID for which to fetch the raw transaction hex.
  * @returns A promise that resolves to the raw transaction hex string.
  */
 export async function getTxhex(txid: string): Promise<string> {
   if (!txHexByIdCache[txid]) {
-    const url = await getEndpointUrl('indexer', `gettxhex/${txid}`)
-    txHexByIdCache[txid] = await fetchWithErrors<string>(url, { method: 'GET' })
+    txHexByIdCache[txid] = await getChainProvider().txHex(txid)
   }
 
   return txHexByIdCache[txid]
 }
 
 /**
- * Validates a list of transaction hexes by sending them to the backend API for testing their acceptance into the mempool. The function combines the provided transaction hexes with any currently saved extra transaction hexes and sends them to the backend for validation.
+ * Tests the mempool acceptance of a list of transactions through the chain provider (see `setProviders`). The saved extra transactions are tested first, so the given transactions may spend their outputs.
  *
  * @param txHexes An array of transaction hex strings representing the transactions to be validated.
- * @returns A promise that resolves to the validation result returned by the backend API, or null if the validation request fails.
+ * @returns A promise that resolves to one result per tested transaction, saved extras included, or null when the provider's request fails with a {@link BackendError}.
  */
-export async function validateTxes(txHexes: string[]) {
-  const url = await getEndpointUrl('tx', `testmempoolaccept`)
+export async function validateTxes(txHexes: string[]): Promise<MempoolAcceptResult[] | null> {
   try {
-    const response1 = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ txhexes: currentExtraTxHexes.concat(txHexes) }),
-    })
-    return await response1.json()
-  } catch {
-    return null
+    return await getChainProvider().testMempoolAccept(currentExtraTxHexes.concat(txHexes))
+  } catch (error) {
+    if (error instanceof BackendError) return null
+    throw error
   }
 }
 
 /**
- * Broadcasts a list of transaction hexes to the network by sending them to the backend API. The function throws an error if there are any extra transaction hexes currently set, as broadcasting is not allowed in that state.
+ * Broadcasts a list of transactions through the chain provider (see `setProviders`). The function throws an error if there are any extra transaction hexes currently set, as broadcasting is not allowed in that state.
  *
  * @param txHexes An array of transaction hex strings representing the transactions to be broadcasted.
- * @returns A promise that resolves to the result of the broadcast request returned by the backend API, or null if the broadcast request fails.
+ * @returns A promise that resolves to the broadcast transactions' txids, or null when the provider's request fails with a {@link BackendError}.
  * @throws An error if there are extra transaction hexes currently set, as broadcasting is not allowed in that state.
  */
-export async function broadcastTxes(txHexes: string[]) {
+export async function broadcastTxes(txHexes: string[]): Promise<string[] | null> {
   if (currentExtraTxHexes.length > 0) {
     throw new Error('Cannot broadcast txes when extra txes are set')
   }
 
-  const url = await getEndpointUrl('tx', `sendrawtransactions`)
   try {
-    const response1 = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ txhexes: txHexes }),
-    })
-    return await response1.json()
-  } catch {
-    return null
+    return await getChainProvider().broadcast(txHexes)
+  } catch (error) {
+    if (error instanceof BackendError) return null
+    throw error
   }
 }
 
@@ -691,15 +678,17 @@ export async function broadcastTxes(txHexes: string[]) {
  * @param message The message for which the signature needs to be verified.
  * @param signatureHex The signature in hexadecimal format that needs to be verified against the message and address.
  * @param address The Bitcoin address that is claimed to have produced the signature for the given message.
+ * @param indexerBase A base URL to use in place of the configured `indexer` endpoint.
  * @returns A promise that resolves to a boolean indicating whether the signature is valid for the given message and address, or throws an error if the verification process fails.
  * @throws An error if the verification process fails, such as due to network issues or invalid input parameters.
  */
 export async function verifySignature(
   message: string,
   signatureHex: string,
-  address: string
+  address: string,
+  indexerBase?: string
 ): Promise<boolean> {
-  const url = await getEndpointUrl('indexer', `brc20_verify_bip322`)
+  const url = await getEndpointUrl('indexer', `brc20_verify_bip322`, indexerBase)
   try {
     const network = getBitcoinNetwork()
     const response1 = await fetch(url, {
@@ -790,17 +779,18 @@ export async function fetchWithErrors<T>(url: string, options: RequestInit): Pro
 /**
  * Retrieves the BRC2.0 JSON-RPC URL configured as the `rpc` endpoint for the selected network.
  *
+ * @param base An RPC URL to use in place of the configured `rpc` endpoint.
  * @returns The RPC URL.
  * @throws {Error} If the selected network has no RPC endpoint configured.
  */
-export async function getPublicRpcUrl(): Promise<string> {
-  const base = getEndpointBase('rpc')
-  await assertServiceNetwork(base)
-  return base
+export async function getPublicRpcUrl(base?: string): Promise<string> {
+  const resolved = base === undefined ? getEndpointBase('rpc') : base.replace(/\/+$/, '')
+  await assertServiceNetwork(resolved)
+  return resolved
 }
 
 /**
- * Executes an eth_call on the BRC2.0 RPC configured for the selected network. The function constructs the JSON-RPC request payload with the provided data and sends it to the RPC URL for execution. It returns a promise that resolves to the result of the eth_call, or throws an error if the request fails.
+ * Executes an eth_call through the BRC2.0 RPC provider of the selected network (see `setProviders`). It returns a promise that resolves to the result of the eth_call, or throws an error if the request fails.
  *
  * @param to The address of the contract to call.
  * @param abi The ABI of the contract to call.
@@ -814,25 +804,7 @@ export async function ethCallOnPublicRpc(
   functionName: string,
   params: any
 ): Promise<string> {
-  const url = await getPublicRpcUrl()
   const data = evmEncodeFunctionCall(abi, functionName, params)
-
-  return fetchWithErrors<{ result: string }>(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      jsonrpc: '2.0',
-      id: Math.random().toString(16).slice(2),
-      method: 'eth_call',
-      params: [
-        {
-          to,
-          data,
-        },
-        'latest',
-      ],
-    }),
-  }).then(response => response.result)
+  const result = await getBrc20RpcProvider().request('eth_call', [{ to, data }, 'latest'])
+  return result as string
 }
