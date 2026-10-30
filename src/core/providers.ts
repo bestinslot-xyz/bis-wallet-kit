@@ -1,8 +1,7 @@
 import type { BISProvider, SignFunction } from '../provider/api'
 import type { BISSession, BISWallet, BISWalletProvider, BISWalletPurpose } from '../types/common'
-import { BisChainProvider } from './bis-providers'
-import { getChainProvider } from './chain-providers'
-import { verifySignatureLocal } from './helpers'
+import { hasBrc20Rpc } from './chain-providers'
+import { verifySignature, verifySignatureLocal } from './helpers'
 import { clearWalletInfo, getWalletInfo, saveWalletInfo } from './store'
 
 /**
@@ -247,9 +246,9 @@ export function getSignFn(provider: BISWalletProvider): SignFunction {
 }
 
 /**
- * Verifies a wallet's BIP-322 signature. On a network that reads chain data through a
- * {@link BisChainProvider}, that provider's API verifier decides. With any other chain provider
- * the bundled bip322-js verifier decides, so a custom provider never handles signatures.
+ * Verifies a wallet's BIP-322 signature with the BRC2.0 chain's own verifier, through the network's
+ * BRC2.0 RPC provider, so a signature that passes is one the chain accepts. On a network with no
+ * BRC2.0 RPC, nothing on-chain checks the signature, and the bundled bip322-js verifier decides.
  *
  * @param message The signed message.
  * @param signatureHex The signature, hex encoded.
@@ -261,9 +260,8 @@ async function verifyWalletSignature(
   signatureHex: string,
   address: string
 ): Promise<boolean> {
-  const chain = getChainProvider()
-  if (chain instanceof BisChainProvider) {
-    return chain.verifyBip322(message, signatureHex, address)
+  if (hasBrc20Rpc()) {
+    return verifySignature(message, signatureHex, address)
   }
   try {
     return verifySignatureLocal(message, signatureHex, address)

@@ -2,6 +2,8 @@ import type { BISProvider } from '../../src/provider/api.ts'
 import { Buffer } from 'node:buffer'
 import { Signer } from 'bip322-js'
 import { afterEach, assert, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { setProviders } from '../../src/core/chain-providers.ts'
+import { BIP322_VERIFY_PRECOMPILE } from '../../src/core/helpers.ts'
 import {
   getWallets,
   registerProvider,
@@ -13,6 +15,7 @@ import {
 } from '../../src/core/providers.ts'
 import { setNetwork } from '../../src/core/store-network.ts'
 import { getWalletInfo } from '../../src/core/store.ts'
+import { InMemoryBrc20RpcProvider } from './in-memory-providers.ts'
 
 // Fixed test vector (private key 0x1111...11, testnet). Never use for real funds.
 const WIF = 'cN9spWsvaxA8taS7DFMxnk1yJD2gaF2PX1npuTpy3vuZFJdwavaw'
@@ -104,22 +107,56 @@ describe('pre-sign account check', () => {
   })
 })
 
-describe('signMessage backend verification', () => {
-  function stubVerify(verified: boolean) {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => ({ json: async () => ({ verified }) }))
-    )
+describe('signMessage on-chain verification', () => {
+  const fetchMock = vi.fn(async () => {
+    throw new Error('unexpected HTTP request')
+  })
+
+  beforeEach(() => {
+    vi.stubGlobal('fetch', fetchMock)
+  })
+
+  afterEach(() => {
+    setProviders({})
+  })
+
+  function useChainVerifier(handler: (method: string, params: unknown[]) => unknown) {
+    const rpc = new InMemoryBrc20RpcProvider(handler)
+    setProviders({ testnet: { brc20Rpc: rpc } })
+    return rpc
   }
 
-  it('rejects when the backend reports the signature invalid', async () => {
-    stubVerify(false)
+  it('rejects when the chain verifier reports the signature invalid', async () => {
+    useChainVerifier(() => `0x${'00'.repeat(32)}`)
     await expect(signMessage('gm', 'payment')).rejects.toThrow('Signature verification failed.')
   })
 
-  it('resolves when the backend verifies the signature', async () => {
-    stubVerify(true)
+  it('resolves when the chain verifier accepts the signature', async () => {
+    const rpc = useChainVerifier(() => `0x${'00'.repeat(31)}01`)
     await expect(signMessage('gm', 'payment')).resolves.toBeTruthy()
+
+    assert.equal(rpc.requests.length, 1)
+    const [{ method, params }] = rpc.requests
+    assert.equal(method, 'eth_call')
+    const [call, block] = params as [{ from: string; to: string; data: string }, string]
+    assert.equal(call.to, BIP322_VERIFY_PRECOMPILE)
+    assert.equal(block, 'latest')
+    // verify(bytes,bytes,bytes), with the message 'gm' among its arguments
+    assert.ok(call.data.startsWith('0xde8f50a1'))
+    assert.include(call.data, Buffer.from('gm').toString('hex'))
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects when the node rejects the call', async () => {
+    useChainVerifier(() => {
+      throw new Error('execution reverted')
+    })
+    await expect(signMessage('gm', 'payment')).rejects.toThrow('Signature verification failed.')
+  })
+
+  it('verifies locally on a network with no BRC2.0 RPC', async () => {
+    await expect(signMessage('gm', 'payment')).resolves.toBeTruthy()
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 })
 

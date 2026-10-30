@@ -672,40 +672,53 @@ export async function broadcastTxes(txHexes: string[]): Promise<string[] | null>
   }
 }
 
+/** The BRC2.0 precompile that verifies a BIP-322 signature; it returns 1 for a valid one. */
+export const BIP322_VERIFY_PRECOMPILE = '0x00000000000000000000000000000000000000fe'
+const BIP322_VERIFY_ABI = [
+  {
+    name: 'verify',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'pkscript', type: 'bytes' },
+      { name: 'message', type: 'bytes' },
+      { name: 'signature', type: 'bytes' },
+    ],
+    outputs: [],
+  },
+]
+
 /**
- * Verifies a signature for a given message, signature, and address by sending the verification request to the backend API. The function constructs the necessary parameters for the verification request, including converting the message to hexadecimal format and generating the pkscript from the provided address, and then sends the request to the backend for verification.
+ * Verifies a BIP-322 signature with the BRC2.0 chain's own verifier: an `eth_call` to its BIP-322
+ * precompile through the network's BRC2.0 RPC provider (see `setProviders`). A signature it accepts
+ * is one the chain accepts. A call the node rejects, such as one with a malformed signature, or a
+ * request that fails, counts as invalid.
  *
- * @param message The message for which the signature needs to be verified.
- * @param signatureHex The signature in hexadecimal format that needs to be verified against the message and address.
- * @param address The Bitcoin address that is claimed to have produced the signature for the given message.
- * @param indexerBase A base URL to use in place of the configured `indexer` endpoint.
- * @returns A promise that resolves to a boolean indicating whether the signature is valid for the given message and address, or throws an error if the verification process fails.
- * @throws An error if the verification process fails, such as due to network issues or invalid input parameters.
+ * @param message The signed message.
+ * @param signatureHex The signature, hex encoded.
+ * @param address The address that signed.
+ * @returns Whether the chain's verifier accepts the signature.
+ * @throws {Error} If the address is not valid on the selected network.
  */
 export async function verifySignature(
   message: string,
   signatureHex: string,
-  address: string,
-  indexerBase?: string
+  address: string
 ): Promise<boolean> {
-  const url = await getEndpointUrl('indexer', `brc20_verify_bip322`, indexerBase)
+  const pkscript = bitcoinjs.address.toOutputScript(address, getBitcoinNetwork()).toString('hex')
+  const data = evmEncodeFunctionCall(BIP322_VERIFY_ABI, 'verify', [
+    `0x${pkscript}`,
+    `0x${Buffer.from(message).toString('hex')}`,
+    `0x${signatureHex}`,
+  ])
   try {
-    const network = getBitcoinNetwork()
-    const response1 = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        message_hex: Buffer.from(message).toString('hex'),
-        signature_hex: signatureHex,
-        pkscript_hex: bitcoinjs.address.toOutputScript(address, network).toString('hex'),
-      }),
-    })
-    const result = await response1.json()
-    return result.verified
+    const result = await getBrc20RpcProvider().request('eth_call', [
+      { from: '0x0000000000000000000000000000000000000000', to: BIP322_VERIFY_PRECOMPILE, data },
+      'latest',
+    ])
+    return BigInt(result as string) === 1n
   } catch {
-    throw new Error('Failed to verify signature.')
+    return false
   }
 }
 /**

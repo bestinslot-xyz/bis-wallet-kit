@@ -113,10 +113,12 @@ once it confirms.
 
 ## Signature checks
 
-`wallet.signMessage` checks the wallet's BIP-322 signature after signing. On a network that uses a
-`BisChainProvider`, the Best in Slot API verifies it. With any other chain provider, the kit
-verifies it locally with the bundled BIP-322 verifier, so a provider never handles signatures.
-`signMessageLocalVerify` and `signMessageLocalVerifyDeterministic` always verify locally.
+`wallet.signMessage` checks the wallet's BIP-322 signature after signing, with the BRC2.0 chain's
+own verifier: an `eth_call` to the BIP-322 precompile at
+`0x00000000000000000000000000000000000000fe` through the network's `Brc20RpcProvider`. A signature
+that passes is one the chain accepts, whichever providers are set. On a network with no BRC2.0 RPC,
+the kit verifies it locally with the bundled BIP-322 verifier. `signMessageLocalVerify` and
+`signMessageLocalVerifyDeterministic` always verify locally.
 
 ## The default providers
 

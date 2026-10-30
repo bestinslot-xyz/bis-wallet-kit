@@ -10,7 +10,7 @@ import type { AllBalanceDetails, APIOrdinalUtxoInfo, APIUtxoInfo } from './helpe
 import { Buffer } from 'node:buffer'
 import * as bitcoinjs from 'bitcoinjs-lib'
 import { BackendError } from './backend-error'
-import { fetchWithErrors, getEndpointUrl, getPublicRpcUrl, verifySignature } from './helpers'
+import { fetchWithErrors, getEndpointUrl, getPublicRpcUrl } from './helpers'
 import { assertHttpUrl } from './store-network'
 
 /** Endpoint base URLs for a {@link BisChainProvider}. A key left out reads `setEndpoints`. */
@@ -80,18 +80,6 @@ export class BisChainProvider implements ChainProvider {
     const url = await getEndpointUrl('tx', 'sendrawtransactions', this.tx)
     await postTxHexes(url, txHexes)
     return txHexes.map(txidOfHex)
-  }
-
-  /**
-   * Verifies a BIP-322 signature with the Best in Slot API's verifier.
-   *
-   * @param message The signed message.
-   * @param signatureHex The signature, hex encoded.
-   * @param address The address that signed.
-   * @returns Whether the API accepts the signature.
-   */
-  async verifyBip322(message: string, signatureHex: string, address: string): Promise<boolean> {
-    return verifySignature(message, signatureHex, address, this.indexer)
   }
 }
 

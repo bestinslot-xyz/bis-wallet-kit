@@ -1,6 +1,6 @@
 import type { BISNetwork } from '../types/common'
 import { BisBrc20RpcProvider, BisChainProvider } from './bis-providers'
-import { getNetwork } from './store-network'
+import { getEndpoints, getNetwork } from './store-network'
 
 /**
  * An unspent output that carries no inscriptions and no runes.
@@ -192,4 +192,15 @@ export function getBrc20RpcProvider(network: BISNetwork = getNetwork()): Brc20Rp
   if (override) return override
   defaultBrc20Rpc ??= new BisBrc20RpcProvider()
   return defaultBrc20Rpc
+}
+
+/**
+ * Whether a network has a BRC2.0 RPC: a provider set with {@link setProviders}, or an `rpc`
+ * endpoint for the default provider.
+ *
+ * @param network The network to read. Defaults to the selected network.
+ * @returns Whether BRC2.0 RPC requests on that network have somewhere to go.
+ */
+export function hasBrc20Rpc(network: BISNetwork = getNetwork()): boolean {
+  return Boolean(providerOverrides[network]?.brc20Rpc) || Boolean(getEndpoints(network).rpc)
 }
