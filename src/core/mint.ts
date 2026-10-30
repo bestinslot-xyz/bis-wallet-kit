@@ -1,4 +1,3 @@
-import type { APIOrdinalUtxoInfo, APIUtxoInfo } from '../core/helpers'
 import type { SignFunction, SignResponse } from '../provider/api'
 import type { PaymentOpts } from '../types/common'
 import type {
@@ -7,6 +6,8 @@ import type {
   InscribeResult,
   SendInscriptionResult,
 } from '../types/inscription'
+import type { Utxo } from './chain-providers'
+import type { OrdinalUtxoInfo } from './helpers'
 import { Buffer } from 'node:buffer'
 import { Buff } from '@cmdcode/buff-utils'
 import {
@@ -1158,7 +1159,7 @@ async function buildCommitTx(
   paymentWallet: WalletInfo | null,
   payment: number | null,
   forceInUtxos: UtxoInfoWithWallet[],
-  fetchedCardinalUtxos?: APIUtxoInfo[]
+  fetchedCardinalUtxos?: Utxo[]
 ): Promise<BuildCommitTxResult> {
   if (payment == null || payment < 0) payment = 0
   const changeWallet = payerWallet
@@ -1528,7 +1529,7 @@ export async function mintWithReclaimsCheckFees(
   reclaimInputs: ReclaimInput[],
   feeRate: number,
   postage: number | null,
-  fetchedCardinalUtxos?: APIUtxoInfo[]
+  fetchedCardinalUtxos?: Utxo[]
 ): Promise<{
   unsigned_commit_tx_hex: string
   signed_reveal_tx_hex: string
@@ -2337,7 +2338,7 @@ export interface InscriptionUTXODetails {
 export async function getInscriptionDetails(
   inscriptionId: string,
   inscriptionAddr: string,
-  ordinalUtxos?: APIOrdinalUtxoInfo[]
+  ordinalUtxos?: OrdinalUtxoInfo[]
 ): Promise<InscriptionUTXODetails | null> {
   if (ordinalUtxos) return findInscriptionDetails(inscriptionId, ordinalUtxos)
 
@@ -2349,7 +2350,7 @@ export async function getInscriptionDetails(
 
 function findInscriptionDetails(
   inscriptionId: string,
-  utxos: APIOrdinalUtxoInfo[]
+  utxos: OrdinalUtxoInfo[]
 ): InscriptionUTXODetails | null {
   for (const utxo of utxos) {
     for (let i = 0; i < utxo.inscription_ids.length; i++) {
@@ -2358,7 +2359,7 @@ function findInscriptionDetails(
           satpoint: utxo.satpoints[i]!,
           value: utxo.value,
           script_type: utxo.script_type,
-          block_height: utxo.block_height,
+          block_height: utxo.block_height ?? null,
           utxo: utxo.utxo,
         }
       }
@@ -3169,7 +3170,7 @@ export async function mintAllCheckFees(
   postage: number | null,
   paymentAddr: string | null,
   payment: number | null,
-  fetchedCardinalUtxos?: APIUtxoInfo[]
+  fetchedCardinalUtxos?: Utxo[]
 ): Promise<InscribeCheckFeesResult> {
   // Get connected wallet
   const userPaymentWallet = getPaymentWallet()
@@ -3752,7 +3753,7 @@ export async function sendInscriptionToOpReturnWithExtraInputsAndExtraOutputFeeR
   targetPostage: number,
   extraOutputUtxos: OutputUtxoInfo[],
   feeRate: number,
-  fetchedCardinalUtxos?: APIUtxoInfo[]
+  fetchedCardinalUtxos?: Utxo[]
 ): Promise<SendInscriptionFeeRateResult> {
   // Get connected wallet
   const userPaymentWallet = getPaymentWallet()
@@ -3966,7 +3967,7 @@ export async function mintWithExtraInputInCommitFeeRate(
   postage: number | null,
   paymentAddr: string | null,
   payment: number | null,
-  fetchedCardinalUtxos?: APIUtxoInfo[]
+  fetchedCardinalUtxos?: Utxo[]
 ): Promise<InscribeCheckFeesResult> {
   // Get connected wallet
   const userPaymentWallet = getPaymentWallet()

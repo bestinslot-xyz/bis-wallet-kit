@@ -106,8 +106,9 @@ describe('frBTC on the BRC2.0 address', () => {
         return jsonResponse(Array.from({ length: n }, () => ({ allowed: true })))
       }
       if (u.includes('/sendrawtransactions')) {
-        broadcastBodies.push(JSON.parse(opts.body).txhexes)
-        return jsonResponse({ result: 'ok' })
+        const txhexes: string[] = JSON.parse(opts.body).txhexes
+        broadcastBodies.push(txhexes)
+        return jsonResponse(txhexes.map(hex => bitcoin.Transaction.fromHex(hex).getId()))
       }
       return { ok: false, status: 404, statusText: 'Not Found', json: async () => ({}) }
     })
@@ -252,8 +253,9 @@ describe('chain steps with extra outputs', () => {
           return jsonResponse(Array.from({ length: n }, () => ({ allowed: true })))
         }
         if (u.includes('/sendrawtransactions')) {
-          broadcastBodies.push(JSON.parse(opts.body).txhexes)
-          return jsonResponse({ result: 'ok' })
+          const txhexes: string[] = JSON.parse(opts.body).txhexes
+          broadcastBodies.push(txhexes)
+          return jsonResponse(txhexes.map(hex => bitcoin.Transaction.fromHex(hex).getId()))
         }
         return { ok: false, status: 404, statusText: 'Not Found', json: async () => ({}) }
       })

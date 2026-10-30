@@ -2,6 +2,7 @@ import { Buffer } from 'node:buffer'
 import * as bitcoin from 'bitcoinjs-lib'
 import { afterEach, assert, beforeEach, describe, expect, it, vi } from 'vitest'
 import { wallet } from '../../src/node.ts'
+import { LOCAL } from '../../src/provider/local.ts'
 
 // Fixed testnet key (see local-wallet.test.ts). Never use for real funds.
 const WIF = 'cN9spWsvaxA8taS7DFMxnk1yJD2gaF2PX1npuTpy3vuZFJdwavaw'
@@ -70,8 +71,9 @@ describe('local sendBTC', () => {
       if (u.includes('/testmempoolaccept')) return jsonResponse(mempoolResult)
       if (u.includes('/sendrawtransactions')) {
         if (broadcastShouldFail) throw new Error('network down')
-        broadcastBodies.push(JSON.parse(opts.body).txhexes)
-        return jsonResponse({ result: 'ok' })
+        const txhexes: string[] = JSON.parse(opts.body).txhexes
+        broadcastBodies.push(txhexes)
+        return jsonResponse(txhexes.map(hex => bitcoin.Transaction.fromHex(hex).getId()))
       }
       return { ok: false, status: 404, statusText: 'Not Found', json: async () => ({}) }
     })
@@ -139,5 +141,63 @@ describe('local sendBTC', () => {
   it('rejects a non-positive amount before any network call', async () => {
     await expect(wallet.sendBTC(0, RECIPIENT, 1)).rejects.toThrow(/positive integer/)
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('local signPSBT with broadcast', () => {
+  function unsignedPsbtBase64() {
+    const prev = bitcoin.Transaction.fromHex(prevTxHex(100000))
+    const psbt = new bitcoin.Psbt({ network: net })
+    psbt.addInput({
+      hash: prev.getId(),
+      index: 0,
+      witnessUtxo: { script: payerScript, value: 100000 },
+    })
+    psbt.addOutput({ script: recipientScript, value: 90000 })
+    return psbt.toBase64()
+  }
+
+  beforeEach(async () => {
+    broadcastShouldFail = false
+    broadcastBodies.length = 0
+    fetchMock = vi.fn(async (url: string | URL, opts?: any) => {
+      if (String(url).includes('/sendrawtransactions')) {
+        if (broadcastShouldFail) throw new Error('network down')
+        const txhexes: string[] = JSON.parse(opts.body).txhexes
+        broadcastBodies.push(txhexes)
+        return jsonResponse(txhexes.map(hex => bitcoin.Transaction.fromHex(hex).getId()))
+      }
+      return { ok: false, status: 404, statusText: 'Not Found', json: async () => ({}) }
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    await wallet.connectLocalWallet(WIF, 'testnet', 'p2wpkh', 'unisat')
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('broadcasts the finished transaction and resolves to its txid', async () => {
+    const txid = await LOCAL.signPSBT(unsignedPsbtBase64(), true, [])
+
+    assert.equal(broadcastBodies.length, 1)
+    const sent = bitcoin.Transaction.fromHex(broadcastBodies[0]![0]!)
+    assert.equal(sent.ins[0]!.witness.length, 2) // p2wpkh: signature and pubkey
+    assert.ok(sent.outs[0]!.script.equals(recipientScript))
+    assert.equal(txid, sent.getId())
+  })
+
+  it('resolves to the signed, unfinalized PSBT without broadcast', async () => {
+    const signedPsbtHex = await LOCAL.signPSBT(unsignedPsbtBase64(), false, [])
+
+    assert.equal(broadcastBodies.length, 0)
+    const signed = bitcoin.Psbt.fromHex(signedPsbtHex)
+    assert.equal(signed.data.inputs[0]!.partialSig?.length, 1)
+    assert.equal(signed.data.inputs[0]!.finalScriptWitness, undefined)
+  })
+
+  it('rejects when the broadcast fails', async () => {
+    broadcastShouldFail = true
+    await expect(LOCAL.signPSBT(unsignedPsbtBase64(), true, [])).rejects.toThrow(/broadcast/i)
   })
 })

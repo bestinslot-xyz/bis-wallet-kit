@@ -81,11 +81,14 @@ Unknown keys and non-http(s) URLs throw.
 
 | Key             | Serves                                                                                                                                                             | Default (mainnet / signet)                                             |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
-| `indexer`       | UTXOs, balances, raw transactions, BIP-322 verification                                                                                                            | `https://ts-proxy.bestinslot.xyz/v3/<network>`                         |
+| `indexer`       | UTXOs, balances, raw transactions                                                                                                                                  | `https://ts-proxy.bestinslot.xyz/v3/<network>`                         |
 | `tx`            | `testmempoolaccept`, `sendrawtransactions`                                                                                                                         | `https://ts-proxy.bestinslot.xyz/v3/<network>`                         |
 | `sequencerRead` | Swap display reads: tokens, pairs table, volume, klines, TVL, pair / recent / wallet activity, token decimals                                                      | `https://sa-proxy.bestinslot.xyz` / `https://sas-proxy.bestinslot.xyz` |
 | `sequencer`     | Every other swap route: status, swap info, miner fee, nonce, balances, reserves, referrer info, allowance checks, deposit, wrap, liquidity, swap, withdraw, unwrap | `https://sa-proxy.bestinslot.xyz` / `https://sas-proxy.bestinslot.xyz` |
-| `rpc`           | BRC2.0 JSON-RPC (`eth_call`)                                                                                                                                       | `https://rpc.brc20.build` / `https://rpc-signet.brc20.build`           |
+| `rpc`           | BRC2.0 JSON-RPC (`eth_call`), BIP-322 verification                                                                                                                 | `https://rpc.brc20.build` / `https://rpc-signet.brc20.build`           |
+
+The `indexer`, `tx` and `rpc` endpoints serve the default chain data providers. To read chain data
+from your own node or API instead, see [Chain data providers](./chain-providers.md).
 
 Requests go to `<base>/<route>`; a trailing slash on the base is ignored. `testnet` has `indexer`
 and `tx` (under `/v3/testnet`) and no swap sequencer or RPC unless you configure them.
@@ -119,7 +122,8 @@ try {
 ## Signing
 
 ```ts
-// Sign and verify against the backend (BIP-322):
+// Sign and verify (BIP-322) with the BRC2.0 chain's own verifier, through the BRC2.0 RPC provider
+// (locally on a network with no BRC2.0 RPC; see chain-providers.md):
 const sig = await wallet.signMessage('hello', 'payment')
 
 // Sign and verify locally (offline BIP-322), no backend call:

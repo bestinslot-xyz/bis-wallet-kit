@@ -10,18 +10,26 @@ export {
   getEndpoints,
   getOrdinalsWallet,
   getPaymentWallet,
+  getProviders,
   getSession,
   sendBTC,
   sendInscription,
   setEndpoints,
   setNetwork,
+  setProviders,
   signMessage,
   signMessageLocalVerify,
   signMessageLocalVerifyDeterministic,
   subscribeToAccountChanges,
   WalletAccountChangedError,
 } from '../core/bis' // Export all wallet-related functions from the core BIS module
-export type { AccountChangeEvent, Endpoints, EndpointsConfig } from '../core/bis'
+export type {
+  AccountChangeEvent,
+  Endpoints,
+  EndpointsConfig,
+  NetworkProviders,
+  ProvidersConfig,
+} from '../core/bis'
 
 // Re-export wallet-related types
 export type { WalletInfo }

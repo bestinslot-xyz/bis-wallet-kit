@@ -124,20 +124,31 @@ export function setEndpoints(config: EndpointsConfig) {
       if (value === undefined) {
         continue
       }
-      let url: URL
-      try {
-        url = new URL(value)
-      } catch {
-        throw new Error(`setEndpoints: ${network}.${key} is not a valid URL: ${value}`)
-      }
-      if (url.protocol !== 'https:' && url.protocol !== 'http:') {
-        throw new Error(`setEndpoints: ${network}.${key} must be an http(s) URL: ${value}`)
-      }
+      assertHttpUrl(`setEndpoints: ${network}.${key}`, value)
       entry[key as keyof Endpoints] = value
     }
     next[network as BISNetwork] = entry
   }
   endpointOverrides = next
+}
+
+/**
+ * Checks that a value is an absolute http(s) URL.
+ *
+ * @param label The setting the value belongs to, used as the error prefix.
+ * @param value The URL to check.
+ * @throws {Error} If the value is not a valid URL or uses another protocol.
+ */
+export function assertHttpUrl(label: string, value: string): void {
+  let url: URL
+  try {
+    url = new URL(value)
+  } catch {
+    throw new Error(`${label} is not a valid URL: ${value}`)
+  }
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+    throw new Error(`${label} must be an http(s) URL: ${value}`)
+  }
 }
 
 /**

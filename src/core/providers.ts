@@ -1,5 +1,6 @@
 import type { BISProvider, SignFunction } from '../provider/api'
 import type { BISSession, BISWallet, BISWalletProvider, BISWalletPurpose } from '../types/common'
+import { hasBrc20Rpc } from './chain-providers'
 import { verifySignature, verifySignatureLocal } from './helpers'
 import { clearWalletInfo, getWalletInfo, saveWalletInfo } from './store'
 
@@ -245,8 +246,33 @@ export function getSignFn(provider: BISWalletProvider): SignFunction {
 }
 
 /**
- * Signs a message using the currently connected wallet provider, then verifies it
- * against the backend. Returns the signature, or throws if signing or verification fails.
+ * Verifies a wallet's BIP-322 signature with the BRC2.0 chain's own verifier, through the network's
+ * BRC2.0 RPC provider, so a signature that passes is one the chain accepts. On a network with no
+ * BRC2.0 RPC, nothing on-chain checks the signature, and the bundled bip322-js verifier decides.
+ *
+ * @param message The signed message.
+ * @param signatureHex The signature, hex encoded.
+ * @param address The address that signed.
+ * @returns Whether the signature is valid.
+ */
+async function verifyWalletSignature(
+  message: string,
+  signatureHex: string,
+  address: string
+): Promise<boolean> {
+  if (hasBrc20Rpc()) {
+    return verifySignature(message, signatureHex, address)
+  }
+  try {
+    return verifySignatureLocal(message, signatureHex, address)
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Signs a message using the currently connected wallet provider, then verifies its BIP-322
+ * signature. Returns the signature, or throws if signing or verification fails.
  *
  * @param message The message to sign.
  * @param walletType The wallet purpose to sign with ('payment' | 'ordinals' | 'all').
@@ -265,7 +291,7 @@ export async function signMessage(message: string, walletType: BISWalletPurpose)
   const provider = requireProvider(providerName)
   const signature = await provider.signMessage(message, walletType, wallet.address)
 
-  if (!(await verifySignature(message, signature, wallet.address))) {
+  if (!(await verifyWalletSignature(message, signature, wallet.address))) {
     console.error('Signature verification failed.')
     throw new Error('Signature verification failed.')
   }

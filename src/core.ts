@@ -22,6 +22,8 @@ export {
   subscribeToNetwork,
 } from './core/store-network'
 export type { Endpoints, EndpointsConfig } from './core/store-network'
+export { getProviders, setProviders } from './core/chain-providers'
+export type { NetworkProviders, ProvidersConfig } from './core/chain-providers'
 
 export type { PaymentOpts } from './types/common'
 
