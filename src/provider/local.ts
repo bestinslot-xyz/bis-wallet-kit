@@ -329,7 +329,14 @@ async function signPSBT(psbtBase64: string, broadcast: boolean, inputsToSign: an
   signedPsbt = psbt.toHex()
 
   if (broadcast) {
-    broadcastTxes([psbt.toHex()])
+    // Broadcast the finished transaction, from a finalized copy, and resolve to its txid.
+    const finished = psbt.clone()
+    finalizePsbtInputs(finished)
+    const txids = await broadcastTxes([finished.extractTransaction().toHex()])
+    if (txids == null) {
+      throw new Error('Failed to broadcast transaction.')
+    }
+    return txids[0]!
   }
   return signedPsbt
 }

@@ -7,8 +7,6 @@ import type {
   Utxo,
 } from './chain-providers'
 import type { AllBalanceDetails, APIOrdinalUtxoInfo, APIUtxoInfo } from './helpers'
-import { Buffer } from 'node:buffer'
-import * as bitcoinjs from 'bitcoinjs-lib'
 import { BackendError } from './backend-error'
 import { fetchWithErrors, getEndpointUrl, getPublicRpcUrl } from './helpers'
 import { assertHttpUrl } from './store-network'
@@ -78,8 +76,20 @@ export class BisChainProvider implements ChainProvider {
 
   async broadcast(txHexes: string[]): Promise<string[]> {
     const url = await getEndpointUrl('tx', 'sendrawtransactions', this.tx)
-    await postTxHexes(url, txHexes)
-    return txHexes.map(txidOfHex)
+    const txids = await postTxHexes(url, txHexes)
+    if (
+      !Array.isArray(txids) ||
+      txids.length !== txHexes.length ||
+      !txids.every(txid => typeof txid === 'string')
+    ) {
+      throw new BackendError(
+        `Unexpected broadcast response: ${JSON.stringify(txids)}`,
+        undefined,
+        undefined,
+        url
+      )
+    }
+    return txids
   }
 }
 
@@ -141,18 +151,5 @@ async function postTxHexes(url: string, txHexes: string[]): Promise<any> {
       undefined,
       url
     )
-  }
-}
-
-/**
- * The txid of a raw transaction. Bytes that do not parse as a transaction hash as they are.
- */
-function txidOfHex(txHex: string): string {
-  try {
-    return bitcoinjs.Transaction.fromHex(txHex).getId()
-  } catch {
-    return Buffer.from(bitcoinjs.crypto.hash256(Buffer.from(txHex, 'hex')))
-      .reverse()
-      .toString('hex')
   }
 }

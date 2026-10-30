@@ -38,12 +38,13 @@ export interface MempoolAcceptResult {
 }
 
 /**
- * The balance of an address in sats.
+ * The balance of an address in sats, over every output of the address, inscribed and runic ones
+ * included. The spendable total is `confirmed + mempool`.
  */
 export interface ChainBalance {
-  /** The sum of the address's confirmed outputs. */
+  /** The sum of the address's confirmed outputs that no mempool transaction spends. */
   confirmed: number
-  /** The amount that unconfirmed transactions add to (or, when negative, remove from) `confirmed`. */
+  /** The sum of the address's unspent outputs that unconfirmed transactions create. */
   mempool: number
 }
 

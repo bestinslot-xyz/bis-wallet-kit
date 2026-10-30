@@ -74,10 +74,13 @@ interface MempoolAcceptResult {
 }
 
 interface ChainBalance {
-  confirmed: number // sats in confirmed outputs
-  mempool: number // sats unconfirmed transactions add (or, negative, remove)
+  confirmed: number // sats in confirmed outputs that no mempool transaction spends
+  mempool: number // sats in unspent outputs that unconfirmed transactions create
 }
 ```
+
+Both `ChainBalance` amounts cover every output of the address, inscribed and runic ones included,
+and the address's spendable total is their sum.
 
 `MempoolAcceptResult` matches the entries of Bitcoin Core's `testmempoolaccept`, so a provider
 backed by `bitcoind` can return that RPC's result as it is.
