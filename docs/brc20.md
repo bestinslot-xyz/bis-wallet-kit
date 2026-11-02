@@ -120,7 +120,7 @@ const quote = await brc20.sendAsBrc20({ ...args, dryRun: true })
 //   walletPrompts,  // 2 per step
 //   feeRate,
 //   steps: [{ step: 'brc20Transfer' | 'progWithdraw' | 'progDeposit' | 'progTransfer'
-//                 | 'frBtcWrap' | 'frBtcUnwrap',
+//                 | 'frBtcWrap' | 'frBtcUnwrap' | 'progTransact',
 //             minerFeeSats, postageSats, paymentSats, walletPrompts }],
 // }
 ```
@@ -194,7 +194,15 @@ const { transact, txHash, txIds } = await brc20.transact({ rawTx, feeRate: 2, dr
 - Only legacy (type 0) transactions are accepted, signed with the EIP-155 chain ID of the selected
   network: `0x4252433230` (284847977008) on mainnet, `0x425243323073` (72921082114163) on signet and
   testnet. `rawTx` is hex with or without `0x`. An unsigned, typed or wrong-chain transaction is
-  refused before anything is signed.
+  refused before anything is signed, as is one with non-canonical RLP or a high-s signature, which
+  the BRC2.0 module cannot decode.
+- `value` must be 0, since BRC2.0 has no native value transfer, and `to` must not be the zero
+  address, which BRC2.0 runs as a contract creation. Omit `to` to create a contract.
+- The kit reads the signer's account nonce with `eth_getTransactionCount` and accepts a `nonce` from
+  that value to 9 above it. A transaction with a used nonce, or one 10 or more ahead, still spends
+  the BTC for its inscription while BRC2.0 drops it and nothing executes, so the kit refuses both,
+  as it does a non-zero `value`. A nonce above the account nonce is held for up to 10 blocks for the
+  transactions that fill the gap; BRC2.0 drops it if the gap is still open after that.
 - BRC2.0 grants each inscription `content bytes × 12000` gas. The kit pads the content with spaces
   until it covers the transaction's gas limit, and refuses a gas limit that needs more than 350,000
   content bytes.
@@ -209,8 +217,8 @@ const { transact, txHash, txIds } = await brc20.transact({ rawTx, feeRate: 2, dr
 await brc20.deploySmartContract(
   bytecodeHex, // creation bytecode, constructor arguments already appended
   estimatedGas,
-  gasPerVbyte,
-  feeRate,
+  12000, // gasPerVbyte: BRC2.0 grants 12000 gas per content byte
+  feeRate, // integer sats/vB
   postage, // or null
   dryRun,
   paymentOpts // optional
@@ -226,8 +234,8 @@ await brc20.deploySmartContractAbi(
   abi,
   [constructorArg1, constructorArg2],
   estimatedGas,
-  gasPerVbyte,
-  feeRate,
+  12000, // gasPerVbyte
+  feeRate, // integer sats/vB
   postage,
   dryRun
 )
@@ -238,6 +246,12 @@ deployer, and so `from` of the creation, is `getEvmAddressFromBitcoinAddress(ord
 the contract address derives from that address and its nonce. The result carries the commit, reveal
 and send transaction ids and signed hexes, the inscription id, the postage and the secret. With
 `dryRun: true` nothing is broadcast.
+
+- The kit pads the deploy inscription until `content bytes × gasPerVbyte` covers `estimatedGas`.
+  BRC2.0 grants 12000 gas per content byte, so pass 12000; a value above 12000 would pad too little
+  and is refused.
+- `feeRate` must be an integer.
+- A failed broadcast request throws.
 
 ## Call a smart contract
 

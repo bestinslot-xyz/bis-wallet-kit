@@ -43,7 +43,6 @@ export interface ParsedLegacyTx {
  * Parses a signed legacy (type 0) EVM transaction carrying the EIP-155 chain ID of the current
  * network's BRC2.0 chain.
  *
- * @param rawTx Hex of the signed transaction, with or without `0x`, any case.
  * The checks mirror what the BRC2.0 module accepts and executes: a canonical RLP encoding, a
  * low-s signature, a value of 0 (the module runs every transaction with value 0), and no zero
  * address recipient (the module treats it as a contract creation).
