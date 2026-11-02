@@ -1,10 +1,11 @@
+import type { InscriptionDetails } from '../types/inscription'
 import type { SignProgressOptions } from './sign-progress'
 import { Buffer } from 'node:buffer'
 import { Buff } from '@cmdcode/buff-utils'
 import { Script } from '@cmdcode/tapscript'
 import * as bitcoinjs from 'bitcoinjs-lib'
 import { getBitcoinNetwork } from '../lib/bitcoin'
-import { InscriptionDetails } from '../types/inscription'
+import { textInscription } from '../types/inscription'
 import { WalletInfo } from '../types/wallet'
 import {
   compressSmartContractData,
@@ -141,10 +142,6 @@ export function opReturnTarget(): WalletInfo {
   )
 }
 
-function textInscription(content: Buff): InscriptionDetails {
-  return new InscriptionDetails(Buff.str('text/plain'), null, null, null, null, content)
-}
-
 function targetPostage(target: WalletInfo): number {
   return target.isOpReturn ? 1 : getDustValue(target)
 }
@@ -158,12 +155,10 @@ export async function callInscription(
   calldata: string,
   gasCeiling: number
 ): Promise<InscriptionDetails> {
-  let content = Buff.str(
-    `{"p":"brc20-prog","op":"c","c":"${contractAddress}","b":"${await compressSmartContractData(calldata)}"}`
-  )
-  if (content.length * GAS_PER_BYTE < gasCeiling) {
-    const padding = Math.ceil((gasCeiling - content.length * GAS_PER_BYTE) / GAS_PER_BYTE)
-    content = content.append('20'.repeat(padding))
+  let content = `{"p":"brc20-prog","op":"c","c":"${contractAddress}","b":"${await compressSmartContractData(calldata)}"}`
+  const length = new TextEncoder().encode(content).length
+  if (length * GAS_PER_BYTE < gasCeiling) {
+    content += ' '.repeat(Math.ceil((gasCeiling - length * GAS_PER_BYTE) / GAS_PER_BYTE))
   }
   return textInscription(content)
 }
@@ -466,9 +461,7 @@ export async function sendAsBrc20(
     steps.push({
       name: 'progWithdraw',
       inscription: textInscription(
-        Buff.str(
-          `{"p":"brc20-module","op":"withdraw","tick":"${tick}","amt":"${fromProgAmount}","module":"BRC20PROG"}`
-        )
+        `{"p":"brc20-module","op":"withdraw","tick":"${tick}","amt":"${fromProgAmount}","module":"BRC20PROG"}`
       ),
       target: toSelf ? recipientWallet : new WalletInfo(false, null, ordinalsAddress, null, null),
     })
