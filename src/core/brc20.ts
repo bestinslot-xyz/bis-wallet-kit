@@ -318,7 +318,8 @@ export async function deploySmartContract(
   }
 
   const txes = [res.signed_commit_tx_hex, res.signed_reveal_tx_hex, sendInscriptionTx.signedTxHex]
-  await broadcastTxes(txes)
+  const sent = await broadcastTxes(txes)
+  if (sent == null) throw new Error('Broadcast request failed')
   return {
     commitTxId: res.commit_txid,
     signedCommitTxHex: res.signed_commit_tx_hex,
@@ -498,7 +499,8 @@ export async function callSmartContract(
   }
 
   const txes = [res.signed_commit_tx_hex, res.signed_reveal_tx_hex, sendInscriptionTx.signedTxHex]
-  await broadcastTxes(txes)
+  const sent = await broadcastTxes(txes)
+  if (sent == null) throw new Error('Broadcast request failed')
   return {
     commitTxId: res.commit_txid,
     signedCommitTxHex: res.signed_commit_tx_hex,
@@ -689,7 +691,8 @@ export async function callSmartContractFromPaymentWallet(
     mintResult.signedRevealTxHex,
     sendInscriptionTx.signedTxHex,
   ]
-  await broadcastTxes(txes)
+  const sent = await broadcastTxes(txes)
+  if (sent == null) throw new Error('Broadcast request failed')
   return {
     commitTxId: mintResult.commitTxId,
     signedCommitTxHex: mintResult.signedCommitTxHex,
@@ -861,7 +864,8 @@ export async function depositToBrc20Prog(
     mintResult.signed_reveal_tx_hex,
     sendInscriptionTx.signedTxHex,
   ]
-  await broadcastTxes(txes)
+  const sent = await broadcastTxes(txes)
+  if (sent == null) throw new Error('Broadcast request failed')
   return {
     commitTxId: mintResult.commit_txid,
     signedCommitTxHex: mintResult.signed_commit_tx_hex,
@@ -984,7 +988,8 @@ export async function withdrawFromBrc20Prog(
     mintResult.signed_reveal_tx_hex,
     sendInscriptionTx.signedTxHex,
   ]
-  await broadcastTxes(txes)
+  const sent = await broadcastTxes(txes)
+  if (sent == null) throw new Error('Broadcast request failed')
   return {
     commitTxId: mintResult.commit_txid,
     signedCommitTxHex: mintResult.signed_commit_tx_hex,

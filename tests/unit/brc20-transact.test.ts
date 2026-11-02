@@ -49,6 +49,7 @@ function fakeCardinalUtxo(txid: string, value: number) {
 const broadcastBodies: string[][] = []
 const rpcCalls: { method: string; params: unknown[] }[] = []
 let accountNonce = 0
+let broadcastFails = false
 let fetchMock: ReturnType<typeof vi.fn>
 
 function jsonResponse(data: unknown) {
@@ -216,41 +217,62 @@ describe('brc20-transact', () => {
   })
 })
 
-describe('brc20.transact', () => {
-  beforeEach(async () => {
-    const txid = 'aa'.repeat(32)
-    const utxos = [fakeCardinalUtxo(txid, 200000)]
-    const prevHexByTxid: Record<string, string> = { [txid]: prevTxHex(200000) }
-    broadcastBodies.length = 0
-    rpcCalls.length = 0
-    accountNonce = 0
+/** Stubs fetch with one 200k-sat payer UTXO, a BRC2.0 RPC and a broadcast endpoint. */
+async function installChainMocks() {
+  const txid = 'aa'.repeat(32)
+  const utxos = [fakeCardinalUtxo(txid, 200000)]
+  const prevHexByTxid: Record<string, string> = { [txid]: prevTxHex(200000) }
+  broadcastBodies.length = 0
+  rpcCalls.length = 0
+  accountNonce = 0
+  broadcastFails = false
 
-    fetchMock = vi.fn(async (url: string | URL, opts?: any) => {
-      const u = String(url)
-      if (u.startsWith('https://rpc-signet.brc20.build')) {
-        const { id, method, params } = JSON.parse(opts.body)
-        rpcCalls.push({ method, params })
-        if (method === 'eth_getTransactionCount')
-          return jsonResponse({ jsonrpc: '2.0', id, result: `0x${accountNonce.toString(16)}` })
-      }
-      if (u.includes('/cardinal_utxos/')) return jsonResponse({ data: utxos })
-      if (u.includes('/gettxhex/'))
-        return jsonResponse(prevHexByTxid[u.split('/gettxhex/')[1]!] ?? '')
-      if (u.includes('/testmempoolaccept')) {
-        const n = JSON.parse(opts.body).txhexes?.length ?? 1
-        return jsonResponse(Array.from({ length: n }, () => ({ allowed: true })))
-      }
-      if (u.includes('/sendrawtransactions')) {
-        const txhexes: string[] = JSON.parse(opts.body).txhexes
-        broadcastBodies.push(txhexes)
-        return jsonResponse(txhexes.map(hex => bitcoin.Transaction.fromHex(hex).getId()))
-      }
-      return { ok: false, status: 404, statusText: 'Not Found', json: async () => ({}) }
-    })
-    vi.stubGlobal('fetch', fetchMock)
-
-    await wallet.connectLocalWallet(WIF, 'signet', 'p2wpkh', 'unisat')
+  fetchMock = vi.fn(async (url: string | URL, opts?: any) => {
+    const u = String(url)
+    if (u.startsWith('https://rpc-signet.brc20.build')) {
+      const { id, method, params } = JSON.parse(opts.body)
+      rpcCalls.push({ method, params })
+      if (method === 'eth_getTransactionCount')
+        return jsonResponse({ jsonrpc: '2.0', id, result: `0x${accountNonce.toString(16)}` })
+    }
+    if (u.includes('/cardinal_utxos/')) return jsonResponse({ data: utxos })
+    if (u.includes('/gettxhex/'))
+      return jsonResponse(prevHexByTxid[u.split('/gettxhex/')[1]!] ?? '')
+    if (u.includes('/testmempoolaccept')) {
+      const n = JSON.parse(opts.body).txhexes?.length ?? 1
+      return jsonResponse(Array.from({ length: n }, () => ({ allowed: true })))
+    }
+    if (u.includes('/sendrawtransactions')) {
+      const txhexes: string[] = JSON.parse(opts.body).txhexes
+      broadcastBodies.push(txhexes)
+      if (broadcastFails) return jsonResponse({ error: 'rejected' })
+      return jsonResponse(txhexes.map(hex => bitcoin.Transaction.fromHex(hex).getId()))
+    }
+    return { ok: false, status: 404, statusText: 'Not Found', json: async () => ({}) }
   })
+  vi.stubGlobal('fetch', fetchMock)
+
+  await wallet.connectLocalWallet(WIF, 'signet', 'p2wpkh', 'unisat')
+}
+
+describe('brc20.deploySmartContract', () => {
+  beforeEach(installChainMocks)
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('deploySmartContract throws when the broadcast request fails', async () => {
+    broadcastFails = true
+    await expect(
+      brc20.deploySmartContract('0x6080', 50_000, 12000, 2, null, false)
+    ).rejects.toThrow('Broadcast request failed')
+    expect(broadcastBodies.length).toBe(1)
+  })
+})
+
+describe('brc20.transact', () => {
+  beforeEach(installChainMocks)
 
   afterEach(() => {
     vi.unstubAllGlobals()
