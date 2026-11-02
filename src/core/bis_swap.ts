@@ -614,8 +614,9 @@ export interface SwapBalance {
   ticker: string // LP tokens: LP-<BASE>-<QUOTE>, QUOTE is 'BTC' for WBTC pairs
   decimals: number
   is_lp: boolean
-  // Sats per whole token; null when the token has no BTC price (no direct BTC pool
-  // and no one-hop route through a BTC pool holding at least min_btc_exposure_sats).
+  // Sats per whole token; null when the token has no BTC price route: its own BTC
+  // pool, or one or two hops through other tokens to one, holding at least
+  // min_btc_exposure_sats (see docs/swap.md).
   // For an LP token, the price of its base token.
   price_sats: number | null
   reserve_token_amt?: string // LP only: the base token's reserve
@@ -939,12 +940,13 @@ export interface PairInfo {
   // pairs; for token/token pairs the higher-priority fee token, else token_b.
   price_quote_token: string
   // BTC reserve backing the pair, in sats: a WBTC pair's own WBTC reserve, or for a
-  // token/token pair the sum of both tokens' direct BTC pools.
+  // token/token pair the BTC behind both tokens' price routes, a BTC pool both
+  // reach counted once.
   exposure_sats: bigint
   // Market cap of the base token in WBTC sats: its circulating BRC-20 supply
   // (max - unminted - burned) at the pair's price. A token/token pair values it
-  // at the lower of the base's own BTC pool and the quote's BTC pool. null when
-  // the supply is unlimited or unknown, or no BTC pool deep enough prices it.
+  // at the lower of the base's BTC price and, through this pair, the quote's.
+  // null when the supply is unlimited or unknown, or no price route prices it.
   market_cap: bigint | null
 }
 export interface ListPairsResponse {
@@ -1130,7 +1132,7 @@ export interface GetTvlHistoryResponse {
 /**
  * Fetches a daily Total Value Locked (TVL) series for a token pair from the swap backend, for charting TVL over time.
  *
- * TVL is valued in WBTC sats: 2 x the WBTC-side reserve for a WBTC pair. A token/token pair (`wbtc_side: ''`) is valued through each token's direct BTC pool as of that day, and its point is `tvl: null` on days its BTC exposure is below the backend's threshold. Points are one per day, oldest first, each carrying the pair's reserves as of that day (carried forward across days with no on-chain change).
+ * TVL is valued in WBTC sats: 2 x the WBTC-side reserve for a WBTC pair. A token/token pair (`wbtc_side: ''`) is valued along each token's BTC price route at that day's reserves, and its point is `tvl: null` on days its BTC exposure is below the backend's threshold. Points are one per day, oldest first, each carrying the pair's reserves as of that day (carried forward across days with no on-chain change).
  *
  * @param params An object with the pair address and the number of days to look back (max 365; the backend clamps out-of-range values).
  * @returns {Promise<GetTvlHistoryResponse>} A promise that resolves to the pair address, token addresses and symbols, which side is WBTC, the period in days, and the ascending array of `{ timestamp, block_height, tvl }` points. Each `tvl` is a string of sats (or `null`, see above) and can be converted to bigint if needed.
