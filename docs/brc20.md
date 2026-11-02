@@ -175,6 +175,70 @@ inputs (about 4M gas, roughly 85 vB of padding) and refuses a send that would sp
 broadcast. A call short of gas reverts on BRC2.0 while its Bitcoin transactions still confirm, so
 the BTC paid to the signer would not be credited.
 
+## Transact a pre-signed EVM transaction
+
+`transact` inscribes a signed EVM transaction as a BRC2.0 `transact` op. The transaction's `from` is
+the EVM key that signed it, not the Bitcoin wallet: the wallet only pays for the inscription, and
+the EVM signer owns the nonce, the gas and the resulting state changes.
+
+```ts
+const quote = await brc20.transact({ rawTx, feeRate: 2, dryRun: true })
+// Brc20SendQuote with steps: [{ step: 'progTransact', ... }]
+
+const { transact, txHash, txIds } = await brc20.transact({ rawTx, feeRate: 2, dryRun: false })
+// transact: { commitTxId, revealTxId, sendTxId, inscriptionId }
+// txHash:   keccak256(rawTx), the BRC2.0 transaction hash
+// txIds:    commit, reveal and send transaction ids, in chain order
+```
+
+- Only legacy (type 0) transactions are accepted, signed with the EIP-155 chain ID of the selected
+  network: `0x4252433230` (284847977008) on mainnet, `0x425243323073` (72921082114163) on signet and
+  testnet. `rawTx` is hex with or without `0x`. An unsigned, typed or wrong-chain transaction is
+  refused before anything is signed.
+- BRC2.0 grants each inscription `content bytes × 12000` gas. The kit pads the content with spaces
+  until it covers the transaction's gas limit, and refuses a gas limit that needs more than 350,000
+  content bytes.
+- `txHash` is `keccak256(rawTx)`, so it can be looked up on the BRC2.0 RPC once the send transaction
+  confirms.
+- The send goes to `OP_RETURN "BRC20PROG"` from the ordinals identity, so the quote and
+  `onSignRequest` behave as in [Fee quote](#fee-quote) with one step and 2 wallet prompts.
+
+## Deploy a smart contract
+
+```ts
+await brc20.deploySmartContract(
+  bytecodeHex, // creation bytecode, constructor arguments already appended
+  estimatedGas,
+  gasPerVbyte,
+  feeRate,
+  postage, // or null
+  dryRun,
+  paymentOpts // optional
+)
+```
+
+Or by ABI and constructor parameters (the kit encodes the arguments and appends them to the
+bytecode):
+
+```ts
+await brc20.deploySmartContractAbi(
+  bytecode,
+  abi,
+  [constructorArg1, constructorArg2],
+  estimatedGas,
+  gasPerVbyte,
+  feeRate,
+  postage,
+  dryRun
+)
+```
+
+Each is one deploy inscription sent to `OP_RETURN "BRC20PROG"` from the ordinals identity. The
+deployer, and so `from` of the creation, is `getEvmAddressFromBitcoinAddress(ordinalsAddress)`, and
+the contract address derives from that address and its nonce. The result carries the commit, reveal
+and send transaction ids and signed hexes, the inscription id, the postage and the secret. With
+`dryRun: true` nothing is broadcast.
+
 ## Call a smart contract
 
 By raw calldata:
