@@ -94,7 +94,13 @@ export interface Brc20SendQuote {
 }
 
 export type Brc20SendStepName =
-  'brc20Transfer' | 'progWithdraw' | 'progDeposit' | 'progTransfer' | 'frBtcWrap' | 'frBtcUnwrap'
+  | 'brc20Transfer'
+  | 'progWithdraw'
+  | 'progDeposit'
+  | 'progTransfer'
+  | 'frBtcWrap'
+  | 'frBtcUnwrap'
+  | 'progTransact'
 
 /** An output the send transaction carries right after the target, at vout 1, 2, …. */
 export interface ChainExtraOutput {

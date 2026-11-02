@@ -1,8 +1,10 @@
 import type { InscriptionDetails } from '../types/inscription'
+import type { Brc20SendPart, Brc20SendQuote } from './brc20-send'
+import type { SignProgressOptions } from './sign-progress'
 import { ethers } from 'ethers'
 import { textInscription } from '../types/inscription'
 import { compressSmartContractData } from './brc20'
-import { GAS_PER_BYTE } from './brc20-send'
+import { assertFeeRate, GAS_PER_BYTE, opReturnTarget, runChain } from './brc20-send'
 import { getNetwork } from './store-network'
 
 /** Largest inscription content, in bytes, a transact inscription may be padded to. */
@@ -83,4 +85,47 @@ export async function transactInscription(rawTx: string): Promise<InscriptionDet
   const length = new TextEncoder().encode(content).length
   if (BigInt(length) < neededBytes) content += ' '.repeat(Number(neededBytes) - length)
   return textInscription(content)
+}
+
+export interface TransactArgs extends SignProgressOptions {
+  /** Signed legacy (type 0) EVM transaction, hex with or without 0x. */
+  rawTx: string
+  feeRate: number
+  dryRun: boolean
+}
+
+export interface TransactResult {
+  /** The transact inscription's commit, reveal and send transactions. */
+  transact: Brc20SendPart
+  /** BRC2.0 tx hash, keccak256(rawTx). */
+  txHash: string
+  /** Every broadcast transaction id, in chain order. */
+  txIds: string[]
+}
+
+/**
+ * Inscribes a pre-signed legacy EVM transaction as a BRC2.0 `transact` op. The send transaction
+ * moves the inscription to `OP_RETURN "BRC20PROG"`, where the module executes the embedded
+ * transaction.
+ */
+export async function transact(args: TransactArgs): Promise<Brc20SendQuote | TransactResult> {
+  const { rawTx, feeRate, dryRun } = args
+  if (typeof dryRun !== 'boolean') throw new Error('dryRun must be a boolean')
+  assertFeeRate(feeRate)
+  const { hash } = parseLegacyRawTx(rawTx)
+
+  const res = await runChain(
+    [
+      {
+        name: 'progTransact',
+        inscription: await transactInscription(rawTx),
+        target: opReturnTarget(),
+      },
+    ],
+    feeRate,
+    dryRun,
+    args
+  )
+  if (!('parts' in res)) return res
+  return { transact: res.parts.progTransact!, txHash: hash, txIds: res.txIds }
 }

@@ -80,6 +80,7 @@ const SHARED_NAMESPACES: Record<string, string[]> = {
     'getFrBtcAddress',
     'wrapBtcToBrc20Prog',
     'unwrapBtcFromBrc20Prog',
+    'transact',
     'deployBrc20Inscription',
     'mintBrc20Inscription',
     'transferBrc20Inscription',

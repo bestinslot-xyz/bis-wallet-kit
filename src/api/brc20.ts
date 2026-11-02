@@ -5,6 +5,7 @@ import type {
   SendAsBrc20ProgResult,
   SendAsBrc20Result,
 } from '../core/brc20-send'
+import type { TransactArgs, TransactResult } from '../core/brc20-transact'
 import type { FrBtcResult, UnwrapBtcFromBrc20ProgArgs, WrapBtcToBrc20ProgArgs } from '../core/frbtc'
 import type { BISWalletPurpose, PaymentOpts } from '../types/common'
 import {
@@ -18,6 +19,7 @@ import {
   sendAsBrc20 as sendAsBrc20Core,
   sendAsBrc20Prog as sendAsBrc20ProgCore,
 } from '../core/brc20-send'
+import { transact as transactCore } from '../core/brc20-transact'
 import {
   unwrapBtcFromBrc20Prog as unwrapBtcFromBrc20ProgCore,
   wrapBtcToBrc20Prog as wrapBtcToBrc20ProgCore,
@@ -101,6 +103,29 @@ export async function sendAsBrc20Prog(
   args: SendAsBrc20ProgArgs
 ): Promise<Brc20SendQuote | SendAsBrc20ProgResult> {
   return await sendAsBrc20ProgCore(args)
+}
+
+export type { TransactArgs, TransactResult } from '../core/brc20-transact'
+
+/**
+ * Inscribes a pre-signed legacy EVM transaction as a BRC2.0 `transact` op, so a signature made
+ * outside the kit (for example with a BRC2.0 EVM wallet) executes on BRC2.0. Only legacy (type 0)
+ * transactions carrying the BRC2.0 EIP-155 chain ID of the current network are accepted. The
+ * inscription is padded so its content bytes cover the transaction's gas limit, and its send
+ * transaction moves it to `OP_RETURN "BRC20PROG"`.
+ *
+ * With `dryRun: true` nothing is signed or broadcast and the result is a fee quote.
+ * `onSignRequest` is called before each wallet prompt with `{ step, total }`; `total` is 2.
+ *
+ * @param args - `rawTx` (signed legacy transaction hex, with or without `0x`), `feeRate` (sats/vB), `dryRun`, and optional `onSignRequest`.
+ * @returns The quote for a dry run; otherwise the inscription's transaction ids, every txid in chain order, and `txHash`, the BRC2.0 transaction hash (`keccak256(rawTx)`).
+ * @throws {Error} When `rawTx` is not a signed legacy transaction for this network's BRC2.0 chain, or its gas limit needs more inscription content than fits, before anything is signed.
+ */
+export function transact(args: TransactArgs & { dryRun: true }): Promise<Brc20SendQuote>
+export function transact(args: TransactArgs & { dryRun: false }): Promise<TransactResult>
+export function transact(args: TransactArgs): Promise<Brc20SendQuote | TransactResult>
+export async function transact(args: TransactArgs): Promise<Brc20SendQuote | TransactResult> {
+  return await transactCore(args)
 }
 
 export type { FrBtcResult, UnwrapBtcFromBrc20ProgArgs, WrapBtcToBrc20ProgArgs } from '../core/frbtc'
