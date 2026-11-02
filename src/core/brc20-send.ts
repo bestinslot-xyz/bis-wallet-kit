@@ -31,7 +31,7 @@ import { SignProgress } from './sign-progress'
 import { getWalletInfo } from './store'
 
 /** BRC2.0 grants each inscription `content bytes × GAS_PER_BYTE` gas. */
-const GAS_PER_BYTE = 12000
+export const GAS_PER_BYTE = 12000
 /**
  * Gas ceiling for an ERC-20 `transfer`. A transfer to a fresh holder costs about 52k gas; the call
  * inscription's own bytes grant well over this ceiling, so its content is padded only if it ever
