@@ -11,6 +11,8 @@ import type { BISWalletPurpose, PaymentOpts } from '../types/common'
 import {
   callSmartContract as callSmartContractFromOrdinalsWallet,
   callSmartContractFromPaymentWallet,
+  deploySmartContractAbi as deploySmartContractAbiCore,
+  deploySmartContract as deploySmartContractCore,
   depositToBrc20Prog as depositToBrc20ProgCore,
   evmEncodeFunctionCall,
   withdrawFromBrc20Prog as withdrawFromBrc20ProgCore,
@@ -339,6 +341,83 @@ export async function callSmartContractAbi(
     dryRun,
     paymentOpts,
     walletTypeString
+  )
+}
+
+/**
+ * Deploys a smart contract on BRC2.0 from the ordinals identity. The deploy is inscribed from the
+ * ordinals address, so the contract's deployer is `getEvmAddressFromBitcoinAddress(ordinalsAddress)`.
+ *
+ * @param bytecodeHex - The contract creation bytecode, as a hexadecimal string.
+ * @param estimatedGas - The estimated gas required for the deployment, used to size the inscription content.
+ * @param gasPerVbyte - The gas cost per virtual byte, used to size the inscription content.
+ * @param feeRate - The fee rate in sats/vbyte.
+ * @param postage - The postage in sats for the inscription, or null for none.
+ * @param dryRun - If true, the transactions are signed or built but not broadcast.
+ * @param paymentOpts - Optional extra payment output: when `paymentOpts.paymentAmount` is greater than 0, the transaction sends that many sats to `paymentOpts.paymentAddress` (funded by the connected wallet). Omit, or pass a non-positive amount, for no extra payment.
+ *
+ * @returns The commit, reveal and send transaction ids and signed hexes, the inscription id, the postage and the secret.
+ */
+export async function deploySmartContract(
+  bytecodeHex: string,
+  estimatedGas: number,
+  gasPerVbyte: number,
+  feeRate: number,
+  postage: number | null,
+  dryRun: boolean,
+  paymentOpts?: PaymentOpts
+): Promise<InscribeAndSendToOpReturn> {
+  return await deploySmartContractCore(
+    bytecodeHex,
+    estimatedGas,
+    gasPerVbyte,
+    feeRate,
+    postage,
+    paymentOpts?.paymentAddress || null,
+    paymentOpts?.paymentAmount || null,
+    dryRun
+  )
+}
+
+/**
+ * Deploys a smart contract on BRC2.0 from the ordinals identity, encoding the bytecode with its
+ * constructor parameters from the ABI first. The deploy is inscribed from the ordinals address, so the
+ * contract's deployer is `getEvmAddressFromBitcoinAddress(ordinalsAddress)`.
+ *
+ * @param bytecode - The contract creation bytecode, as a hexadecimal string.
+ * @param abi - The contract ABI, used to encode the constructor parameters.
+ * @param params - The constructor parameters, encoded with the bytecode.
+ * @param estimatedGas - The estimated gas required for the deployment, used to size the inscription content.
+ * @param gasPerVbyte - The gas cost per virtual byte, used to size the inscription content.
+ * @param feeRate - The fee rate in sats/vbyte.
+ * @param postage - The postage in sats for the inscription, or null for none.
+ * @param dryRun - If true, the transactions are signed or built but not broadcast.
+ * @param paymentOpts - Optional extra payment output: when `paymentOpts.paymentAmount` is greater than 0, the transaction sends that many sats to `paymentOpts.paymentAddress` (funded by the connected wallet). Omit, or pass a non-positive amount, for no extra payment.
+ *
+ * @returns The commit, reveal and send transaction ids and signed hexes, the inscription id, the postage and the secret.
+ */
+export async function deploySmartContractAbi(
+  bytecode: string,
+  abi: any,
+  params: any[],
+  estimatedGas: number,
+  gasPerVbyte: number,
+  feeRate: number,
+  postage: number | null,
+  dryRun: boolean,
+  paymentOpts?: PaymentOpts
+): Promise<InscribeAndSendToOpReturn> {
+  return await deploySmartContractAbiCore(
+    bytecode,
+    abi,
+    params,
+    estimatedGas,
+    gasPerVbyte,
+    feeRate,
+    postage,
+    paymentOpts?.paymentAddress || null,
+    paymentOpts?.paymentAmount || null,
+    dryRun
   )
 }
 

@@ -73,6 +73,8 @@ const SHARED_NAMESPACES: Record<string, string[]> = {
   brc20: [
     'callSmartContract',
     'callSmartContractAbi',
+    'deploySmartContract',
+    'deploySmartContractAbi',
     'depositToBrc20Prog',
     'withdrawFromBrc20Prog',
     'sendAsBrc20',
