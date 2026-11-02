@@ -333,19 +333,24 @@ const older = await swap.getRecentActivity({
 })
 ```
 
-Volume and TVL are in WBTC sats; APR is a percentage. For a **token/token pair** all three are null
-when the pair doesn't have enough BTC behind it: its `exposure_sats` (the BTC in both tokens' own
-BTC pools) must reach the backend's `fee_policy.min_btc_exposure_sats`. Below that they come back as
-`null`: `PairInfo.volume_24h` / `volume_7d` / `tvl` / `apr`, `total_volume_wbtc` from
-`getPairVolumeOverDays`, and each `getTvlHistory` point's `tvl`. Show them as "N/A", don't treat
-`null` as zero. Likewise `SwapBalance.price_sats` is `null` for a token with no BTC price.
+A token's **BTC price** comes from the shortest route to a BTC pool holding at least the backend's
+`fee_policy.min_btc_exposure_sats`: the token's own BTC pool; else one hop through a token with such
+a pool (`A -> Y -> BTC`); else two hops (`A -> Y -> Z -> BTC`), where the `Y/Z` pool also holds at
+least that much of `Z`. Routes never pass through BTC itself. `SwapBalance.price_sats` is `null` for
+a token with no route.
+
+Volume and TVL are in WBTC sats; APR is a percentage. A **token/token pair** values each side along
+its price route, and all three are null when the pair doesn't have enough BTC behind it: its
+`exposure_sats` (the BTC behind both tokens' routes, a pool both reach counted once) must reach
+`min_btc_exposure_sats`. Below that they come back as `null`: `PairInfo.volume_24h` / `volume_7d` /
+`tvl` / `apr`, `total_volume_wbtc` from `getPairVolumeOverDays`, and each `getTvlHistory` point's
+`tvl`. Show them as "N/A", don't treat `null` as zero.
 
 `PairInfo.market_cap` is the base token's market cap in WBTC sats: its circulating BRC-20 supply
-(max minus unminted minus burned) at the pair's price. Every valuation needs a BTC pool holding at
-least `min_btc_exposure_sats`: a WBTC pair's own pool, or for a token/token pair the lower of the
-base's own BTC pool and the quote token's BTC pool. It is `null` for a token with unlimited supply,
-a token that is not a wrapped BRC-20, or one no such pool prices. Sort by it with `market_cap_asc` /
-`market_cap_desc`.
+(max minus unminted minus burned) at the pair's price. A WBTC pair values it along the base's price
+route; a token/token pair takes the lower of the base's route and, through this pair, the quote
+token's. It is `null` for a token with unlimited supply, a token that is not a wrapped BRC-20, or
+one no route prices. Sort by it with `market_cap_asc` / `market_cap_desc`.
 
 Prices are quoted in `price_quote_token` (on `PairInfo` and `GetKlinesResponse`): WBTC for a WBTC
 pair; for a token/token pair, the higher-priority fee token if either side is one, else `token_b`. A
