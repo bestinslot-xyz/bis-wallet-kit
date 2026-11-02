@@ -269,6 +269,22 @@ describe('brc20.deploySmartContract', () => {
     ).rejects.toThrow('Broadcast request failed')
     expect(broadcastBodies.length).toBe(1)
   })
+
+  it('deploySmartContract and deploySmartContractAbi refuse gasPerVbyte above 12000', async () => {
+    await expect(brc20.deploySmartContract('0x6080', 50_000, 12001, 2, null, true)).rejects.toThrow(
+      /12000 gas per byte/
+    )
+    await expect(
+      brc20.deploySmartContractAbi('0x6080', [], [], 50_000, 12001, 2, null, true)
+    ).rejects.toThrow(/12000 gas per byte/)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('deploySmartContract accepts gasPerVbyte 12000', async () => {
+    const res = await brc20.deploySmartContract('0x6080', 50_000, 12000, 2, null, true)
+    expect(res.inscriptionId).toMatch(/i0$/)
+    expect(broadcastBodies.length).toBe(0)
+  })
 })
 
 describe('brc20.transact', () => {

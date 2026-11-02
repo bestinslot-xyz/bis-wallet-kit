@@ -18,6 +18,7 @@ import {
   withdrawFromBrc20Prog as withdrawFromBrc20ProgCore,
 } from '../core/brc20'
 import {
+  GAS_PER_BYTE,
   sendAsBrc20 as sendAsBrc20Core,
   sendAsBrc20Prog as sendAsBrc20ProgCore,
 } from '../core/brc20-send'
@@ -344,19 +345,29 @@ export async function callSmartContractAbi(
   )
 }
 
+/** Refuses a `gasPerVbyte` above what BRC2.0 grants, which would pad a deploy too little. */
+function assertDeployGasPerVbyte(gasPerVbyte: number): void {
+  if (gasPerVbyte > GAS_PER_BYTE) {
+    throw new Error(
+      `gasPerVbyte ${gasPerVbyte} is above what BRC2.0 grants: ${GAS_PER_BYTE} gas per byte; pass ${GAS_PER_BYTE}`
+    )
+  }
+}
+
 /**
  * Deploys a smart contract on BRC2.0 from the ordinals identity. The deploy is inscribed from the
  * ordinals address, so the contract's deployer is `getEvmAddressFromBitcoinAddress(ordinalsAddress)`.
  *
  * @param bytecodeHex - The contract creation bytecode, as a hexadecimal string.
  * @param estimatedGas - The estimated gas required for the deployment, used to size the inscription content.
- * @param gasPerVbyte - The gas cost per virtual byte, used to size the inscription content.
- * @param feeRate - The fee rate in sats/vbyte.
+ * @param gasPerVbyte - Gas each inscription content byte grants, used to pad the content to `estimatedGas`. Pass 12000: BRC2.0 grants 12000 gas per byte, so a larger value pads too little and under-gases the deploy.
+ * @param feeRate - The fee rate in sats/vbyte, an integer.
  * @param postage - The postage in sats for the inscription, or null for none.
  * @param dryRun - If true, the transactions are signed or built but not broadcast.
  * @param paymentOpts - Optional extra payment output: when `paymentOpts.paymentAmount` is greater than 0, the transaction sends that many sats to `paymentOpts.paymentAddress` (funded by the connected wallet). Omit, or pass a non-positive amount, for no extra payment.
  *
  * @returns The commit, reveal and send transaction ids and signed hexes, the inscription id, the postage and the secret.
+ * @throws {Error} When `gasPerVbyte` is above 12000, or the broadcast request fails.
  */
 export async function deploySmartContract(
   bytecodeHex: string,
@@ -367,6 +378,7 @@ export async function deploySmartContract(
   dryRun: boolean,
   paymentOpts?: PaymentOpts
 ): Promise<InscribeAndSendToOpReturn> {
+  assertDeployGasPerVbyte(gasPerVbyte)
   return await deploySmartContractCore(
     bytecodeHex,
     estimatedGas,
@@ -388,13 +400,14 @@ export async function deploySmartContract(
  * @param abi - The contract ABI, used to encode the constructor parameters.
  * @param params - The constructor parameters, encoded with the bytecode.
  * @param estimatedGas - The estimated gas required for the deployment, used to size the inscription content.
- * @param gasPerVbyte - The gas cost per virtual byte, used to size the inscription content.
- * @param feeRate - The fee rate in sats/vbyte.
+ * @param gasPerVbyte - Gas each inscription content byte grants, used to pad the content to `estimatedGas`. Pass 12000: BRC2.0 grants 12000 gas per byte, so a larger value pads too little and under-gases the deploy.
+ * @param feeRate - The fee rate in sats/vbyte, an integer.
  * @param postage - The postage in sats for the inscription, or null for none.
  * @param dryRun - If true, the transactions are signed or built but not broadcast.
  * @param paymentOpts - Optional extra payment output: when `paymentOpts.paymentAmount` is greater than 0, the transaction sends that many sats to `paymentOpts.paymentAddress` (funded by the connected wallet). Omit, or pass a non-positive amount, for no extra payment.
  *
  * @returns The commit, reveal and send transaction ids and signed hexes, the inscription id, the postage and the secret.
+ * @throws {Error} When `gasPerVbyte` is above 12000, or the broadcast request fails.
  */
 export async function deploySmartContractAbi(
   bytecode: string,
@@ -407,6 +420,7 @@ export async function deploySmartContractAbi(
   dryRun: boolean,
   paymentOpts?: PaymentOpts
 ): Promise<InscribeAndSendToOpReturn> {
+  assertDeployGasPerVbyte(gasPerVbyte)
   return await deploySmartContractAbiCore(
     bytecode,
     abi,
