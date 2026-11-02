@@ -44,7 +44,14 @@ export interface ParsedLegacyTx {
  * network's BRC2.0 chain.
  *
  * @param rawTx Hex of the signed transaction, with or without `0x`, any case.
- * @throws If the input is not valid hex, is unsigned, is not legacy, or targets another chain.
+ * The checks mirror what the BRC2.0 module accepts and executes: a canonical RLP encoding, a
+ * low-s signature, a value of 0 (the module runs every transaction with value 0), and no zero
+ * address recipient (the module treats it as a contract creation).
+ *
+ * @param rawTx Hex of the signed transaction, with or without `0x`, any case.
+ * @throws If the input is not valid hex, is unsigned, is not legacy, is not canonically encoded,
+ * has a high-s signature, targets another chain, carries a non-zero value, or sends to the zero
+ * address.
  */
 export function parseLegacyRawTx(rawTx: string): ParsedLegacyTx {
   const hex = normalizeHex(rawTx)
@@ -56,10 +63,24 @@ export function parseLegacyRawTx(rawTx: string): ParsedLegacyTx {
   }
   if (tx.type !== 0) throw new Error('Raw transaction must be a legacy (type 0) transaction')
   if (tx.from == null || tx.signature == null) throw new Error('Raw transaction must be signed')
+  if (tx.serialized.toLowerCase() !== `0x${hex}`) {
+    throw new Error('Raw transaction is not canonically RLP encoded')
+  }
+  if (BigInt(tx.signature.s) > ethers.N / 2n) {
+    throw new Error('Raw transaction signature has a high s value')
+  }
   const expected = getBrc20ProgChainId()
   if (tx.chainId !== expected) {
     throw new Error(
       `Raw transaction chain id ${tx.chainId} does not match BRC2.0 chain id ${expected}`
+    )
+  }
+  if (tx.value !== 0n) {
+    throw new Error('Raw transaction value must be 0: BRC2.0 has no native value transfer')
+  }
+  if (tx.to === ethers.ZeroAddress) {
+    throw new Error(
+      'Raw transaction sends to the zero address, which BRC2.0 runs as a contract creation; omit `to` for a contract creation'
     )
   }
   return {

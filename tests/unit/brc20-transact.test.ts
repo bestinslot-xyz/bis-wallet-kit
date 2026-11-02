@@ -145,6 +145,38 @@ describe('brc20-transact', () => {
     expect(() => parseLegacyRawTx('0xzz')).toThrow(/invalid raw transaction/i)
   })
 
+  it('parseLegacyRawTx rejects a non-zero value', async () => {
+    const raw = await signedTx(ethers.Wallet.createRandom(), { value: 1n })
+    expect(() => parseLegacyRawTx(raw)).toThrow(
+      'Raw transaction value must be 0: BRC2.0 has no native value transfer'
+    )
+  })
+
+  it('parseLegacyRawTx rejects the zero address as recipient', async () => {
+    const raw = await signedTx(ethers.Wallet.createRandom(), { to: ethers.ZeroAddress })
+    expect(() => parseLegacyRawTx(raw)).toThrow(/omit `to` for a contract creation/)
+  })
+
+  it('parseLegacyRawTx accepts a contract creation without `to`', async () => {
+    const raw = await signedTx(ethers.Wallet.createRandom(), { to: undefined })
+    expect(parseLegacyRawTx(raw).to).toBeNull()
+  })
+
+  it('parseLegacyRawTx rejects a non-canonical RLP encoding', async () => {
+    const fields = ethers.decodeRlp(await signedTx(ethers.Wallet.createRandom(), { nonce: 7 }))
+    expect((fields as string[])[0]).toBe('0x07')
+    const raw = ethers.encodeRlp(['0x0007', ...(fields as string[]).slice(1)])
+    expect(() => parseLegacyRawTx(raw)).toThrow(/canonical/)
+  })
+
+  it('parseLegacyRawTx rejects a high-s signature', async () => {
+    const fields = ethers.decodeRlp(await signedTx(ethers.Wallet.createRandom())) as string[]
+    // Above N/2 yet below 2^255, so it passes ethers' own top-bit check.
+    const highS = ethers.toBeHex(ethers.N / 2n + 1n, 32)
+    const raw = ethers.encodeRlp([...fields.slice(0, 8), highS])
+    expect(() => parseLegacyRawTx(raw)).toThrow(/high s/)
+  })
+
   it('transactInscription content is the t op with the compressed raw tx', async () => {
     const raw = await signedTx(ethers.Wallet.createRandom())
     const inscription = await transactInscription(raw)

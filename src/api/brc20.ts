@@ -121,7 +121,7 @@ export type { TransactArgs, TransactResult } from '../core/brc20-transact'
  *
  * @param args - `rawTx` (signed legacy transaction hex, with or without `0x`), `feeRate` (sats/vB), `dryRun`, and optional `onSignRequest`.
  * @returns The quote for a dry run; otherwise the inscription's transaction ids, every txid in chain order, and `txHash`, the BRC2.0 transaction hash (`keccak256(rawTx)`).
- * @throws {Error} When `rawTx` is not a signed legacy transaction for this network's BRC2.0 chain, its gas limit needs more inscription content than fits, or its nonce is below the signer's BRC2.0 account nonce or more than 9 above it, before anything is signed.
+ * @throws {Error} When `rawTx` is not a canonically encoded, low-s signed legacy transaction for this network's BRC2.0 chain, carries a non-zero value, sends to the zero address, its gas limit needs more inscription content than fits, or its nonce is below the signer's BRC2.0 account nonce or more than 9 above it, before anything is signed.
  */
 export function transact(args: TransactArgs & { dryRun: true }): Promise<Brc20SendQuote>
 export function transact(args: TransactArgs & { dryRun: false }): Promise<TransactResult>
