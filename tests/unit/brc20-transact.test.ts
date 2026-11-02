@@ -108,6 +108,15 @@ describe('brc20-transact', () => {
     expect(new TextDecoder().decode(inscription.mimeType!.to_bytes())).toBe('text/plain')
   })
 
+  it('transactInscription yields identical content for 0x, bare, 0X and uppercase input', async () => {
+    const raw = await signedTx(ethers.Wallet.createRandom())
+    const bare = raw.slice(2)
+    const expected = contentText(await transactInscription(raw))
+    for (const variant of [bare, `0X${bare}`, `0x${bare.toUpperCase()}`, bare.toUpperCase()]) {
+      expect(contentText(await transactInscription(variant))).toBe(expected)
+    }
+  })
+
   it('transactInscription pads to the tx gas limit', async () => {
     const raw = await signedTx(ethers.Wallet.createRandom(), { gasLimit: 5_000_000n })
     const inscription = await transactInscription(raw)

@@ -16,6 +16,11 @@ export function getBrc20ProgChainId(): bigint {
   return getNetwork() === 'mainnet' ? MAINNET_CHAIN_ID : TEST_CHAIN_ID
 }
 
+/** Lowercase hex without a `0x`/`0X` prefix. */
+function normalizeHex(rawTx: string): string {
+  return (rawTx.startsWith('0x') || rawTx.startsWith('0X') ? rawTx.slice(2) : rawTx).toLowerCase()
+}
+
 export interface ParsedLegacyTx {
   /** `keccak256(rawTx)`, lowercase with `0x`. This is the BRC2.0 transaction hash. */
   hash: string
@@ -36,9 +41,7 @@ export interface ParsedLegacyTx {
  * @throws If the input is not valid hex, is unsigned, is not legacy, or targets another chain.
  */
 export function parseLegacyRawTx(rawTx: string): ParsedLegacyTx {
-  const hex = (
-    rawTx.startsWith('0x') || rawTx.startsWith('0X') ? rawTx.slice(2) : rawTx
-  ).toLowerCase()
+  const hex = normalizeHex(rawTx)
   let tx: ethers.Transaction
   try {
     tx = ethers.Transaction.from(`0x${hex}`)
@@ -76,7 +79,7 @@ export async function transactInscription(rawTx: string): Promise<InscriptionDet
       `Transaction gas limit ${gasLimit} needs ${neededBytes} bytes of inscription content, above the ${MAX_TRANSACT_CONTENT_BYTES} byte maximum`
     )
   }
-  let content = `{"p":"brc20-prog","op":"t","b":"${await compressSmartContractData(rawTx)}"}`
+  let content = `{"p":"brc20-prog","op":"t","b":"${await compressSmartContractData(normalizeHex(rawTx))}"}`
   const length = new TextEncoder().encode(content).length
   if (BigInt(length) < neededBytes) content += ' '.repeat(Number(neededBytes) - length)
   return textInscription(content)
