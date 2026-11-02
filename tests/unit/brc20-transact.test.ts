@@ -47,6 +47,8 @@ function fakeCardinalUtxo(txid: string, value: number) {
 }
 
 const broadcastBodies: string[][] = []
+const rpcCalls: { method: string; params: unknown[] }[] = []
+let accountNonce = 0
 let fetchMock: ReturnType<typeof vi.fn>
 
 function jsonResponse(data: unknown) {
@@ -188,9 +190,17 @@ describe('brc20.transact', () => {
     const utxos = [fakeCardinalUtxo(txid, 200000)]
     const prevHexByTxid: Record<string, string> = { [txid]: prevTxHex(200000) }
     broadcastBodies.length = 0
+    rpcCalls.length = 0
+    accountNonce = 0
 
     fetchMock = vi.fn(async (url: string | URL, opts?: any) => {
       const u = String(url)
+      if (u.startsWith('https://rpc-signet.brc20.build')) {
+        const { id, method, params } = JSON.parse(opts.body)
+        rpcCalls.push({ method, params })
+        if (method === 'eth_getTransactionCount')
+          return jsonResponse({ jsonrpc: '2.0', id, result: `0x${accountNonce.toString(16)}` })
+      }
       if (u.includes('/cardinal_utxos/')) return jsonResponse({ data: utxos })
       if (u.includes('/gettxhex/'))
         return jsonResponse(prevHexByTxid[u.split('/gettxhex/')[1]!] ?? '')
@@ -252,5 +262,40 @@ describe('brc20.transact', () => {
       brc20.transact({ rawTx: legacy, feeRate: 2, dryRun: 'yes' as unknown as boolean })
     ).rejects.toThrow(/dryRun/)
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('transact reads the signer nonce from the BRC2.0 RPC', async () => {
+    const w = ethers.Wallet.createRandom()
+    await brc20.transact({ rawTx: await signedTx(w), feeRate: 2, dryRun: true })
+    expect(rpcCalls).toEqual([
+      { method: 'eth_getTransactionCount', params: [w.address.toLowerCase(), 'latest'] },
+    ])
+  })
+
+  it('transact refuses a nonce the account already used', async () => {
+    accountNonce = 5
+    const raw = await signedTx(ethers.Wallet.createRandom(), { nonce: 4 })
+    await expect(brc20.transact({ rawTx: raw, feeRate: 2, dryRun: false })).rejects.toThrow(
+      'nonce 4 is already used; account nonce is 5'
+    )
+    expect(broadcastBodies.length).toBe(0)
+  })
+
+  it('transact refuses a nonce 10 or more ahead of the account nonce', async () => {
+    accountNonce = 5
+    const raw = await signedTx(ethers.Wallet.createRandom(), { nonce: 15 })
+    await expect(brc20.transact({ rawTx: raw, feeRate: 2, dryRun: false })).rejects.toThrow(
+      'nonce 15 is more than 9 ahead of account nonce 5'
+    )
+    expect(broadcastBodies.length).toBe(0)
+  })
+
+  it('transact accepts nonces from the account nonce to 9 ahead of it', async () => {
+    accountNonce = 5
+    for (const nonce of [5, 14]) {
+      const raw = await signedTx(ethers.Wallet.createRandom(), { nonce })
+      const quote = await brc20.transact({ rawTx: raw, feeRate: 2, dryRun: true })
+      expect(quote.steps[0]!.step).toBe('progTransact')
+    }
   })
 })

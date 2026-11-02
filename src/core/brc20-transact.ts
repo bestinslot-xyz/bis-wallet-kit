@@ -5,10 +5,14 @@ import { ethers } from 'ethers'
 import { textInscription } from '../types/inscription'
 import { compressSmartContractData } from './brc20'
 import { assertFeeRate, GAS_PER_BYTE, opReturnTarget, runChain } from './brc20-send'
+import { getBrc20RpcProvider } from './chain-providers'
 import { getNetwork } from './store-network'
 
 /** Largest inscription content, in bytes, a transact inscription may be padded to. */
 export const MAX_TRANSACT_CONTENT_BYTES = 350_000
+
+/** The BRC2.0 module keeps a transaction whose nonce is below account nonce + this value. */
+const MAX_FUTURE_NONCES = 10
 
 const MAINNET_CHAIN_ID = 0x4252433230n
 const TEST_CHAIN_ID = 0x425243323073n
@@ -104,6 +108,25 @@ export interface TransactResult {
 }
 
 /**
+ * Refuses a nonce the BRC2.0 module drops: one below the signer's account nonce, or
+ * {@link MAX_FUTURE_NONCES} or more above it. A nonce inside the window executes at once when it
+ * equals the account nonce; a higher one waits up to 10 blocks for the gap to fill.
+ */
+async function assertNonceInWindow(from: string, nonce: number): Promise<void> {
+  const count = Number(
+    BigInt(
+      (await getBrc20RpcProvider().request('eth_getTransactionCount', [from, 'latest'])) as string
+    )
+  )
+  if (nonce < count) throw new Error(`nonce ${nonce} is already used; account nonce is ${count}`)
+  if (nonce >= count + MAX_FUTURE_NONCES) {
+    throw new Error(
+      `nonce ${nonce} is more than ${MAX_FUTURE_NONCES - 1} ahead of account nonce ${count}`
+    )
+  }
+}
+
+/**
  * Inscribes a pre-signed legacy EVM transaction as a BRC2.0 `transact` op. The send transaction
  * moves the inscription to `OP_RETURN "BRC20PROG"`, where the module executes the embedded
  * transaction.
@@ -112,7 +135,8 @@ export async function transact(args: TransactArgs): Promise<Brc20SendQuote | Tra
   const { rawTx, feeRate, dryRun } = args
   if (typeof dryRun !== 'boolean') throw new Error('dryRun must be a boolean')
   assertFeeRate(feeRate)
-  const { hash } = parseLegacyRawTx(rawTx)
+  const { hash, from, nonce } = parseLegacyRawTx(rawTx)
+  await assertNonceInWindow(from, nonce)
 
   const res = await runChain(
     [
