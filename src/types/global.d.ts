@@ -1,13 +1,7 @@
-import type { ListenFn, RequestFn } from '@leather-wallet/types'
-
 declare global {
   interface Window {
     // Providers
     unisat?: UniSat
-    LeatherProvider?: {
-      request: RequestFn
-      listen: ListenFn
-    }
     okxwallet?: any
     XverseProviders?: any
   }

@@ -1,6 +1,5 @@
 import type { BISWalletProvider, ConnectCallbacks, ModalState, ModalTheme } from '../types/common'
 import errorImage from '../assets/img/error.png'
-import leatherLogo from '../assets/img/provider/leather.png'
 import okxLogo from '../assets/img/provider/okx.png'
 import unisatLogo from '../assets/img/provider/unisat.png'
 import xverseLogo from '../assets/img/provider/xverse.png'
@@ -11,7 +10,6 @@ const PROVIDERS: Partial<Record<BISWalletProvider, { name: string; img: string }
   okx: { name: 'OKX', img: okxLogo },
   unisat: { name: 'Unisat', img: unisatLogo },
   xverse: { name: 'Xverse', img: xverseLogo },
-  leather: { name: 'Leather', img: leatherLogo },
 }
 
 const LINKS = {
