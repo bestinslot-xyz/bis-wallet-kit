@@ -2,7 +2,7 @@ import type { FeePolicy } from '../lib/fee-policy'
 import type { SwapFees } from '../lib/swap-reporting'
 import type { RawSwapRoute, SwapBLSMessageFields, SwapRoute } from '../lib/swap-route'
 import type { UniswapInfoProxy } from '../lib/uniswap_ops'
-import type { SignFunction } from '../provider/api'
+import type { SignFunction, SignManyFunction } from '../provider/api'
 import type { BISNetwork } from '../types/common'
 import type { BatchedReveal, BatchedSendLayout, ReclaimInput } from './mint'
 import type { SignProgressOptions } from './sign-progress'
@@ -64,6 +64,7 @@ import {
   getOrdinalsWallet,
   getPaymentWallet,
   getSignFn,
+  getSignManyFn,
   signMessageLocalVerify,
   signMessageLocalVerifyDeterministic,
 } from './providers'
@@ -1672,6 +1673,26 @@ export interface DepositOrderOptions extends SignProgressOptions {
    * Defaults to `single`.
    */
   batchSendLayout?: BatchedSendLayout
+  /**
+   * Signs a batched deposit's commit and send in one wallet prompt when the wallet can sign several
+   * PSBTs at once (UniSat, OKX, Xverse) and the payer is not a legacy P2PKH address, so the
+   * deposit takes two prompts (BIP-322, then both txs). Defaults to true; false keeps three.
+   */
+  batchSigning?: boolean
+}
+
+/**
+ * Whether a batched commit's txid is known before signing for these addresses, which holds for
+ * every address type but legacy P2PKH (see `unsignedTxOnceSigned`).
+ */
+function txidKnownBeforeSigning(addresses: string[]): boolean {
+  return addresses.every(addr => {
+    try {
+      return bitcoinjs.address.fromBase58Check(addr).version !== getBitcoinNetwork().pubKeyHash
+    } catch {
+      return true // bech32
+    }
+  })
 }
 
 function baseDepositInscription(ticker: string, amount: string): InscriptionDetails {
@@ -1718,7 +1739,8 @@ async function broadcastBatchedDepositOrder(
   reclaimInputs: ReclaimInput[],
   feeRate: number,
   signFn: SignFunction,
-  sendLayout: BatchedSendLayout
+  sendLayout: BatchedSendLayout,
+  signManyFn: SignManyFunction | null
 ): Promise<string[]> {
   const pkg = await inscribeAllToOpReturn(
     batchedDepositInscriptions(deposit, allowance, baseDeposit),
@@ -1726,7 +1748,8 @@ async function broadcastBatchedDepositOrder(
     brc20ProgOpReturnWallet(),
     feeRate,
     signFn,
-    sendLayout
+    sendLayout,
+    signManyFn
   )
 
   const bundle = (reveal: BatchedReveal): ApproveDetails => ({
@@ -1827,14 +1850,27 @@ export async function createAndBroadcastDepositOrder(
   const batched =
     options.batchInscriptions === true && (useBaseAvailableBalanceAmount > 0n || needsAllowance)
 
+  const signManyImpl =
+    batched &&
+    options.batchSigning !== false &&
+    txidKnownBeforeSigning([payerAddress, ordinalsAddress])
+      ? getSignManyFn(walletInfo.provider)
+      : null
+
   // Wallet prompts: the BIP-322 message and the deposit's inscribe + send, then an inscribe + send
   // for each of the base-layer conversion and the allowance when they are needed. A batched
-  // deposit inscribes and sends all of them with one prompt each.
+  // deposit inscribes and sends all of them with one prompt each, or both in one prompt when the
+  // wallet signs several PSBTs at once.
   const progress = new SignProgress(
     options,
-    batched ? 3 : 3 + (useBaseAvailableBalanceAmount > 0n ? 2 : 0) + (needsAllowance ? 2 : 0)
+    batched
+      ? signManyImpl
+        ? 2
+        : 3
+      : 3 + (useBaseAvailableBalanceAmount > 0n ? 2 : 0) + (needsAllowance ? 2 : 0)
   )
   const signFn = progress.wrap(getSignFn(walletInfo.provider))
+  const signManyFn = signManyImpl ? progress.wrapMany(signManyImpl) : null
 
   const l1ContractAddress = getSwapContractAddress()
   const allowanceCalldata = `0x095ea7b3000000000000000000000000${l1ContractAddress.slice(2).toLowerCase()}ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff`
@@ -1923,7 +1959,8 @@ export async function createAndBroadcastDepositOrder(
         : [],
       feeRate,
       signFn,
-      options.batchSendLayout ?? 'single'
+      options.batchSendLayout ?? 'single',
+      signManyFn
     )
   }
 

@@ -1,4 +1,4 @@
-import type { SignFunction, SignResponse } from '../provider/api'
+import type { SignFunction, SignManyFunction, SignPsbtRequest, SignResponse } from '../provider/api'
 import type { PaymentOpts } from '../types/common'
 import type {
   InscribeFees,
@@ -1811,6 +1811,36 @@ export async function getInscribeAllToOpReturnFee(
 }
 
 /**
+ * `psbt`'s unsigned transaction with each input's scriptSig as signing will leave it, so its txid
+ * is the signed tx's; or null when a signature lands in a scriptSig. SegWit and taproot inputs
+ * sign in the witness and keep an empty scriptSig, and a P2SH-P2WPKH input's scriptSig is the push
+ * of its redeem script. Any other input, such as legacy P2PKH, makes it null.
+ */
+export function unsignedTxOnceSigned(psbt: bitcoinjs.Psbt): bitcoinjs.Transaction | null {
+  const tx = bitcoinjs.Transaction.fromBuffer(
+    (psbt.data.globalMap.unsignedTx as unknown as { toBuffer: () => Buffer }).toBuffer()
+  )
+  const isWitnessProgram = (script: Buffer) =>
+    (script[0] === 0x00 || (script[0]! >= 0x51 && script[0]! <= 0x60)) &&
+    script.length === script[1]! + 2
+  for (const [i, input] of psbt.data.inputs.entries()) {
+    const txIn = tx.ins[i]!
+    if (input.redeemScript) {
+      if (!isWitnessProgram(input.redeemScript) || input.redeemScript[0] !== 0x00) return null
+      txIn.script = bitcoinjs.script.compile([input.redeemScript])
+      continue
+    }
+    const prevout =
+      input.witnessUtxo?.script ??
+      (input.nonWitnessUtxo
+        ? bitcoinjs.Transaction.fromBuffer(input.nonWitnessUtxo).outs[txIn.index]?.script
+        : undefined)
+    if (!prevout || !isWitnessProgram(prevout)) return null
+  }
+  return tx
+}
+
+/**
  * Inscribes several inscriptions from one commit tx and sends them all to OP_RETURN outputs in
  * one tx, so the wallet signs two transactions however many inscriptions there are. The signed
  * package is validated with testmempoolaccept and returned for the caller to broadcast.
@@ -1823,6 +1853,10 @@ export async function getInscribeAllToOpReturnFee(
  * follow `sendLayout`. Either way the first sat of every inscription input lands in an OP_RETURN
  * output, in input order, so ord moves each inscription there and indexers process them in that
  * order.
+ *
+ * With `signManyFunc`, the commit and the send are signed in one wallet prompt whenever the commit's
+ * txid is known before signing (see `unsignedTxOnceSigned`); the package is refused if the signed
+ * commit's txid differs. Otherwise `signFunc` signs the commit, then the send.
  */
 export async function inscribeAllToOpReturn(
   inscriptions: InscriptionDetails[],
@@ -1830,7 +1864,8 @@ export async function inscribeAllToOpReturn(
   opReturnWallet: WalletInfo,
   feeRate: number,
   signFunc: SignFunction,
-  sendLayout: BatchedSendLayout = 'single'
+  sendLayout: BatchedSendLayout = 'single',
+  signManyFunc: SignManyFunction | null = null
 ): Promise<InscribeAllToOpReturnResult> {
   const {
     payerWallet,
@@ -1853,18 +1888,32 @@ export async function inscribeAllToOpReturn(
   const postage = plan.postage
 
   const commitPsbt = await buildPsbtFromTx(commit.tx, commitCardinals, payerWallet, reclaimUtxos)
-  const signedCommit = await signFunc(
-    commitPsbt.toHex(),
-    payerAddr,
-    inscriptionAddr,
-    reclaimInputs.map((_, i) => i)
-  )
+  const commitRequest: SignPsbtRequest = {
+    unsignedPsbtHex: commitPsbt.toHex(),
+    paymentAddr: payerAddr,
+    ordAddr: inscriptionAddr,
+    ordAddrIdxes: reclaimInputs.map((_, i) => i),
+  }
+  // With a batch signer and a commit txid that signing leaves alone, the send is built against the
+  // unsigned commit and both are signed in one prompt; otherwise the commit is signed first.
+  const presignedCommit = signManyFunc ? unsignedTxOnceSigned(commitPsbt) : null
+  let signedCommit: SignResponse | null = null
+  if (!presignedCommit) {
+    signedCommit = await signFunc(
+      commitRequest.unsignedPsbtHex,
+      commitRequest.paymentAddr,
+      commitRequest.ordAddr,
+      commitRequest.ordAddrIdxes
+    )
+  }
+  const commitTxId = presignedCommit ? presignedCommit.getId() : signedCommit!.txId
+  const commitTxHex = presignedCommit ? presignedCommit.toHex() : signedCommit!.signedTxHex
 
   const reveals: BatchedReveal[] = []
   for (const [i, leaf] of leaves.entries()) {
     const reveal = await buildRevealTx(
       inscriptionWallet,
-      signedCommit.txId,
+      commitTxId,
       leaf.commitOutputValue,
       leaf.secret,
       leaf.inscription,
@@ -1885,13 +1934,12 @@ export async function inscribeAllToOpReturn(
   let send: BuildTransactionResult
   let signedSend: SignResponse
   try {
-    saveExtraUtxos([signedCommit.signedTxHex, ...reveals.map(r => r.signedRevealTxHex)], null)
+    saveExtraUtxos([commitTxHex, ...reveals.map(r => r.signedRevealTxHex)], null)
 
     // A single-address wallet sees the reveal and reclaim outputs as cardinal; they carry inscriptions.
     const revealTxIds = new Set(reveals.map(r => r.revealTxId))
     const sendCardinals = (await getCardinalUtxos(payerAddr)).filter(
-      u =>
-        !revealTxIds.has(u.txid) && !(u.txid === signedCommit.txId && u.vout < reclaimInputs.length)
+      u => !revealTxIds.has(u.txid) && !(u.txid === commitTxId && u.vout < reclaimInputs.length)
     )
     const inscriptionScriptType = utxoOutputTypeFromOutputScript(
       inscriptionWallet.outputScript,
@@ -1914,15 +1962,33 @@ export async function inscribeAllToOpReturn(
       plan.fundingInput
     )
     const sendPsbt = await buildPsbtFromTx(send.tx, sendCardinals, payerWallet, inscriptionUtxos)
-    signedSend = await signFunc(
-      sendPsbt.toHex(),
-      payerAddr,
-      inscriptionAddr,
-      inscriptionUtxos.map((_, i) => i)
-    )
+    const sendRequest: SignPsbtRequest = {
+      unsignedPsbtHex: sendPsbt.toHex(),
+      paymentAddr: payerAddr,
+      ordAddr: inscriptionAddr,
+      ordAddrIdxes: inscriptionUtxos.map((_, i) => i),
+    }
+    if (presignedCommit) {
+      const [commitResponse, sendResponse] = await signManyFunc!([commitRequest, sendRequest])
+      if (!commitResponse || !sendResponse)
+        throw new Error('The wallet returned too few signed txs.')
+      // The send spends the commit through the reveals, so a commit the wallet altered orphans it.
+      if (commitResponse.txId !== commitTxId)
+        throw new Error('The wallet changed the commit tx while signing; nothing was broadcast.')
+      signedCommit = commitResponse
+      signedSend = sendResponse
+    } else {
+      signedSend = await signFunc(
+        sendRequest.unsignedPsbtHex,
+        sendRequest.paymentAddr,
+        sendRequest.ordAddr,
+        sendRequest.ordAddrIdxes
+      )
+    }
   } finally {
     clearExtraUtxos()
   }
+  if (!signedCommit) throw new Error('The commit tx is unsigned.')
 
   const isValid = await validateTxes([
     signedCommit.signedTxHex,

@@ -43,6 +43,22 @@ export type SignFunction = (
   noSignIdxes?: number[]
 ) => Promise<SignResponse>
 
+/** One PSBT of a `SignManyFunction` call, with the arguments a `SignFunction` takes for it. */
+export interface SignPsbtRequest {
+  unsignedPsbtHex: string
+  paymentAddr: string
+  ordAddr: string
+  ordAddrIdxes: number[]
+  useTweakSignerIdxes?: number[]
+  noSignIdxes?: number[]
+}
+
+/**
+ * Signs several PSBTs in one wallet prompt and returns one `SignResponse` per request, in order.
+ * The PSBTs may depend on each other (one spending another's outputs), so none is broadcast.
+ */
+export type SignManyFunction = (requests: SignPsbtRequest[]) => Promise<SignResponse[]>
+
 /**
  * Defines the interface for a BISProvider, which includes methods for retrieving wallets, signing messages, and sending Bitcoin. The BISProvider interface specifies the structure that any wallet provider must implement to be compatible with the BIS Wallet Kit. This includes methods for getting the list of wallets, signing messages in both standard and deterministic ways, sending Bitcoin transactions, and signing PSBTs (Partially Signed Bitcoin Transactions). By adhering to this interface, different wallet providers can be integrated into the BIS Wallet Kit while ensuring a consistent API for developers using the kit.
  */
@@ -137,4 +153,11 @@ export interface BISProvider {
    * @returns A promise that resolves to an object containing the signed PSBT as a hexadecimal string and optionally the transaction ID (txid) if the transaction was broadcasted. This allows developers to use the signed PSBT for further processing or to track the transaction on the blockchain. If there is an error in signing the PSBT, the promise will be rejected with a descriptive error message.
    */
   sign: SignFunction
+
+  /**
+   * Returns a function that signs several PSBTs in one wallet prompt, or null when the wallet
+   * (or its installed version) has no such method. Implemented only by providers whose wallet
+   * offers batch signing.
+   */
+  getSignMany?: () => SignManyFunction | null
 }

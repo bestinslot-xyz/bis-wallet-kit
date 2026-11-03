@@ -1,6 +1,6 @@
 import type { BISWallet } from '../api/wallet'
 import type { BISWalletPurpose } from '../types/common'
-import type { BISProvider, SignResponse } from './api'
+import type { BISProvider, SignPsbtRequest, SignResponse } from './api'
 import { Buffer } from 'node:buffer'
 import * as bitcoinjs from 'bitcoinjs-lib'
 import { getNetwork, getPaymentWallet } from '../core/bis'
@@ -150,6 +150,37 @@ async function signPSBT(
   return response
 }
 
+/** Xverse's inputs to sign for a `sign` request. */
+function inputsToSignOf(request: SignPsbtRequest): any[] {
+  const { unsignedPsbtHex, paymentAddr, ordAddr, ordAddrIdxes, noSignIdxes } = request
+  const psbt = bitcoinjs.Psbt.fromHex(unsignedPsbtHex)
+  const inscriptionsToSign = []
+  for (let i = 0; i < psbt.inputCount; i++) {
+    if (noSignIdxes && noSignIdxes.includes(i)) continue
+    if (ordAddrIdxes.includes(i)) continue
+    inscriptionsToSign.push(i)
+  }
+  return [
+    {
+      address: paymentAddr,
+      signingIndexes: inscriptionsToSign,
+      sigHash: bitcoinjs.Transaction.SIGHASH_DEFAULT,
+    },
+    {
+      address: ordAddr,
+      signingIndexes: ordAddrIdxes,
+      sigHash: bitcoinjs.Transaction.SIGHASH_DEFAULT,
+    },
+  ]
+}
+
+function signedResponse(signedPsbtBase64: string, noSignIdxes?: number[]): SignResponse {
+  const signedPsbt = bitcoinjs.Psbt.fromBase64(signedPsbtBase64)
+  finalizePsbtInputs(signedPsbt, noSignIdxes)
+  const signedTx = signedPsbt.extractTransaction()
+  return { txId: signedTx.getId(), signedTxHex: signedTx.toHex() }
+}
+
 async function sign(
   unsignedPsbtHex: string,
   paymentAddr: string,
@@ -158,44 +189,43 @@ async function sign(
   _useTweakedSignerIndexes?: number[], // not used in Xverse
   noSignIndexes?: number[]
 ): Promise<SignResponse> {
-  const psbt = bitcoinjs.Psbt.fromHex(unsignedPsbtHex)
-  const inscriptionsToSign = []
-
-  for (let i = 0; i < psbt.inputCount; i++) {
-    if (noSignIndexes && noSignIndexes.includes(i)) continue
-    if (ordAddrIndexes.includes(i)) continue
-    inscriptionsToSign.push(i)
-  }
-
   const signed = await signPSBT(
     hexToBase64(unsignedPsbtHex),
     false,
-    [
-      {
-        address: paymentAddr,
-        signingIndexes: inscriptionsToSign,
-        sigHash: bitcoinjs.Transaction.SIGHASH_DEFAULT,
-      },
-      {
-        address: ordAddr,
-        signingIndexes: ordAddrIndexes,
-        sigHash: bitcoinjs.Transaction.SIGHASH_DEFAULT,
-      },
-    ],
+    inputsToSignOf({
+      unsignedPsbtHex,
+      paymentAddr,
+      ordAddr,
+      ordAddrIdxes: ordAddrIndexes,
+      noSignIdxes: noSignIndexes,
+    }),
     'sign this pls'
   )
+  return signedResponse(signed.psbtBase64, noSignIndexes)
+}
 
-  const signedPsbt = bitcoinjs.Psbt.fromBase64(signed.psbtBase64)
+async function signMany(requests: SignPsbtRequest[]): Promise<SignResponse[]> {
+  const provider = window.XverseProviders?.BitcoinProvider
+  if (typeof provider?.signMultipleTransactions !== 'function')
+    throw new Error('Xverse cannot sign several PSBTs at once.')
+  const request = createUnsecuredToken({
+    network: { type: getNetworkType() },
+    message: 'Sign Transactions',
+    psbts: requests.map(r => ({
+      psbtBase64: hexToBase64(r.unsignedPsbtHex),
+      inputsToSign: inputsToSignOf(r),
+    })),
+  })
+  const signed: { psbtBase64: string }[] = await provider.signMultipleTransactions(request)
+  if (signed.length !== requests.length) throw new Error('Xverse returned the wrong PSBT count.')
+  return signed.map((s, i) => signedResponse(s.psbtBase64, requests[i]!.noSignIdxes))
+}
 
-  finalizePsbtInputs(signedPsbt, noSignIndexes)
-
-  const signedTx = signedPsbt.extractTransaction()
-  const signedTxHex = signedTx.toHex()
-
-  return {
-    txId: signedTx.getId(),
-    signedTxHex,
-  }
+function getSignMany() {
+  return typeof window !== 'undefined' &&
+    typeof window.XverseProviders?.BitcoinProvider?.signMultipleTransactions === 'function'
+    ? signMany
+    : null
 }
 
 export const XVERSE: BISProvider = {
@@ -205,4 +235,5 @@ export const XVERSE: BISProvider = {
   sendBTC,
   signPSBT,
   sign,
+  getSignMany,
 }

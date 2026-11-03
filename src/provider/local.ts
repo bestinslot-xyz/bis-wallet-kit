@@ -1,7 +1,7 @@
 import type { Network, Signer } from 'bitcoinjs-lib'
 import type { ECPairInterface } from 'ecpair'
 import type { BISNetwork, BISWallet, BISWalletPurpose } from '../types/common'
-import type { BISProvider, SignResponse } from './api'
+import type { BISProvider, SignPsbtRequest, SignResponse } from './api'
 import { Buffer } from 'node:buffer'
 import { Signer as BIP322Signer } from 'bip322-js'
 import * as bitcoinjs from 'bitcoinjs-lib'
@@ -493,6 +493,24 @@ export function lockLocalWallet(): void {
   clearWalletInfo()
 }
 
+// The key is in-process, so there is no prompt to share; each PSBT is signed in turn.
+async function signMany(requests: SignPsbtRequest[]): Promise<SignResponse[]> {
+  const signed: SignResponse[] = []
+  for (const r of requests) {
+    signed.push(
+      await sign(
+        r.unsignedPsbtHex,
+        r.paymentAddr,
+        r.ordAddr,
+        r.ordAddrIdxes,
+        r.useTweakSignerIdxes,
+        r.noSignIdxes
+      )
+    )
+  }
+  return signed
+}
+
 export const LOCAL: BISProvider = {
   getWallets,
   signMessage,
@@ -500,4 +518,5 @@ export const LOCAL: BISProvider = {
   sendBTC,
   signPSBT,
   sign,
+  getSignMany: () => signMany,
 }
