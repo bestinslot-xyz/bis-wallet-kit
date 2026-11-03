@@ -59,17 +59,6 @@ export function findBitcoinStandardWallet(name: RegExp): Wallet | null {
   )
 }
 
-/**
- * The icon of an installed wallet whose name matches `name`, from any of its Wallet Standard
- * registrations (a wallet may register for other chains under the same name and logo), preferring
- * its Bitcoin one.
- */
-export function findStandardWalletIcon(name: RegExp): string | undefined {
-  if (typeof window === 'undefined') return undefined
-  registry ??= getWallets()
-  return findBitcoinStandardWallet(name)?.icon ?? registry.get().find(w => name.test(w.name))?.icon
-}
-
 /** A key's hex when `bytes` is a compressed (33-byte) or x-only (32-byte) public key. */
 function publicKeyHex(bytes: ArrayLike<number>): string | null {
   return bytes.length === 33 || bytes.length === 32

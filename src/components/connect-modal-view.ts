@@ -1,38 +1,43 @@
-import type { BISWalletProvider, ConnectCallbacks, ModalState, ModalTheme } from '../types/common'
+import type {
+  BISWalletProvider,
+  ConnectCallbacks,
+  ModalLegalLinks,
+  ModalState,
+  ModalTheme,
+} from '../types/common'
 import errorImage from '../assets/img/error.png'
+import metamaskLogo from '../assets/img/provider/metamask.svg'
 import okxLogo from '../assets/img/provider/okx.svg'
 import unisatLogo from '../assets/img/provider/unisat.png'
 import xverseLogo from '../assets/img/provider/xverse.svg'
 import wooGIF from '../assets/img/woo.gif'
 import { getWallets } from '../core/providers'
-import { findStandardWalletIcon } from '../provider/wallet-standard'
 
-// Bundled logos are vectors or at least 128px, so they stay sharp at 2x and 3x screen densities.
-interface ProviderEntry {
-  name: string
-  /** A bundled logo. */
-  img?: string
-  /** The Wallet Standard name of a wallet without a bundled logo, whose own icon is used. */
-  standardName?: RegExp
-}
-
-const PROVIDERS: Partial<Record<BISWalletProvider, ProviderEntry>> = {
+// Logos are vectors or at least 128px, so they stay sharp at 2x and 3x screen densities.
+const PROVIDERS: Partial<Record<BISWalletProvider, { name: string; img: string }>> = {
   okx: { name: 'OKX', img: okxLogo },
   unisat: { name: 'Unisat', img: unisatLogo },
   xverse: { name: 'Xverse', img: xverseLogo },
-  metamask: { name: 'MetaMask', standardName: /metamask/i },
+  metamask: { name: 'MetaMask', img: metamaskLogo },
 }
 
-/** A neutral badge with the wallet's initial, shown until (or unless) the wallet's own icon is found. */
-function letterBadge(name: string): string {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><rect width="40" height="40" rx="8" fill="#6b7280"/><text x="20" y="27" font-family="sans-serif" font-size="20" font-weight="600" fill="#fff" text-anchor="middle">${name.charAt(0).toUpperCase()}</text></svg>`
-  return `data:image/svg+xml;base64,${btoa(svg)}`
+export const DEFAULT_LEGAL_LINKS: ModalLegalLinks = {
+  terms: 'https://bisdex.io/legal/terms',
+  privacy: 'https://bisdex.io/legal/privacy',
+  owner: 'Best in Slot',
 }
 
-const LINKS = {
-  terms: 'https://bestinslot.xyz/legal/terms',
-  privacy: 'https://bestinslot.xyz/legal/privacy',
-  api: 'https://bestinslot.xyz/api',
+/**
+ * `url` resolved against the page when it is an http(s) URL or a path, else `fallback`. Legal
+ * links come from the app, and an href also runs `javascript:` URLs, so nothing else is set.
+ */
+function safeHref(url: string, fallback: string): string {
+  try {
+    const { href, protocol } = new URL(url, window.location.href)
+    return protocol === 'https:' || protocol === 'http:' ? href : fallback
+  } catch {
+    return fallback
+  }
 }
 
 const GENERIC_ERROR = 'An error occurred. Please try again.'
@@ -51,6 +56,7 @@ export class BisModalView {
   private errorMessage = ''
   private provider: BISWalletProvider | undefined
   private callbacks: ConnectCallbacks | null = null
+  private legal: ModalLegalLinks = DEFAULT_LEGAL_LINKS
 
   constructor(root: HTMLElement) {
     this.root = root
@@ -88,6 +94,11 @@ export class BisModalView {
 
   setTheme(theme: ModalTheme): void {
     this.theme = theme
+    this.render()
+  }
+
+  setLegalLinks(links: Partial<ModalLegalLinks>): void {
+    this.legal = { ...DEFAULT_LEGAL_LINKS, ...links }
     this.render()
   }
 
@@ -138,7 +149,7 @@ export class BisModalView {
             data-provider="${key}"
             class="group flex items-center gap-x-4 p-2 border hover:border-primary border-border rounded-lg w-full text-left transition-colors cursor-pointer duration-300"
           >
-            <img src="${item.img ?? letterBadge(item.name)}" class="rounded-lg size-10" alt="${item.name}">
+            <img src="${item.img}" class="rounded-lg size-10" alt="${item.name}">
             <div class="font-semibold text-lg grow">${item.name}</div>
             <svg class="w-auto h-6 text-muted-foreground group-hover:text-foreground transition-colors duration-300" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m9 18l6-6l-6-6"/></svg>
           </button>`
@@ -182,11 +193,18 @@ export class BisModalView {
           </div>
           <div class="overflow-y-auto px-4 sm:px-6 py-6 best-scrollbar">${this.screenMarkup()}</div>
           <div class="p-4 border-t border-border text-muted-foreground text-center">
-            <div class="mb-2">Powered by <a class="font-medium text-foreground hover:underline underline-offset-4" href="${LINKS.api}" target="_blank">BiS API</a></div>
-            <div class="text-sm">By connecting your wallet, you agree to Best in Slot's <a class="text-foreground hover:underline underline-offset-4" href="${LINKS.terms}" target="_blank">Terms of Service</a> and <a class="text-foreground hover:underline underline-offset-4" href="${LINKS.privacy}" target="_blank">Privacy Policy</a>.</div>
+            <div class="text-sm">By connecting your wallet, you agree to <span data-legal-owner></span>'s <a data-legal="terms" class="text-foreground hover:underline underline-offset-4" target="_blank" rel="noopener noreferrer">Terms of Service</a> and <a data-legal="privacy" class="text-foreground hover:underline underline-offset-4" target="_blank" rel="noopener noreferrer">Privacy Policy</a>.</div>
           </div>
         </div>
       </div>`
+
+    // App-supplied legal links and owner are set as properties and text, never written into the markup.
+    const owner = this.root.querySelector<HTMLElement>('[data-legal-owner]')
+    if (owner) owner.textContent = this.legal.owner
+    this.root.querySelectorAll<HTMLAnchorElement>('[data-legal]').forEach(link => {
+      const key = link.dataset.legal as 'terms' | 'privacy'
+      link.href = safeHref(this.legal[key], DEFAULT_LEGAL_LINKS[key])
+    })
 
     // Error text is assigned as text (never HTML) to avoid injection.
     if (this.state === 'error') {
@@ -203,13 +221,6 @@ export class BisModalView {
 
     if (this.state === 'connect') {
       this.root.querySelectorAll<HTMLButtonElement>('[data-provider]').forEach(btn => {
-        const entry = PROVIDERS[btn.dataset.provider as BISWalletProvider]
-        // A wallet's icon is wallet-supplied, so it is set as a property (never written into the
-        // markup) and only when it is image data.
-        const icon = entry?.standardName ? findStandardWalletIcon(entry.standardName) : undefined
-        const img = btn.querySelector('img')
-        if (img && icon?.startsWith('data:image/')) img.src = icon
-
         btn.addEventListener('click', () => {
           void this.onProviderSelect(btn.dataset.provider as BISWalletProvider)
         })

@@ -12,7 +12,14 @@ modal.init() // create + mount the modal (call once)
 const session = await modal.connect() // show picker, resolve on connect
 modal.disconnect() // hide modal and clear the stored session
 modal.setTheme('dark') // 'light' | 'dark' | 'system' (default 'system')
+modal.setLegalLinks({ terms: '/legal/terms', privacy: '/legal/privacy', owner: 'Acme' })
 ```
+
+The modal's footer reads "By connecting your wallet, you agree to `owner`'s Terms of Service and
+Privacy Policy". `setLegalLinks` points it at your own pages; fields left out keep the defaults
+(`https://bisdex.io/legal/terms`, `https://bisdex.io/legal/privacy`, owner `Best in Slot`). URLs are
+http(s) or a path on your origin; anything else keeps the default. It can be called before
+`modal.init()`.
 
 Lower-level modal controls are also exported: `modal.create`, `modal.showConnect`,
 `modal.showConnectConfirmation`, `modal.showError`, `modal.hide`.

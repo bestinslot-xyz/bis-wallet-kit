@@ -108,4 +108,7 @@ const endpoints = wallet.getEndpoints() // effective URLs for the selected netwo
 
 // Theme - defaults to 'system'
 modal.setTheme('dark') // system, dark, light
+
+// Legal links in the modal footer - default to bisdex.io's pages
+modal.setLegalLinks({ terms: '/legal/terms', privacy: '/legal/privacy', owner: 'Acme' })
 ```

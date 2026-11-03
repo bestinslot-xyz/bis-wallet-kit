@@ -1,6 +1,5 @@
 // @vitest-environment jsdom
 import type { ConnectCallbacks } from '../../src/types/common'
-import { getWallets } from '@wallet-standard/app'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { BisModalView } from '../../src/components/connect-modal-view'
 
@@ -29,65 +28,40 @@ describe('bisModalView', () => {
     )
   })
 
-  // Registers a Wallet Standard wallet for the duration of `run`.
-  function withWallet(
-    name: string,
-    icon: string,
-    features: Record<string, unknown>,
-    run: () => void
-  ) {
-    const unregister = getWallets().register({
-      version: '1.0.0',
-      name,
-      icon: icon as `data:image/svg+xml;base64,${string}`,
-      chains: ['bitcoin:mainnet'],
-      accounts: [],
-      features: features as never,
-    })
-    try {
-      run()
-    } finally {
-      unregister()
-    }
-  }
-
-  const logoOf = (provider: string) =>
-    root.querySelector<HTMLImageElement>(`[data-provider="${provider}"] img`)!
-
-  it("uses a wallet's icon from any of its registrations, such as MetaMask's Solana one", () => {
-    const icon = 'data:image/svg+xml,%3Csvg xmlns%3D%22http://www.w3.org/2000/svg%22/%3E'
-    withWallet('MetaMask', icon, { 'solana:signTransaction': {} }, () => {
-      new BisModalView(root).showConnect({ onSelect: vi.fn(), onError: vi.fn() })
-      expect(logoOf('metamask').src).toBe(icon)
+  it('gives every wallet a bundled logo', () => {
+    new BisModalView(root).showConnect({ onSelect: vi.fn(), onError: vi.fn() })
+    root.querySelectorAll<HTMLImageElement>('[data-provider] img').forEach(img => {
+      expect(img.getAttribute('src')).toBeTruthy()
     })
   })
 
-  it("keeps a bundled logo over the installed wallet's own icon", () => {
-    const shown = () => {
-      new BisModalView(root).showConnect({ onSelect: vi.fn(), onError: vi.fn() })
-      return logoOf('okx').getAttribute('src')
-    }
-    const bundled = shown()
-    // OKX registers a 48px PNG icon; the bundled vector is sharper.
-    withWallet('OKX Wallet', 'data:image/png;base64,AAAA', { 'solana:signTransaction': {} }, () => {
-      expect(shown()).toBe(bundled)
-    })
+  const legalLink = (key: string) => root.querySelector<HTMLAnchorElement>(`[data-legal="${key}"]`)!
+  const legalText = () => legalLink('terms').parentElement!.textContent
+
+  it("links the footer to bisdex.io's legal pages by default, with no BiS API line", () => {
+    new BisModalView(root).showConnect({ onSelect: vi.fn(), onError: vi.fn() })
+    expect(legalLink('terms').href).toBe('https://bisdex.io/legal/terms')
+    expect(legalLink('privacy').href).toBe('https://bisdex.io/legal/privacy')
+    expect(legalText()).toContain("you agree to Best in Slot's Terms of Service")
+    expect(root.textContent).not.toContain('Powered by')
   })
 
-  it('sets a wallet icon as a property, so quotes in it cannot add attributes', () => {
-    const icon = 'data:image/svg+xml;base64," onerror="alert(1)'
-    withWallet('MetaMask', icon, { 'bitcoin:connect': {} }, () => {
-      new BisModalView(root).showConnect({ onSelect: vi.fn(), onError: vi.fn() })
-      expect(logoOf('metamask').getAttribute('onerror')).toBeNull()
-      expect(logoOf('metamask').getAttribute('src')).toBe(icon)
-    })
+  it("uses an app's own legal links and owner, keeping defaults for the rest", () => {
+    const view = new BisModalView(root)
+    view.setLegalLinks({ terms: '/legal/terms', owner: 'Acme' })
+    view.showConnect({ onSelect: vi.fn(), onError: vi.fn() })
+    expect(legalLink('terms').href).toBe(`${window.location.origin}/legal/terms`)
+    expect(legalLink('privacy').href).toBe('https://bisdex.io/legal/privacy')
+    expect(legalText()).toContain("you agree to Acme's Terms of Service")
   })
 
-  it("keeps the letter badge for an icon that isn't image data", () => {
-    withWallet('MetaMask', 'javascript:alert(1)', { 'bitcoin:connect': {} }, () => {
-      new BisModalView(root).showConnect({ onSelect: vi.fn(), onError: vi.fn() })
-      expect(logoOf('metamask').getAttribute('src')).toMatch(/^data:image\/svg\+xml;base64,/)
-    })
+  it('keeps the default for a link that is not http(s), and an owner as text', () => {
+    const view = new BisModalView(root)
+    view.setLegalLinks({ privacy: 'javascript:alert(1)', owner: '<img src=x onerror=alert(1)>' })
+    view.showConnect({ onSelect: vi.fn(), onError: vi.fn() })
+    expect(legalLink('privacy').href).toBe('https://bisdex.io/legal/privacy')
+    expect(legalLink('terms').parentElement!.querySelector('img')).toBeNull()
+    expect(legalText()).toContain('<img src=x onerror=alert(1)>')
   })
 
   it('clears the DOM on hide', () => {
