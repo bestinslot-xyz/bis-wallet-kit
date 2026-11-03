@@ -1,9 +1,10 @@
 import type { BISWallet, BISWalletPurpose } from '../types/common'
 import type { BISProvider, SignManyFunction, SignPsbtRequest, SignResponse } from './api'
 import { Buffer } from 'node:buffer'
+// Pure JS: this module is in the browser bundle, where tiny-secp256k1's WASM needs a top-level await.
+import * as ecc from '@bitcoinerlab/secp256k1'
 import * as bitcoinjs from 'bitcoinjs-lib'
-import * as bitcoinMessage from 'bitcoinjs-message'
-import * as tinysecp from 'tiny-secp256k1'
+import * as varuint from 'varuint-bitcoin'
 import { broadcastTxes, finalizePsbtInputs, getCardinalUtxos, validateTxes } from '../core/helpers'
 import { buildPsbtFromTx, buildTransaction } from '../core/mint'
 import { getOrdinalsWallet, getPaymentWallet } from '../core/providers'
@@ -56,6 +57,15 @@ function addressForPubkey(pubkey: Buffer, address: string): string | undefined {
   return bitcoinjs.payments.p2pkh({ pubkey, network }).address
 }
 
+/** The hash a legacy ("Bitcoin Signed Message") signature over `message` signs. */
+function legacyMessageHash(message: string): Buffer {
+  const prefix = Buffer.from(getBitcoinNetwork().messagePrefix, 'utf8')
+  const body = Buffer.from(message, 'utf8')
+  const length = Buffer.alloc(varuint.encodingLength(body.length))
+  varuint.encode(body.length, length)
+  return bitcoinjs.crypto.hash256(Buffer.concat([prefix, length, body]))
+}
+
 /**
  * The public key behind `address`, read from a signature over `message`: a BIP-322 simple
  * signature's witness carries it, and a legacy 65-byte signature lets it be recovered. Null when
@@ -72,8 +82,12 @@ export function publicKeyFromSignature(
     const header = sig[0]! - 27
     const recovery = header & 3
     const compressed = header >= 4
-    const hash = bitcoinMessage.magicHash(message, getBitcoinNetwork().messagePrefix)
-    const key = tinysecp.recover(hash, sig.subarray(1), recovery as 0 | 1 | 2 | 3, compressed)
+    const key = ecc.recover(
+      legacyMessageHash(message),
+      sig.subarray(1),
+      recovery as 0 | 1 | 2 | 3,
+      compressed
+    )
     if (key) candidates.push(Buffer.from(key))
   } else {
     // A serialized witness stack: an item count, then each item with its length.
