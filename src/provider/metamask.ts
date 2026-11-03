@@ -1,6 +1,8 @@
 import type { BitcoinWalletBackend } from './bitcoin-wallet'
 import { Buffer } from 'node:buffer'
 import { getDefaultTransport, getMultichainClient } from '@metamask/multichain-api-client'
+import * as bitcoinjs from 'bitcoinjs-lib'
+import { getTxhex } from '../core/helpers'
 import { getNetwork } from '../core/store-network'
 import { createBitcoinWalletProvider } from './bitcoin-wallet'
 import { findBitcoinStandardWallet, standardWalletBackend } from './wallet-standard'
@@ -24,6 +26,22 @@ type SignPsbt = (call: {
 }) => Promise<{ psbt: string }>
 
 let invoke: SignPsbt | undefined
+
+/**
+ * `psbt` with each SegWit v0 input carrying its previous transaction (`nonWitnessUtxo`) beside the
+ * spent output. MetaMask signs with BDK, which refuses a SegWit v0 input without it
+ * (`trust_witness_utxo` is off), and then reports the PSBT as not finalized. The kit's own unbroadcast
+ * txs (a package's commit and reveals) come from the tx cache `saveExtraUtxos` fills.
+ */
+export async function withPreviousTxs(psbt: Uint8Array): Promise<Uint8Array> {
+  const parsed = bitcoinjs.Psbt.fromBuffer(Buffer.from(psbt))
+  for (const [i, input] of parsed.data.inputs.entries()) {
+    if (input.nonWitnessUtxo || input.witnessUtxo?.script[0] !== 0x00) continue
+    const txid = Buffer.from(parsed.txInputs[i]!.hash).reverse().toString('hex')
+    parsed.updateInput(i, { nonWitnessUtxo: Buffer.from(await getTxhex(txid), 'hex') })
+  }
+  return parsed.toBuffer()
+}
 
 /**
  * Signs `psbt` as built. MetaMask's Wallet Standard `bitcoin:signTransaction` always asks
@@ -71,7 +89,7 @@ export const METAMASK = createBitcoinWalletProvider('MetaMask', (): BitcoinWalle
         // The wallet signs every input it owns; MetaMask has one address, so that is r's.
         const address = r.inputs[0]?.address ?? wallet.accounts[0]?.address
         if (!address) throw new Error('MetaMask has no connected account.')
-        signed.push(await signPsbtAsBuilt(address, r.psbt))
+        signed.push(await signPsbtAsBuilt(address, await withPreviousTxs(r.psbt)))
       }
       return signed
     },
