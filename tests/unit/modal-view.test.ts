@@ -29,26 +29,53 @@ describe('bisModalView', () => {
     )
   })
 
-  it("shows a badge instead of a wallet icon that isn't base64 image data", () => {
-    const wallets = getWallets()
-    const unregister = wallets.register({
+  // Registers a Wallet Standard wallet for the duration of `run`.
+  function withWallet(
+    name: string,
+    icon: string,
+    features: Record<string, unknown>,
+    run: () => void
+  ) {
+    const unregister = getWallets().register({
       version: '1.0.0',
-      name: 'MetaMask',
-      icon: 'data:image/svg+xml;base64," onerror="alert(1)' as `data:image/svg+xml;base64,${string}`,
+      name,
+      icon: icon as `data:image/svg+xml;base64,${string}`,
       chains: ['bitcoin:mainnet'],
       accounts: [],
-      features: {
-        'bitcoin:connect': {},
-        'bitcoin:signTransaction': {},
-        'bitcoin:signMessage': {},
-      },
+      features: features as never,
     })
-    const view = new BisModalView(root)
-    view.showConnect({ onSelect: vi.fn(), onError: vi.fn() })
-    const img = root.querySelector('[data-provider="metamask"] img')!
-    expect(img.getAttribute('onerror')).toBeNull()
-    expect(img.getAttribute('src')).toMatch(/^data:image\/svg\+xml;base64,[A-Z0-9+/=]+$/i)
-    unregister()
+    try {
+      run()
+    } finally {
+      unregister()
+    }
+  }
+
+  const logoOf = (provider: string) =>
+    root.querySelector<HTMLImageElement>(`[data-provider="${provider}"] img`)!
+
+  it("uses a wallet's icon from any of its registrations, such as Phantom's Solana one", () => {
+    const icon = 'data:image/svg+xml,%3Csvg xmlns%3D%22http://www.w3.org/2000/svg%22/%3E'
+    withWallet('Phantom', icon, { 'solana:signTransaction': {} }, () => {
+      new BisModalView(root).showConnect({ onSelect: vi.fn(), onError: vi.fn() })
+      expect(logoOf('phantom').src).toBe(icon)
+    })
+  })
+
+  it('sets a wallet icon as a property, so quotes in it cannot add attributes', () => {
+    const icon = 'data:image/svg+xml;base64," onerror="alert(1)'
+    withWallet('MetaMask', icon, { 'bitcoin:connect': {} }, () => {
+      new BisModalView(root).showConnect({ onSelect: vi.fn(), onError: vi.fn() })
+      expect(logoOf('metamask').getAttribute('onerror')).toBeNull()
+      expect(logoOf('metamask').getAttribute('src')).toBe(icon)
+    })
+  })
+
+  it("keeps the letter badge for an icon that isn't image data", () => {
+    withWallet('MetaMask', 'javascript:alert(1)', { 'bitcoin:connect': {} }, () => {
+      new BisModalView(root).showConnect({ onSelect: vi.fn(), onError: vi.fn() })
+      expect(logoOf('metamask').getAttribute('src')).toMatch(/^data:image\/svg\+xml;base64,/)
+    })
   })
 
   it('clears the DOM on hide', () => {

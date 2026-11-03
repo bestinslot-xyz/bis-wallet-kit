@@ -191,16 +191,11 @@ function getWallet(walletType: BISWalletPurpose): BISWallet | undefined {
     return undefined
   }
 
+  // A single-address session (any provider that connected with `purpose: 'all'`) serves every role.
   const wallets = walletInfo.wallets
-  const provider = walletInfo.provider
-
-  const singleWalletProviders = ['okx', 'unisat', 'local']
-
-  if (singleWalletProviders.includes(provider)) {
-    walletType = 'all'
-  }
-
-  const wallet = wallets.find(wallet => wallet.purpose === walletType)
+  const wallet =
+    wallets.find(wallet => wallet.purpose === 'all') ??
+    wallets.find(wallet => wallet.purpose === walletType)
 
   if (!wallet) {
     console.error(`${walletType} wallet not found. Provider: ${walletInfo.provider}`)

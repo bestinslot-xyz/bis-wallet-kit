@@ -5,7 +5,7 @@ import unisatLogo from '../assets/img/provider/unisat.png'
 import xverseLogo from '../assets/img/provider/xverse.png'
 import wooGIF from '../assets/img/woo.gif'
 import { getWallets } from '../core/providers'
-import { findBitcoinStandardWallet } from '../provider/wallet-standard'
+import { findStandardWalletIcon } from '../provider/wallet-standard'
 
 interface ProviderEntry {
   name: string
@@ -23,19 +23,10 @@ const PROVIDERS: Partial<Record<BISWalletProvider, ProviderEntry>> = {
   metamask: { name: 'MetaMask', standardName: /metamask/i },
 }
 
-// A wallet's icon is wallet-supplied text set into an src attribute, so only base64 image data passes.
-const SAFE_ICON = /^data:image\/(?:svg\+xml|png|webp|jpeg|gif);base64,[A-Z0-9+/=]+$/i
-
-/** A neutral badge with the wallet's initial, for a wallet whose icon is unavailable. */
+/** A neutral badge with the wallet's initial, shown until (or unless) the wallet's own icon is found. */
 function letterBadge(name: string): string {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><rect width="40" height="40" rx="8" fill="#6b7280"/><text x="20" y="27" font-family="sans-serif" font-size="20" font-weight="600" fill="#fff" text-anchor="middle">${name.charAt(0).toUpperCase()}</text></svg>`
   return `data:image/svg+xml;base64,${btoa(svg)}`
-}
-
-function logoOf(entry: ProviderEntry): string {
-  if (entry.img) return entry.img
-  const icon = entry.standardName ? findBitcoinStandardWallet(entry.standardName)?.icon : undefined
-  return icon && SAFE_ICON.test(icon) ? icon : letterBadge(entry.name)
 }
 
 const LINKS = {
@@ -147,7 +138,7 @@ export class BisModalView {
             data-provider="${key}"
             class="group flex items-center gap-x-4 p-2 border hover:border-primary border-border rounded-lg w-full text-left transition-colors cursor-pointer duration-300"
           >
-            <img src="${logoOf(item)}" class="rounded-lg size-10" alt="${item.name}">
+            <img src="${item.img ?? letterBadge(item.name)}" class="rounded-lg size-10" alt="${item.name}">
             <div class="font-semibold text-lg grow">${item.name}</div>
             <svg class="w-auto h-6 text-muted-foreground group-hover:text-foreground transition-colors duration-300" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m9 18l6-6l-6-6"/></svg>
           </button>`
@@ -212,6 +203,13 @@ export class BisModalView {
 
     if (this.state === 'connect') {
       this.root.querySelectorAll<HTMLButtonElement>('[data-provider]').forEach(btn => {
+        const entry = PROVIDERS[btn.dataset.provider as BISWalletProvider]
+        // A wallet's icon is wallet-supplied, so it is set as a property (never written into the
+        // markup) and only when it is image data.
+        const icon = entry?.standardName ? findStandardWalletIcon(entry.standardName) : undefined
+        const img = btn.querySelector('img')
+        if (img && icon?.startsWith('data:image/')) img.src = icon
+
         btn.addEventListener('click', () => {
           void this.onProviderSelect(btn.dataset.provider as BISWalletProvider)
         })

@@ -6,7 +6,9 @@ import * as bitcoinMessage from 'bitcoinjs-message'
 import { ECPairFactory } from 'ecpair'
 import * as tinysecp from 'tiny-secp256k1'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
+import { getOrdinalsWallet, getPaymentWallet } from '../../src/core/providers.ts'
 import { setNetwork } from '../../src/core/store-network.ts'
+import { saveWalletInfo } from '../../src/core/store.ts'
 import {
   createBitcoinWalletProvider,
   publicKeyFromSignature,
@@ -74,6 +76,23 @@ function unsignedPsbtHex(): string {
   psbt.addOutput({ script, value: 9000 })
   return psbt.toHex()
 }
+
+describe('session wallet lookup', () => {
+  it("serves both roles from a single-address session's 'all' wallet, whatever the provider", () => {
+    const wallet = { address, pubkey: pubkey.toString('hex'), purpose: 'all' as const }
+    saveWalletInfo({ provider: 'metamask', wallets: [wallet], signature: null })
+    expect(getPaymentWallet()).toEqual(wallet)
+    expect(getOrdinalsWallet()).toEqual(wallet)
+  })
+
+  it('keeps the payment and ordinals wallets of a split session apart', () => {
+    const payment = { address, pubkey: 'aa', purpose: 'payment' as const }
+    const ordinals = { address: 'tb1pordinals', pubkey: 'bb', purpose: 'ordinals' as const }
+    saveWalletInfo({ provider: 'phantom', wallets: [payment, ordinals], signature: null })
+    expect(getPaymentWallet()).toEqual(payment)
+    expect(getOrdinalsWallet()).toEqual(ordinals)
+  })
+})
 
 describe('createBitcoinWalletProvider', () => {
   it('connects a payment-only wallet as one address, reading its key from a signature', async () => {
