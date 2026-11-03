@@ -90,6 +90,7 @@
     "@cmdcode/buff-utils": "^2.0.0",
     "@cmdcode/crypto-tools": "^2.8.0",
     "@cmdcode/tapscript": "1.5.3",
+    "@metamask/multichain-api-client": "^0.12.0",
     "@noble/curves": "2.0.1",
     "@noble/hashes": "2.0.1",
     "@noble/secp256k1": "^3.0.0",

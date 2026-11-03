@@ -36,6 +36,9 @@ importers:
       '@cmdcode/tapscript':
         specifier: 1.5.3
         version: 1.5.3(patch_hash=d8299590fc5ad350028072a452269f8bd5c7f2130655a3d2bdfc98ca0c826bb5)
+      '@metamask/multichain-api-client':
+        specifier: ^0.12.0
+        version: 0.12.0
       '@noble/curves':
         specifier: 2.0.1
         version: 2.0.1
@@ -802,6 +805,10 @@ packages:
 
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
+
+  '@metamask/multichain-api-client@0.12.0':
+    resolution: {integrity: sha512-5YxIcK93n9DMhjTY5nuPj4aN5Nvabnnu4njf8kzXB0DKDKvvowe4YaQNvnjw/ZrHiDwE1ScPCyLgsdmPYCQhCQ==}
+    engines: {node: ^18.20 || ^20.17 || >=22}
 
   '@microsoft/api-extractor-model@7.32.2':
     resolution: {integrity: sha512-Ussc25rAalc+4JJs9HNQE7TuO9y6jpYQX9nWD1DhqUzYPBr3Lr7O9intf+ZY8kD5HnIqeIRJX7ccCT0QyBy2Ww==}
@@ -4476,6 +4483,8 @@ snapshots:
     dependencies:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
+
+  '@metamask/multichain-api-client@0.12.0': {}
 
   '@microsoft/api-extractor-model@7.32.2(@types/node@25.0.3)':
     dependencies:
