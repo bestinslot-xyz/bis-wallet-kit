@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import type { ConnectCallbacks } from '../../src/types/common'
+import { getWallets } from '@wallet-standard/app'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { BisModalView } from '../../src/components/connect-modal-view'
 
@@ -22,8 +23,32 @@ describe('bisModalView', () => {
     const view = new BisModalView(root)
     view.showConnect({ onSelect: vi.fn(), onError: vi.fn() })
     const buttons = root.querySelectorAll('[data-provider]')
-    expect(buttons.length).toBe(3)
-    expect([...buttons].map(b => b.getAttribute('data-provider'))).toContain('unisat')
+    expect(buttons.length).toBe(5)
+    expect([...buttons].map(b => b.getAttribute('data-provider'))).toEqual(
+      expect.arrayContaining(['unisat', 'phantom', 'metamask'])
+    )
+  })
+
+  it("shows a badge instead of a wallet icon that isn't base64 image data", () => {
+    const wallets = getWallets()
+    const unregister = wallets.register({
+      version: '1.0.0',
+      name: 'MetaMask',
+      icon: 'data:image/svg+xml;base64," onerror="alert(1)' as `data:image/svg+xml;base64,${string}`,
+      chains: ['bitcoin:mainnet'],
+      accounts: [],
+      features: {
+        'bitcoin:connect': {},
+        'bitcoin:signTransaction': {},
+        'bitcoin:signMessage': {},
+      },
+    })
+    const view = new BisModalView(root)
+    view.showConnect({ onSelect: vi.fn(), onError: vi.fn() })
+    const img = root.querySelector('[data-provider="metamask"] img')!
+    expect(img.getAttribute('onerror')).toBeNull()
+    expect(img.getAttribute('src')).toMatch(/^data:image\/svg\+xml;base64,[A-Z0-9+/=]+$/i)
+    unregister()
   })
 
   it('clears the DOM on hide', () => {
@@ -53,7 +78,7 @@ describe('bisModalView', () => {
     expect(errorBox.querySelector('img')).toBeNull()
     expect(errorBox.textContent).toContain('<img src=x onerror=alert(1)>')
     root.querySelector<HTMLButtonElement>('[data-retry]')!.click()
-    expect(root.querySelectorAll('[data-provider]').length).toBe(3)
+    expect(root.querySelectorAll('[data-provider]').length).toBe(5)
   })
 
   it('applies the forced theme class', () => {

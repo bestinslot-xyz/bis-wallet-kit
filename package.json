@@ -93,6 +93,8 @@
     "@noble/curves": "2.0.1",
     "@noble/hashes": "2.0.1",
     "@noble/secp256k1": "^3.0.0",
+    "@wallet-standard/app": "^1.1.1",
+    "@wallet-standard/base": "^1.1.1",
     "base64-arraybuffer": "^1.0.2",
     "bip322-js": "^3.0.0",
     "bitcoinjs-lib": "^6.1.7",

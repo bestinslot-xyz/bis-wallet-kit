@@ -11,7 +11,7 @@ export interface ConnectCallbacks {
 }
 
 /* Wallet */
-export type BISWalletProvider = 'okx' | 'unisat' | 'xverse' | 'local'
+export type BISWalletProvider = 'okx' | 'unisat' | 'xverse' | 'phantom' | 'metamask' | 'local'
 export type BISWalletPurpose = 'ordinals' | 'payment' | 'all'
 
 export interface BISSession {

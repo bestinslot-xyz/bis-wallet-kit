@@ -10,6 +10,8 @@ Bitcoin-native dApps and web apps needing simple, multi-wallet support.
 - ✅ OKX
 - ✅ Unisat
 - ✅ Xverse
+- ✅ Phantom
+- ✅ MetaMask (mainnet and testnet; no signet)
 
 ## 📚 Documentation
 

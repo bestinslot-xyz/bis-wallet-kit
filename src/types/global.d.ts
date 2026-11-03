@@ -4,6 +4,7 @@ declare global {
     unisat?: UniSat
     okxwallet?: any
     XverseProviders?: any
+    phantom?: { bitcoin?: unknown }
   }
 }
 
