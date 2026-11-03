@@ -9,16 +9,19 @@ import { findStandardWalletIcon } from '../provider/wallet-standard'
 
 interface ProviderEntry {
   name: string
-  /** A bundled logo. */
+  /** A bundled logo, shown when the wallet is not installed. */
   img?: string
-  /** The Wallet Standard name of a wallet whose own icon is the logo. */
+  /**
+   * The Wallet Standard name of the wallet. When it is installed, its own icon (usually a vector,
+   * sharp at any density) replaces the bundled logo.
+   */
   standardName?: RegExp
 }
 
 const PROVIDERS: Partial<Record<BISWalletProvider, ProviderEntry>> = {
-  okx: { name: 'OKX', img: okxLogo },
-  unisat: { name: 'Unisat', img: unisatLogo },
-  xverse: { name: 'Xverse', img: xverseLogo },
+  okx: { name: 'OKX', img: okxLogo, standardName: /okx/i },
+  unisat: { name: 'Unisat', img: unisatLogo, standardName: /unisat/i },
+  xverse: { name: 'Xverse', img: xverseLogo, standardName: /xverse/i },
   metamask: { name: 'MetaMask', standardName: /metamask/i },
 }
 

@@ -62,6 +62,19 @@ describe('bisModalView', () => {
     })
   })
 
+  it("replaces a bundled logo with the installed wallet's own icon", () => {
+    const bundled = () => {
+      new BisModalView(root).showConnect({ onSelect: vi.fn(), onError: vi.fn() })
+      return logoOf('okx').getAttribute('src')
+    }
+    const withoutWallet = bundled()
+    const icon = 'data:image/svg+xml;base64,PHN2Zy8+'
+    withWallet('OKX Wallet', icon, { 'solana:signTransaction': {} }, () => {
+      expect(bundled()).toBe(icon)
+    })
+    expect(withoutWallet).not.toBe(icon)
+  })
+
   it('sets a wallet icon as a property, so quotes in it cannot add attributes', () => {
     const icon = 'data:image/svg+xml;base64," onerror="alert(1)'
     withWallet('MetaMask', icon, { 'bitcoin:connect': {} }, () => {
