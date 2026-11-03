@@ -88,7 +88,7 @@ describe('session wallet lookup', () => {
   it('keeps the payment and ordinals wallets of a split session apart', () => {
     const payment = { address, pubkey: 'aa', purpose: 'payment' as const }
     const ordinals = { address: 'tb1pordinals', pubkey: 'bb', purpose: 'ordinals' as const }
-    saveWalletInfo({ provider: 'phantom', wallets: [payment, ordinals], signature: null })
+    saveWalletInfo({ provider: 'xverse', wallets: [payment, ordinals], signature: null })
     expect(getPaymentWallet()).toEqual(payment)
     expect(getOrdinalsWallet()).toEqual(ordinals)
   })

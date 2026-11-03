@@ -19,7 +19,6 @@ const PROVIDERS: Partial<Record<BISWalletProvider, ProviderEntry>> = {
   okx: { name: 'OKX', img: okxLogo },
   unisat: { name: 'Unisat', img: unisatLogo },
   xverse: { name: 'Xverse', img: xverseLogo },
-  phantom: { name: 'Phantom', standardName: /phantom/i },
   metamask: { name: 'MetaMask', standardName: /metamask/i },
 }
 

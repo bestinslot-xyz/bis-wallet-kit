@@ -17,15 +17,13 @@ modal.setTheme('dark') // 'light' | 'dark' | 'system' (default 'system')
 Lower-level modal controls are also exported: `modal.create`, `modal.showConnect`,
 `modal.showConnectConfirmation`, `modal.showError`, `modal.hide`.
 
-Supported providers: `okx`, `unisat`, `xverse`, `phantom`, `metamask`, and `local` (Node only — see
-below).
+Supported providers: `okx`, `unisat`, `xverse`, `metamask`, and `local` (Node only — see below).
 
-Phantom and MetaMask are reached through the Bitcoin Wallet Standard (`bitcoin:connect`,
-`bitcoin:signTransaction`, `bitcoin:signMessage`); Phantom falls back to its injected
-`window.phantom.bitcoin` where the Wallet Standard wallet is absent. MetaMask gives a single payment
-address, so it connects as a single-address wallet (`purpose: 'all'`); it reports no public key, so
-connecting asks for one message signature to read it. MetaMask's Bitcoin chains are mainnet,
-testnet, testnet4 and regtest: on signet it refuses to connect.
+MetaMask is reached through the Bitcoin Wallet Standard (`bitcoin:connect`,
+`bitcoin:signTransaction`, `bitcoin:signMessage`). It gives a single payment address, so it connects
+as a single-address wallet (`purpose: 'all'`); it reports no public key, so connecting asks for one
+message signature to read it. Its Bitcoin chains are mainnet, testnet and regtest: on signet it
+refuses to connect.
 
 ## Sessions
 
@@ -33,7 +31,7 @@ A session describes the connected wallet:
 
 ```ts
 interface BISSession {
-  provider: 'okx' | 'unisat' | 'xverse' | 'phantom' | 'metamask' | 'local'
+  provider: 'okx' | 'unisat' | 'xverse' | 'metamask' | 'local'
   wallets: BISWallet[]
   signature: string | null
 }

@@ -23,9 +23,9 @@ describe('bisModalView', () => {
     const view = new BisModalView(root)
     view.showConnect({ onSelect: vi.fn(), onError: vi.fn() })
     const buttons = root.querySelectorAll('[data-provider]')
-    expect(buttons.length).toBe(5)
+    expect(buttons.length).toBe(4)
     expect([...buttons].map(b => b.getAttribute('data-provider'))).toEqual(
-      expect.arrayContaining(['unisat', 'phantom', 'metamask'])
+      expect.arrayContaining(['unisat', 'metamask'])
     )
   })
 
@@ -54,11 +54,11 @@ describe('bisModalView', () => {
   const logoOf = (provider: string) =>
     root.querySelector<HTMLImageElement>(`[data-provider="${provider}"] img`)!
 
-  it("uses a wallet's icon from any of its registrations, such as Phantom's Solana one", () => {
+  it("uses a wallet's icon from any of its registrations, such as MetaMask's Solana one", () => {
     const icon = 'data:image/svg+xml,%3Csvg xmlns%3D%22http://www.w3.org/2000/svg%22/%3E'
-    withWallet('Phantom', icon, { 'solana:signTransaction': {} }, () => {
+    withWallet('MetaMask', icon, { 'solana:signTransaction': {} }, () => {
       new BisModalView(root).showConnect({ onSelect: vi.fn(), onError: vi.fn() })
-      expect(logoOf('phantom').src).toBe(icon)
+      expect(logoOf('metamask').src).toBe(icon)
     })
   })
 
@@ -105,7 +105,7 @@ describe('bisModalView', () => {
     expect(errorBox.querySelector('img')).toBeNull()
     expect(errorBox.textContent).toContain('<img src=x onerror=alert(1)>')
     root.querySelector<HTMLButtonElement>('[data-retry]')!.click()
-    expect(root.querySelectorAll('[data-provider]').length).toBe(5)
+    expect(root.querySelectorAll('[data-provider]').length).toBe(4)
   })
 
   it('applies the forced theme class', () => {

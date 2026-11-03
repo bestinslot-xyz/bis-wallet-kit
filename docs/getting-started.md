@@ -9,8 +9,8 @@ pnpm add @bestinslot/wallet-kit
 
 The package ships as ESM only, in two flavours resolved automatically by your environment:
 
-- **browser** — extension wallets (OKX, Unisat, Xverse, Phantom, MetaMask) + the framework-free
-  connect modal, plus all the feature APIs.
+- **browser** — extension wallets (OKX, Unisat, Xverse, MetaMask) + the framework-free connect
+  modal, plus all the feature APIs.
 - **server** (Node/Bun) — the same feature APIs (swap, inscriptions, BRC-2.0, balances) connected
   via a local WIF wallet (`wallet.connectLocalWallet`), with no Vue or modal. Ideal for
   headless/automated use.
@@ -31,8 +31,7 @@ pnpm add react # only if you use the /react adapter
 
 ## Connect a wallet
 
-In a browser, open the modal and let the user pick a wallet (OKX, Unisat, Xverse, Phantom, or
-MetaMask):
+In a browser, open the modal and let the user pick a wallet (OKX, Unisat, Xverse, or MetaMask):
 
 ```ts
 import { modal, wallet } from '@bestinslot/wallet-kit'

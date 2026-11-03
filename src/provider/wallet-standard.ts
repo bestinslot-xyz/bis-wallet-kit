@@ -4,7 +4,7 @@ import { Buffer } from 'node:buffer'
 import { getWallets } from '@wallet-standard/app'
 import { getNetwork } from '../core/store-network'
 
-// Bitcoin Wallet Standard features (MetaMask's and Phantom's), named as the wallets register them.
+// Bitcoin Wallet Standard features, named as wallets (MetaMask) register them.
 const CONNECT: IdentifierString = 'bitcoin:connect'
 const SIGN_TRANSACTION: IdentifierString = 'bitcoin:signTransaction'
 const SIGN_MESSAGE: IdentifierString = 'bitcoin:signMessage'
