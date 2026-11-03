@@ -1,27 +1,25 @@
 import type { BISWalletProvider, ConnectCallbacks, ModalState, ModalTheme } from '../types/common'
 import errorImage from '../assets/img/error.png'
-import okxLogo from '../assets/img/provider/okx.png'
+import okxLogo from '../assets/img/provider/okx.svg'
 import unisatLogo from '../assets/img/provider/unisat.png'
-import xverseLogo from '../assets/img/provider/xverse.png'
+import xverseLogo from '../assets/img/provider/xverse.svg'
 import wooGIF from '../assets/img/woo.gif'
 import { getWallets } from '../core/providers'
 import { findStandardWalletIcon } from '../provider/wallet-standard'
 
+// Bundled logos are vectors or at least 128px, so they stay sharp at 2x and 3x screen densities.
 interface ProviderEntry {
   name: string
-  /** A bundled logo, shown when the wallet is not installed. */
+  /** A bundled logo. */
   img?: string
-  /**
-   * The Wallet Standard name of the wallet. When it is installed, its own icon (usually a vector,
-   * sharp at any density) replaces the bundled logo.
-   */
+  /** The Wallet Standard name of a wallet without a bundled logo, whose own icon is used. */
   standardName?: RegExp
 }
 
 const PROVIDERS: Partial<Record<BISWalletProvider, ProviderEntry>> = {
-  okx: { name: 'OKX', img: okxLogo, standardName: /okx/i },
-  unisat: { name: 'Unisat', img: unisatLogo, standardName: /unisat/i },
-  xverse: { name: 'Xverse', img: xverseLogo, standardName: /xverse/i },
+  okx: { name: 'OKX', img: okxLogo },
+  unisat: { name: 'Unisat', img: unisatLogo },
+  xverse: { name: 'Xverse', img: xverseLogo },
   metamask: { name: 'MetaMask', standardName: /metamask/i },
 }
 
