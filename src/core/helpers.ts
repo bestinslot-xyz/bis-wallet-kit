@@ -382,9 +382,11 @@ function fixCardinalUtxos(utxos: Utxo[], addr: string): CardinalUtxoInfo[] {
       const vout = tx.outs[i]!
       if (checkIfUtxoIsExtraOrdinal(txid, i)) continue
       if (checkIfUtxoUsedInExtras(txid, i)) continue
+      // An OP_RETURN output pays no address.
+      if (vout.script[0] === bitcoinjs.opcodes.OP_RETURN) continue
 
       try {
-        // vout.script might be an OP_RETURN or a script without wallet address so this part may fail which is ok
+        // vout.script may still be a script without a wallet address, so this part may fail, which is ok
         const voutAddress = bitcoinjs.address.fromOutputScript(vout.script, network)
         if (voutAddress === addr) {
           newUtxos.push({
