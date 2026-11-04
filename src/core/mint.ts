@@ -20,8 +20,7 @@ import {
   broadcastTxes,
   clearExtraUtxos,
   getCardinalUtxos,
-  getExtraOrdinalUtxos,
-  getOrdinalUtxos,
+  getInscriptionUtxo,
   getTxhex,
   saveExtraUtxos,
   txHexByIdCache,
@@ -2244,17 +2243,7 @@ async function buildCommitTxWithParent(
 
   if (!inscriptionWallet.addr) throw new Error('Inscription wallet address is not set.')
 
-  const ordinalUtxos = await getOrdinalUtxos(inscriptionWallet.addr)
-  let parentUtxo = null
-  for (const utxo of ordinalUtxos) {
-    for (const inscrId of utxo.inscription_ids) {
-      if (inscrId === parentInscriptionId) {
-        parentUtxo = utxo
-        break
-      }
-    }
-    if (parentUtxo) break
-  }
+  const parentUtxo = await getInscriptionUtxo(inscriptionWallet.addr, parentInscriptionId)
   if (!parentUtxo) throw new Error('Parent inscription utxo not found in ordinal utxos')
 
   const cardinalUtxos = await getCardinalUtxos(payerWallet.addr)
@@ -2840,9 +2829,9 @@ export interface InscriptionUTXODetails {
   utxo: string
 }
 /**
- * Locates an inscription's UTXO on `inscriptionAddr`. Searches `ordinalUtxos` when given.
- * Otherwise an inscription created by the saved extra transactions resolves from them
- * directly, and any other inscription is looked up in the backend's `ordinal_utxos` list.
+ * Locates an inscription's UTXO on `inscriptionAddr`. Searches `ordinalUtxos` when given;
+ * otherwise reads it with `getInscriptionUtxo` (saved extra transactions first, then the
+ * chain provider).
  */
 export async function getInscriptionDetails(
   inscriptionId: string,
@@ -2851,10 +2840,8 @@ export async function getInscriptionDetails(
 ): Promise<InscriptionUTXODetails | null> {
   if (ordinalUtxos) return findInscriptionDetails(inscriptionId, ordinalUtxos)
 
-  return (
-    findInscriptionDetails(inscriptionId, getExtraOrdinalUtxos(inscriptionAddr)) ??
-    findInscriptionDetails(inscriptionId, await getOrdinalUtxos(inscriptionAddr))
-  )
+  const utxo = await getInscriptionUtxo(inscriptionAddr, inscriptionId)
+  return utxo ? findInscriptionDetails(inscriptionId, [utxo]) : null
 }
 
 function findInscriptionDetails(
@@ -3144,17 +3131,7 @@ async function buildRevealTxWithParent(
   if (!inscriptionWallet.addr) throw new Error('Inscription wallet address is not set.')
   if (!payerWallet.addr) throw new Error('Payer wallet address is not set.')
 
-  const ordinalUtxos = await getOrdinalUtxos(inscriptionWallet.addr)
-  let parentUtxo = null
-  for (const utxo of ordinalUtxos) {
-    for (const inscrId of utxo.inscription_ids) {
-      if (inscrId === parentInscriptionId) {
-        parentUtxo = utxo
-        break
-      }
-    }
-    if (parentUtxo) break
-  }
+  const parentUtxo = await getInscriptionUtxo(inscriptionWallet.addr, parentInscriptionId)
   if (!parentUtxo) throw new Error('Parent inscription utxo not found in ordinal utxos')
 
   const cardinalUtxos = await getCardinalUtxos(payerWallet.addr)

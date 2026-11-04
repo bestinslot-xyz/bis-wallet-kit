@@ -73,13 +73,26 @@ function simulatedMint() {
   }
 }
 
-function stubBackend(routes: { ordinal?: APIOrdinalUtxoInfo[]; cardinal?: APIUtxoInfo[] }) {
+// `inscription: 404` stands for an indexer without the inscription_utxo route.
+function stubBackend(routes: {
+  ordinal?: APIOrdinalUtxoInfo[]
+  cardinal?: APIUtxoInfo[]
+  inscription?: APIOrdinalUtxoInfo | null | 404
+}) {
   const calls: string[] = []
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (input: any) => {
     const url = typeof input === 'string' ? input : input.toString()
     calls.push(url)
     let data: unknown
-    if (url.includes('/ordinal_utxos/') && routes.ordinal) data = routes.ordinal
+    if (url.includes('/inscription_utxo/') && routes.inscription === 404) {
+      return new Response(JSON.stringify({ error: 'Not found' }), {
+        status: 404,
+        headers: { 'content-type': 'application/json' },
+      })
+    }
+    if (url.includes('/inscription_utxo/') && routes.inscription !== undefined)
+      data = routes.inscription
+    else if (url.includes('/ordinal_utxos/') && routes.ordinal) data = routes.ordinal
     else if (url.includes('/cardinal_utxos/') && routes.cardinal) data = routes.cardinal
     else throw new Error(`unexpected network call in offline test: ${url}`)
     return new Response(JSON.stringify({ data }), {
@@ -133,35 +146,56 @@ describe('getInscriptionDetails', () => {
     expect(await getInscriptionDetails(mint.inscriptionId, addr)).toEqual(fromMerged)
   })
 
-  it('falls back to ordinal_utxos for an inscription the extras do not create', async () => {
+  const realTxid = 'dd'.repeat(32)
+  const realDetails = {
+    satpoint: `${realTxid}:0:0`,
+    value: 330,
+    script_type: 'witness_v1_taproot',
+    block_height: 900000,
+    utxo: `${realTxid}:0`,
+  }
+  const realInscription = (): APIOrdinalUtxoInfo => ({
+    ...cardinalUtxo(`${realTxid}:0`, 330),
+    inscription_ids: [`${realTxid}i0`],
+    satpoints: [`${realTxid}:0:0`],
+  })
+
+  it('looks up an inscription the extras do not create with one inscription_utxo read', async () => {
     const mint = simulatedMint()
     saveExtraUtxos(mint.txHexes, [mint.inscriptionId, mint.satpoint])
-    const realTxid = 'dd'.repeat(32)
-    const realInscription: APIOrdinalUtxoInfo = {
-      ...cardinalUtxo(`${realTxid}:0`, 330),
-      inscription_ids: [`${realTxid}i0`],
-      satpoints: [`${realTxid}:0:0`],
-    }
-    const calls = stubBackend({ ordinal: [realInscription] })
+    const calls = stubBackend({ inscription: realInscription() })
 
     const details = await getInscriptionDetails(`${realTxid}i0`, addr)
 
     expect(calls).toHaveLength(1)
-    expect(calls[0]).toContain(`/ordinal_utxos/${addr}`)
-    expect(details).toEqual({
-      satpoint: `${realTxid}:0:0`,
-      value: 330,
-      script_type: 'witness_v1_taproot',
-      block_height: 900000,
-      utxo: `${realTxid}:0`,
-    })
+    expect(calls[0]).toContain(`/inscription_utxo/${addr}/${realTxid}i0`)
+    expect(details).toEqual(realDetails)
+  })
+
+  it('searches ordinal_utxos on an indexer without inscription_utxo', async () => {
+    const calls = stubBackend({ inscription: 404, ordinal: [realInscription()] })
+
+    expect(await getInscriptionDetails(`${realTxid}i0`, addr)).toEqual(realDetails)
+    expect(calls).toHaveLength(2)
+    expect(calls[1]).toContain(`/ordinal_utxos/${addr}`)
   })
 
   it('looks up the network when no extras are saved', async () => {
-    const calls = stubBackend({ ordinal: [] })
+    const calls = stubBackend({ inscription: null })
 
     expect(await getInscriptionDetails(`${'ee'.repeat(32)}i0`, addr)).toBeNull()
     expect(calls).toHaveLength(1)
+  })
+
+  it('drops a network answer whose output a saved extra tx spends', async () => {
+    const mint = simulatedMint()
+    const spend = new bitcoinjs.Transaction()
+    spend.addInput(Buffer.from(realTxid, 'hex').reverse(), 0)
+    spend.addOutput(Buffer.from('6a', 'hex'), 0)
+    saveExtraUtxos([...mint.txHexes, spend.toHex()], [mint.inscriptionId, mint.satpoint])
+    stubBackend({ inscription: realInscription() })
+
+    expect(await getInscriptionDetails(`${realTxid}i0`, addr)).toBeNull()
   })
 
   it('treats an extra inscription output spent by another extra tx as gone', async () => {
@@ -170,7 +204,7 @@ describe('getInscriptionDetails', () => {
     spend.addInput(Buffer.from(mint.revealTxid, 'hex').reverse(), 0)
     spend.addOutput(Buffer.from('6a', 'hex'), 0)
     saveExtraUtxos([...mint.txHexes, spend.toHex()], [mint.inscriptionId, mint.satpoint])
-    const calls = stubBackend({ ordinal: [] })
+    const calls = stubBackend({ inscription: null })
 
     expect(await getInscriptionDetails(mint.inscriptionId, addr)).toBeNull()
     expect(calls).toHaveLength(1)

@@ -58,6 +58,28 @@ export class BisChainProvider implements ChainProvider {
     return json.data
   }
 
+  /**
+   * Reads the inscription's output from the `inscription_utxo` route. An indexer without that
+   * route (HTTP 404) is searched through `ordinal_utxos` instead.
+   */
+  async inscriptionUtxo(address: string, inscriptionId: string): Promise<OrdinalUtxo | null> {
+    const url = await getEndpointUrl(
+      'indexer',
+      `inscription_utxo/${address}/${inscriptionId}`,
+      this.indexer
+    )
+    try {
+      const json = await fetchWithErrors<{ data: APIOrdinalUtxoInfo | null }>(url, {
+        method: 'GET',
+      })
+      return json.data
+    } catch (error) {
+      if (!(error instanceof BackendError) || error.status !== 404) throw error
+      const utxos = await this.ordinalUtxos(address)
+      return utxos.find(u => u.inscription_ids.includes(inscriptionId)) ?? null
+    }
+  }
+
   async balance(address: string): Promise<ChainBalance> {
     const url = await getEndpointUrl('indexer', `all_balance_details/${address}`, this.indexer)
     const json = await fetchWithErrors<AllBalanceDetails>(url, { method: 'GET' })
