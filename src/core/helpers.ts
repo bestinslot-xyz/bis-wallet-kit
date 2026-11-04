@@ -624,6 +624,30 @@ export async function getOrdinalUtxos(addr: string): Promise<OrdinalUtxoInfo[]> 
 }
 
 /**
+ * Finds the address's unspent output that carries an inscription, with the saved extra transactions applied: the output they create for the inscription comes first, and an output they spend is not returned. A chain provider with `inscriptionUtxo` (see `setProviders`) answers in one lookup, whatever else the address holds; any other is searched through its `ordinalUtxos`.
+ *
+ * @param addr The address holding the inscription.
+ * @param inscriptionId The inscription's id (`<txid>i<index>`).
+ * @returns The output, or `null` when the address does not hold the inscription.
+ */
+export async function getInscriptionUtxo(
+  addr: string,
+  inscriptionId: string
+): Promise<OrdinalUtxoInfo | null> {
+  const carries = (u: OrdinalUtxo) => u.inscription_ids.includes(inscriptionId)
+  const extra = getExtraOrdinalUtxos(addr).find(carries)
+  if (extra) return extra
+
+  const provider = getChainProvider()
+  if (!provider.inscriptionUtxo) return (await getOrdinalUtxos(addr)).find(carries) ?? null
+
+  const utxo = await provider.inscriptionUtxo(addr, inscriptionId)
+  if (!utxo || !carries(utxo)) return null
+  if (checkIfUtxoUsedInExtras(utxo.txid, utxo.vout)) return null
+  return withOutpoints([utxo], addr)[0]!
+}
+
+/**
  * Returns the raw transaction hex for a transaction ID. Transactions the kit built or fetched before come from a cache; any other is read from the chain provider (see `setProviders`).
  *
  * @param txid The transaction ID for which to fetch the raw transaction hex.

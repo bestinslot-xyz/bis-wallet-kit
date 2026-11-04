@@ -77,6 +77,41 @@ describe('in-memory providers', () => {
     expect(outpoints(result.signedTxHex)).toContain(`${inscription.txid}:0`)
   })
 
+  it('finds the inscription to send with inscriptionUtxo when the provider has it', async () => {
+    const inscription = chain.inscribed(P2TR, 546)
+    chain.fund(P2TR, 20_000)
+    const lookups: [string, string][] = []
+    chain.ordinalUtxos = async () => {
+      throw new Error('ordinalUtxos must not be called')
+    }
+    const withLookup = Object.assign(chain, {
+      inscriptionUtxo: async (address: string, inscriptionId: string) => {
+        lookups.push([address, inscriptionId])
+        return structuredClone(inscription)
+      },
+    })
+    wallet.setProviders({ testnet: { chain: withLookup } })
+    const id = inscription.inscription_ids[0]!
+
+    const result = await wallet.sendInscription(id, opReturnWalletInfo(OP_RETURN), 2, null, true)
+
+    expect(lookups).toEqual([[P2TR, id]])
+    expect(outpoints(result.signedTxHex)).toContain(`${inscription.txid}:0`)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('treats a null inscriptionUtxo answer as an inscription the address does not hold', async () => {
+    chain.fund(P2TR, 20_000)
+    wallet.setProviders({
+      testnet: { chain: Object.assign(chain, { inscriptionUtxo: async () => null }) },
+    })
+
+    await expect(
+      wallet.sendInscription(`${'ab'.repeat(32)}i0`, opReturnWalletInfo(OP_RETURN), 2, null, true)
+    ).rejects.toThrow('Inscription cannot be found in wallet')
+    expect(chain.mempoolTests).toEqual([])
+  })
+
   it('reads balances from the chain provider', async () => {
     chain.fund(P2TR, 1_000)
     chain.fund(P2TR, 2_500)
@@ -185,6 +220,83 @@ describe('setProviders', () => {
       () => wallet.setProviders({ signet: { brc20Rpc: {} } } as never),
       /signet\.brc20Rpc has no request\(\) method/
     )
+    const badLookup = { ...partial, broadcast: async () => [], inscriptionUtxo: 'nope' }
+    assert.throws(
+      () => wallet.setProviders({ signet: { chain: badLookup } } as never),
+      /signet\.chain\.inscriptionUtxo is not a function/
+    )
+  })
+})
+
+describe('inscriptionUtxo of the default chain provider', () => {
+  const ID = `${'cd'.repeat(32)}i0`
+  const entry = {
+    txid: 'cd'.repeat(32),
+    vout: 0,
+    value: 546,
+    inscription_ids: [ID],
+    satpoints: [`${'cd'.repeat(32)}:0:0`],
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  function stubFetch(answer: (url: string) => { status: number; body: unknown }) {
+    const urls: string[] = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: unknown) => {
+        urls.push(String(url))
+        const { status, body } = answer(String(url))
+        return {
+          ok: status >= 200 && status < 300,
+          status,
+          statusText: String(status),
+          headers: new Headers({ 'content-type': 'application/json' }),
+          json: async () => body,
+          text: async () => JSON.stringify(body),
+        }
+      })
+    )
+    return urls
+  }
+
+  it('reads the inscription_utxo route', async () => {
+    const urls = stubFetch(() => ({ status: 200, body: { data: entry } }))
+    const provider = new BisChainProvider({ indexer: 'https://idx.example' })
+
+    assert.deepEqual(await provider.inscriptionUtxo('tb1qaddr', ID), entry)
+    assert.deepEqual(urls, [`https://idx.example/inscription_utxo/tb1qaddr/${ID}`])
+  })
+
+  it('passes a null answer through', async () => {
+    stubFetch(() => ({ status: 200, body: { data: null } }))
+    const provider = new BisChainProvider({ indexer: 'https://idx.example' })
+
+    assert.equal(await provider.inscriptionUtxo('tb1qaddr', ID), null)
+  })
+
+  it('searches ordinal_utxos on an indexer without the route', async () => {
+    const urls = stubFetch(url =>
+      url.includes('/inscription_utxo/')
+        ? { status: 404, body: { error: 'Not found' } }
+        : { status: 200, body: { data: [{ ...entry, inscription_ids: ['other'] }, entry] } }
+    )
+    const provider = new BisChainProvider({ indexer: 'https://idx.example' })
+
+    assert.deepEqual(await provider.inscriptionUtxo('tb1qaddr', ID), entry)
+    assert.deepEqual(urls, [
+      `https://idx.example/inscription_utxo/tb1qaddr/${ID}`,
+      'https://idx.example/ordinal_utxos/tb1qaddr',
+    ])
+  })
+
+  it('surfaces other errors', async () => {
+    stubFetch(() => ({ status: 500, body: { error: 'boom' } }))
+    const provider = new BisChainProvider({ indexer: 'https://idx.example' })
+
+    await expect(provider.inscriptionUtxo('tb1qaddr', ID)).rejects.toThrow()
   })
 })
 
