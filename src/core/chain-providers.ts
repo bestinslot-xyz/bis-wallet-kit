@@ -67,6 +67,13 @@ export interface ChainProvider {
   cardinalUtxos: (address: string) => Promise<Utxo[]>
   /** Lists the address's unspent outputs that carry inscriptions. */
   ordinalUtxos: (address: string) => Promise<OrdinalUtxo[]>
+  /**
+   * Optional. Returns the address's unspent output that carries the inscription, or `null` when
+   * the address holds no such output. `inscription_ids` and `satpoints` may list just that
+   * inscription. wallet-kit uses it to find an inscription it is about to spend; a provider
+   * without it is searched through {@link ChainProvider.ordinalUtxos} instead.
+   */
+  inscriptionUtxo?: (address: string, inscriptionId: string) => Promise<OrdinalUtxo | null>
   /** Returns the address's balance. A provider without mempool data reports `mempool: 0`. */
   balance: (address: string) => Promise<ChainBalance>
   /** Returns the raw transaction with the given id, hex encoded. */
@@ -139,6 +146,10 @@ export function setProviders(config: ProvidersConfig) {
           if (typeof (provider as any)?.[method] !== 'function') {
             throw new TypeError(`setProviders: ${network}.chain has no ${method}() method`)
           }
+        }
+        const lookup = (provider as any).inscriptionUtxo
+        if (lookup !== undefined && typeof lookup !== 'function') {
+          throw new TypeError(`setProviders: ${network}.chain.inscriptionUtxo is not a function`)
         }
         entry.chain = provider as ChainProvider
       } else if (key === 'brc20Rpc') {

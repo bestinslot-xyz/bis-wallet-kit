@@ -33,6 +33,7 @@ stay configured through `setEndpoints`.
 interface ChainProvider {
   cardinalUtxos: (address: string) => Promise<Utxo[]>
   ordinalUtxos: (address: string) => Promise<OrdinalUtxo[]>
+  inscriptionUtxo?: (address: string, inscriptionId: string) => Promise<OrdinalUtxo | null> // optional
   balance: (address: string) => Promise<ChainBalance>
   txHex: (txid: string) => Promise<string>
   testMempoolAccept: (txHexes: string[]) => Promise<MempoolAcceptResult[]>
@@ -43,13 +44,18 @@ interface ChainProvider {
 | Method              | Returns                                                                                                                                 |
 | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | `cardinalUtxos`     | The address's unspent outputs that carry no inscriptions and no runes. These fund every transaction the kit builds.                     |
-| `ordinalUtxos`      | The address's unspent outputs that carry inscriptions. Used to find an inscription before sending it or using it as a parent.           |
+| `ordinalUtxos`      | The address's unspent outputs that carry inscriptions. Used to find an inscription when the provider has no `inscriptionUtxo`.          |
+| `inscriptionUtxo`   | Optional. The address's unspent output carrying one inscription, or `null`. Finds an inscription to send or use as a parent.            |
 | `balance`           | The address's confirmed balance, and the amount unconfirmed transactions add to it (negative when they spend from it).                  |
 | `txHex`             | The raw transaction, hex encoded. The kit reads the transactions that created the outputs it spends.                                    |
 | `testMempoolAccept` | One verdict per transaction, in order. Later transactions in the list may spend outputs of earlier ones, as `testmempoolaccept` allows. |
 | `broadcast`         | The txids of the broadcast transactions, in order. The list is a chain (commit, reveal, send), so broadcast them in the order given.    |
 
 Every method throws when it cannot answer.
+
+`inscriptionUtxo` answers in one lookup whatever else the address holds, and its `inscription_ids` /
+`satpoints` may list just the requested inscription. Without it, the kit searches the address's
+`ordinalUtxos`, whose cost grows with the number of inscriptions the address holds.
 
 ### Types
 
@@ -140,6 +146,9 @@ wallet.setProviders({
 ```
 
 A key left out of a constructor reads `setEndpoints`.
+
+`BisChainProvider.inscriptionUtxo` reads the indexer's `inscription_utxo/<address>/<inscriptionId>`
+route. An indexer that answers that route with HTTP 404 is searched through `ordinal_utxos` instead.
 
 ## Testing a provider
 
