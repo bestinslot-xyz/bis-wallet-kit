@@ -191,6 +191,32 @@ describe('building with used inscriptions', () => {
     expect(landing(built.tx, pool)).toEqual([0, 1])
   })
 
+  it('leaves outputs with used inscriptions alone while the plain ones can pay', async () => {
+    const { payer, other } = await wallets()
+    // Selection alone would take the 50,000-sat output: it prefers outputs above 10,000 sats.
+    const pool = [plain('aa', 9000), inscribed('bb', 50000, [0])]
+    const built = buildTransaction(pool, [], payer, [], other, payer, 2, 1000, null, null)
+    expect(built.tx.ins.map((_, i) => spent(built.tx, i))).toEqual([`${'aa'.repeat(32)}:0`])
+    expect(built.output_index).toEqual([0, 1])
+    expect(built.tx.outs).toHaveLength(2)
+  })
+
+  it('leaves them alone in a multi-output build too', async () => {
+    const { payer, other } = await wallets()
+    const pool = [plain('aa', 9000), inscribed('bb', 50000, [0])]
+    const built = buildTransactionMultiOutput(pool, [], payer, [other, other], [480, 480], payer, 2)
+    expect(built.tx.ins.map((_, i) => spent(built.tx, i))).toEqual([`${'aa'.repeat(32)}:0`])
+    expect(built.output_index).toEqual([0, 1, 2])
+  })
+
+  it('reports a plain shortfall when even the used-inscription outputs cannot pay', async () => {
+    const { payer, other } = await wallets()
+    const pool = [plain('aa', 1000), inscribed('bb', 2000, [0])]
+    expect(() =>
+      buildTransaction(pool, [], payer, [], other, payer, 2, 100000, null, null)
+    ).toThrow(/^Not enough funds$/)
+  })
+
   it('needs one set-aside output for a batch of commits', async () => {
     const { payer, other } = await wallets()
     const consolidated = inscribed('aa', 20000, [0, 546, 1092, 1638])

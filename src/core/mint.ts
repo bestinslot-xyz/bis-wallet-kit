@@ -292,35 +292,53 @@ function recordSetAside(
   )
 }
 
+/** Whether a build failed because its inputs cannot pay for its outputs and fee. */
+function isShortOfFunds(e: unknown): boolean {
+  return (
+    e instanceof Error &&
+    (e.message.startsWith('Not enough funds') ||
+      e.message === 'Fee payer output cannot pay the fee')
+  )
+}
+
 /**
- * Runs a transaction build with a growing change reserve while setting aside used inscriptions
- * runs short, so selection adds the inputs that pay for the set-aside output. When no set-aside
- * output can keep them out, or the reserve still falls short, it builds from the outputs without
- * inscriptions alone (`plainOnly`).
+ * Runs a transaction build that spends outputs with used BRC-20 inscriptions only when the outputs
+ * without them cannot pay for it: it first builds from those alone (`plainOnly`). Spending the
+ * inscribed outputs, it retries with a growing change reserve while setting aside their
+ * inscriptions runs short, so selection adds the inputs that pay for the set-aside output.
+ *
+ * @param build Builds the transaction from the given change reserve and UTXO pool.
+ * @param hasInscribed Whether the UTXO pool holds outputs with used inscriptions.
+ * @throws The plain build's error when even the inscribed outputs leave the funds short, and a
+ *   "Not enough funds" error naming the used inscriptions when only they could pay but none of
+ *   their layouts keeps the inscriptions out of the outputs.
  */
 function withSetAsideReserve(
-  build: (reserve: number, plainOnly: boolean) => BuildTransactionResult
+  build: (reserve: number, plainOnly: boolean) => BuildTransactionResult,
+  hasInscribed: boolean
 ) {
+  if (!hasInscribed) return build(0, false)
+  let plainError: unknown
+  try {
+    return build(0, true)
+  } catch (e) {
+    if (!isShortOfFunds(e)) throw e
+    plainError = e
+  }
   let reserve = 0
   for (let attempt = 0; attempt < 4; attempt++) {
     try {
       return build(reserve, false)
     } catch (e) {
       if (e instanceof SetAsideShortfallError) reserve += e.shortfall
-      else if (e instanceof SetAsideImpossibleError || reserve > 0) break
+      else if (isShortOfFunds(e) && reserve === 0) throw plainError
+      else if (e instanceof SetAsideImpossibleError || isShortOfFunds(e)) break
       else throw e
     }
   }
-  try {
-    return build(0, true)
-  } catch (e) {
-    if (e instanceof Error && e.message.startsWith('Not enough funds')) {
-      throw new Error(
-        `${e.message}: this transaction cannot spend outputs with used BRC-20 inscriptions without sending them on, so it needs BTC on outputs without inscriptions`
-      )
-    }
-    throw e
-  }
+  throw new Error(
+    'Not enough funds: this transaction cannot spend outputs with used BRC-20 inscriptions without sending them on, so it needs BTC on outputs without inscriptions'
+  )
 }
 
 const ADDITIONAL_INPUT_P2PKH_VBYTES = 147
@@ -990,20 +1008,22 @@ export function buildTransaction(
   paymentWallet: WalletInfo | null,
   payment: number | null
 ): BuildTransactionResult {
-  return withSetAsideReserve((reserve, plainOnly) =>
-    buildTransactionWithReserve(
-      plainOnly ? utxoInfos.filter(u => !isInscribed(u)) : utxoInfos,
-      forceInUtxos,
-      payerWallet,
-      opReturnWallets,
-      outputWallet,
-      changeWallet,
-      feeRate,
-      amount,
-      paymentWallet,
-      payment,
-      reserve
-    )
+  return withSetAsideReserve(
+    (reserve, plainOnly) =>
+      buildTransactionWithReserve(
+        plainOnly ? utxoInfos.filter(u => !isInscribed(u)) : utxoInfos,
+        forceInUtxos,
+        payerWallet,
+        opReturnWallets,
+        outputWallet,
+        changeWallet,
+        feeRate,
+        amount,
+        paymentWallet,
+        payment,
+        reserve
+      ),
+    utxoInfos.some(isInscribed)
   )
 }
 
@@ -2545,18 +2565,20 @@ export function buildTransactionMultiOutput(
   feeRate: number,
   fundingInput = false
 ): BuildTransactionResult {
-  return withSetAsideReserve((reserve, plainOnly) =>
-    buildTransactionMultiOutputWithReserve(
-      plainOnly ? utxoArray.filter(u => !isInscribed(u)) : utxoArray,
-      forceInUtxos,
-      payerWallet,
-      outputWallets,
-      amounts,
-      changeWallet,
-      feeRate,
-      fundingInput,
-      reserve
-    )
+  return withSetAsideReserve(
+    (reserve, plainOnly) =>
+      buildTransactionMultiOutputWithReserve(
+        plainOnly ? utxoArray.filter(u => !isInscribed(u)) : utxoArray,
+        forceInUtxos,
+        payerWallet,
+        outputWallets,
+        amounts,
+        changeWallet,
+        feeRate,
+        fundingInput,
+        reserve
+      ),
+    utxoArray.some(isInscribed)
   )
 }
 

@@ -175,8 +175,9 @@ change address. That matters most for a commit: the reveal inscribes on the comm
 sat, and BRC-20 ignores an inscription made on a sat that already carries one. It also keeps them
 out of recipients, OP_RETURNs and the swap handler.
 
-- **Outputs without inscriptions go first.** The used-inscription sats then land in the change or
-  the fee.
+- **Only when needed.** A transaction spends outputs with used inscriptions only when the outputs
+  without them cannot pay for it. Then the outputs without inscriptions go first, so the
+  used-inscription sats land in the change or the fee.
 - **A set-aside output takes the rest.** When an outside output would still receive one, for example
   when a consolidated output carries an inscription on its first sat, the builder adds one output to
   the change address right before it. It is at least the dust limit and reaches past the last
