@@ -4,6 +4,7 @@ import type { RawSwapRoute, SwapBLSMessageFields, SwapRoute } from '../lib/swap-
 import type { UniswapInfoProxy } from '../lib/uniswap_ops'
 import type { SignFunction, SignManyFunction } from '../provider/api'
 import type { BISNetwork } from '../types/common'
+import type { Utxo } from './chain-providers'
 import type { BatchedReveal, BatchedSendLayout, ReclaimInput } from './mint'
 import type { SignProgressOptions } from './sign-progress'
 import type { BISSwapWalletInfo } from './store'
@@ -43,6 +44,7 @@ import {
   clearExtraUtxos,
   fetchCardinalUtxos,
   fetchWithErrors,
+  getCardinalUtxos,
   getSwapBackendUrl,
   saveExtraUtxos,
   utxoOutputTypeFromOutputScript,
@@ -71,6 +73,7 @@ import {
 import { SignProgress } from './sign-progress'
 import { getWalletInfo, readSwapWalletInfo, saveSwapWalletInfo } from './store'
 import { getNetwork } from './store-network'
+import { isInscribed } from './used-inscriptions'
 
 const SWAP_ABI_SIGNET = [
   {
@@ -90,6 +93,34 @@ const SWAP_ABI_SIGNET = [
   },
 ]
 const SWAP_ABI_MAINNET = SWAP_ABI_SIGNET
+
+// A wrap's send spends its reveal output and payer change and pays an OP_RETURN, the handler and
+// change: within this many vbytes with a few funding inputs.
+const WRAP_SEND_VBYTES = 400
+// A wrap's commit and reveal, with the call inscription's postage, stay within this many vbytes and
+// sats; headroom for telling whether plain BTC funds the whole wrap.
+const WRAP_COMMIT_REVEAL_VBYTES = 1500
+const WRAP_POSTAGE_SATS = 546
+
+/**
+ * The change a wrap's commit leaves for its send (see `buildTransaction`'s `minChange`): the
+ * wrapped amount plus the send's fee when the payer's BTC outside used BRC-20 inscriptions cannot
+ * fund the whole wrap, and 0 otherwise. The send cannot take inscribed sats to the handler, so
+ * this is how a commit splits the output with used inscriptions and hands the send its clean BTC.
+ */
+async function wrapCommitMinChange(
+  btcAmount: bigint,
+  feeRate: number,
+  payerAddr: string,
+  fetchedCardinalUtxos?: Utxo[]
+): Promise<number> {
+  const send = Number(btcAmount) + Math.ceil(WRAP_SEND_VBYTES * feeRate)
+  const utxos = await getCardinalUtxos(payerAddr, fetchedCardinalUtxos)
+  if (!utxos.some(isInscribed)) return 0
+  const plain = utxos.reduce((sum, u) => (isInscribed(u) ? sum : sum + u.value), 0)
+  const commitAndReveal = WRAP_POSTAGE_SATS + Math.ceil(WRAP_COMMIT_REVEAL_VBYTES * feeRate)
+  return plain >= send + commitAndReveal ? 0 : send
+}
 
 const DUMMY_UTXO_VALUE = 1000
 const GAS_PER_BYTE = 12000
@@ -2878,7 +2909,8 @@ export async function createAndBroadcastWrapOrder(
       null,
       0,
       true,
-      signFn
+      signFn,
+      await wrapCommitMinChange(btcAmount, feeRate, userPaymentWallet.address)
     )
     const depositCommitTxHex = depositMintRes.signedCommitTxHex
     const depositRevealTxHex = depositMintRes.signedRevealTxHex
@@ -3037,7 +3069,8 @@ export async function getMinerFeesOfWrapOrder(
     null,
     null,
     0,
-    cardinalUtxos
+    cardinalUtxos,
+    await wrapCommitMinChange(btcAmount, feeRate, userPaymentWallet.address, cardinalUtxos)
   )
   const depositCommitTxHex = depositMintRes.unsigned_commit_tx_hex
   const depositRevealTxHex = depositMintRes.signed_reveal_tx_hex

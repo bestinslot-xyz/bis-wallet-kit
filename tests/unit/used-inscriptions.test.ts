@@ -7,11 +7,14 @@ import { BisChainProvider } from '../../src/core/bis-providers.ts'
 import { clearExtraUtxos, getCardinalUtxos, saveExtraUtxos } from '../../src/core/helpers.ts'
 import { buildTransaction, buildTransactionMultiOutput } from '../../src/core/mint.ts'
 import {
+  bestRecoverable,
+  dustForScriptType,
   inscribedSatRanges,
   inscriptionsByOutput,
   inscriptionsOf,
   lastInscribedEndIn,
   outputRanges,
+  recoverableSats,
 } from '../../src/core/used-inscriptions.ts'
 import { wallet } from '../../src/node.ts'
 import { WalletInfo } from '../../src/types/wallet.ts'
@@ -352,5 +355,134 @@ describe('bisChainProvider includeUsedBrc20', () => {
       'https://idx.example/cardinal_utxos/tb1qaddr',
       'https://idx.example/cardinal_utxos/tb1qaddr?include_used_brc20=1',
     ])
+  })
+})
+
+describe('recoverable BTC', () => {
+  it('is what follows the last inscribed sat, beyond a dust-sized set-aside output', () => {
+    expect(recoverableSats(inscribed('aa', 50000, [0, 330, 660]), 330)).toBe(50000 - 661)
+    expect(recoverableSats(inscribed('aa', 50000, [0]), 330)).toBe(50000 - 330)
+    // Postage-only outputs, as most used inscriptions sit on, give nothing.
+    expect(recoverableSats(inscribed('aa', 330, [0]), 330)).toBe(0)
+    expect(recoverableSats(inscribed('aa', 546, [0]), 546)).toBe(0)
+    // Inscriptions at the end leave nothing after them.
+    expect(recoverableSats(inscribed('aa', 50000, [49999]), 330)).toBe(0)
+    expect(recoverableSats({ value: 50000, inscription_ids: ['x'], satpoints: [] }, 330)).toBe(0)
+    expect(recoverableSats(plain('aa', 50000), 330)).toBe(0)
+  })
+
+  it('uses the dust limit of the output type', () => {
+    expect(dustForScriptType('witness_v1_taproot')).toBe(330)
+    expect(dustForScriptType('witness_v0_keyhash')).toBe(294)
+    expect(dustForScriptType('scripthash')).toBe(540)
+    expect(dustForScriptType('pubkeyhash')).toBe(546)
+  })
+
+  it('picks the inscribed output giving the most', () => {
+    const small = inscribed('aa', 5000, [0])
+    const big = inscribed('bb', 30000, [0, 330])
+    const postage = inscribed('cc', 330, [0])
+    expect(bestRecoverable([small, big, postage, plain('dd', 90000)])).toBe(big)
+    expect(bestRecoverable([postage, plain('dd', 90000)])).toBeNull()
+  })
+
+  it('spends only the inscribed output giving the most', async () => {
+    const { payer, other } = await wallets()
+    const big = inscribed('aa', 30000, [0, 330])
+    const pool = [inscribed('bb', 5000, [0]), big, inscribed('cc', 330, [0])]
+    const built = buildTransaction(pool, [], payer, [], other, payer, 2, 20000, null, null)
+    expect(built.tx.ins.map((_, i) => spent(built.tx, i))).toEqual([`${'aa'.repeat(32)}:0`])
+    expect(landing(built.tx, pool)).toEqual([2, 0, 0])
+  })
+
+  it('reports a plain shortfall when the inscribed outputs give nothing', async () => {
+    const { payer, other } = await wallets()
+    const pool = [plain('aa', 1000), ...['bb', 'cc', 'dd'].map(b => inscribed(b, 330, [0]))]
+    expect(() => buildTransaction(pool, [], payer, [], other, payer, 2, 1100, null, null)).toThrow(
+      /^Not enough funds$/
+    )
+  })
+
+  it('splits an inscribed output in a commit asked for change, so the change is clean', async () => {
+    const { payer, other } = await wallets()
+    const consolidated = inscribed('aa', 50000, [0, 330])
+    const pool = [plain('bb', 9000), consolidated]
+    const built = buildTransaction(pool, [], payer, [], other, payer, 2, 1000, null, null, 30000)
+    const outs = built.tx.outs.map(o => Number(o.value))
+    expect(built.output_index).toEqual([1, 2])
+    expect(outs[0]).toBe(331)
+    expect(outs[1]).toBe(1000)
+    expect(outs[2]).toBeGreaterThanOrEqual(30000)
+    expect(landing(built.tx, pool)).toEqual([2, 0, 0])
+  })
+
+  it('asks for no extra change without inscribed outputs', async () => {
+    const { payer, other } = await wallets()
+    const built = buildTransaction(
+      [plain('aa', 9000)],
+      [],
+      payer,
+      [],
+      other,
+      payer,
+      2,
+      1000,
+      null,
+      null,
+      1_000_000
+    )
+    expect(built.tx.ins).toHaveLength(1)
+    expect(built.output_index).toEqual([0, 1])
+  })
+
+  it('falls back to plain change when no inscribed output can give it', async () => {
+    const { payer, other } = await wallets()
+    const pool = [plain('aa', 9000), inscribed('bb', 330, [0])]
+    const built = buildTransaction(pool, [], payer, [], other, payer, 2, 1000, null, null, 30000)
+    expect(built.tx.ins.map((_, i) => spent(built.tx, i))).toEqual([`${'aa'.repeat(32)}:0`])
+  })
+
+  it('wallet.getCardinalBalances reports plain and recoverable BTC', async () => {
+    const { payer } = await wallets()
+    const utxos = [
+      { txid: 'aa'.repeat(32), vout: 0, value: 9000 },
+      {
+        txid: 'bb'.repeat(32),
+        vout: 0,
+        value: 330,
+        inscription_ids: ['i0'],
+        satpoints: [`${'bb'.repeat(32)}:0:0`],
+      },
+      {
+        txid: 'cc'.repeat(32),
+        vout: 0,
+        value: 50000,
+        inscription_ids: ['i1', 'i2'],
+        satpoints: [`${'cc'.repeat(32)}:0:0`, `${'cc'.repeat(32)}:0:330`],
+      },
+    ]
+    const unused = async () => {
+      throw new Error('unused')
+    }
+    wallet.setProviders({
+      testnet: {
+        chain: {
+          cardinalUtxos: async () => utxos,
+          ordinalUtxos: async () => [],
+          balance: unused,
+          txHex: unused,
+          testMempoolAccept: unused,
+          broadcast: unused,
+        },
+      },
+    })
+    try {
+      const balances = await wallet.getCardinalBalances(payer.addr!)
+      expect(balances.plain).toBe(9000)
+      expect(balances.recoverable).toBe(50000 - 331)
+      expect(balances.recoverableUtxo?.utxo).toBe(`${'cc'.repeat(32)}:0`)
+    } finally {
+      wallet.setProviders({})
+    }
   })
 })

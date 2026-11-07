@@ -175,9 +175,10 @@ change address. That matters most for a commit: the reveal inscribes on the comm
 sat, and BRC-20 ignores an inscription made on a sat that already carries one. It also keeps them
 out of recipients, OP_RETURNs and the swap handler.
 
-- **Only when needed.** A transaction spends outputs with used inscriptions only when the outputs
-  without them cannot pay for it. Then the outputs without inscriptions go first, so the
-  used-inscription sats land in the change or the fee.
+- **Only when needed, and one at a time.** A transaction spends an output with used inscriptions
+  only when the outputs without them cannot pay for it, and then only the one with the most
+  recoverable BTC (below). The outputs without inscriptions go first, so the used-inscription sats
+  land in the change or the fee.
 - **A set-aside output takes the rest.** When an outside output would still receive one, for example
   when a consolidated output carries an inscription on its first sat, the builder adds one output to
   the change address right before it. It is at least the dust limit and reaches past the last
@@ -189,6 +190,21 @@ out of recipients, OP_RETURNs and the swap handler.
 
 The kit remembers where the inscriptions of its own pending transactions land, so their change and
 set-aside outputs keep their inscriptions when a chained flow spends them.
+
+### Recoverable BTC
+
+Only the BTC after an output's last inscribed sat can be spent: the set-aside output keeps the
+inscribed sats, and it is at least the dust limit. An output that is just an inscription's postage
+(330 or 546 sats, as most used inscriptions sit on) gives nothing. One that a consolidation filled
+with the postage of many inscriptions first and plain BTC after gives the plain BTC.
+
+`wallet.getCardinalBalances(address)` reports what the builders can spend: `plain` (outputs without
+inscriptions) and `recoverable` (from the one inscribed output a transaction would add), so an app
+can offer exactly that. The spending inputs' own fees are not subtracted.
+
+A wrap (`swap.wrapBtc`) pays the swap handler from its send, which cannot take inscribed sats. When
+the BTC outside used inscriptions cannot fund the whole wrap, its commit splits the inscribed output
+instead and hands the send its clean BTC as change.
 
 ## Testing a provider
 

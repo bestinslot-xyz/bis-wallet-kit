@@ -11,7 +11,8 @@ import { getWalletInfo } from './store'
 
 export { getProviders, setProviders } from './chain-providers'
 export type { NetworkProviders, ProvidersConfig } from './chain-providers'
-export { getAllBalanceDetails, getCardinalBalance } from './helpers'
+export { getAllBalanceDetails, getCardinalBalance, getCardinalBalances } from './helpers'
+export type { CardinalBalances } from './helpers'
 export {
   getOrdinalsWallet,
   getPaymentWallet,

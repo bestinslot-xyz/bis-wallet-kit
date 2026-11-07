@@ -35,6 +35,7 @@ import { getBitcoinNetwork } from '../lib/bitcoin'
 import { InscriptionDetails } from '../types/inscription'
 import { WalletInfo } from '../types/wallet'
 import {
+  bestRecoverable,
   inscribedSatRanges,
   inscriptionsByOutput,
   isInscribed,
@@ -302,43 +303,79 @@ function isShortOfFunds(e: unknown): boolean {
 }
 
 /**
- * Runs a transaction build that spends outputs with used BRC-20 inscriptions only when the outputs
- * without them cannot pay for it: it first builds from those alone (`plainOnly`). Spending the
- * inscribed outputs, it retries with a growing change reserve while setting aside their
- * inscriptions runs short, so selection adds the inputs that pay for the set-aside output.
+ * Runs a transaction build that spends an output with used BRC-20 inscriptions only when the
+ * outputs without them cannot pay for it, and then only the one giving the most recoverable BTC
+ * (`bestRecoverable`), so the clean BTC of the others never ends up in its set-aside output. It
+ * returns the first of these builds that succeeds:
+ *
+ * 1. from the outputs without inscriptions, with change of at least `minChange`;
+ * 2. adding the best inscribed output, with a change reserve that starts at `minChange` and grows
+ *    while setting aside its inscriptions runs short;
+ * 3. from the outputs without inscriptions, without `minChange`.
+ *
+ * `minChange` asks for change a later transaction will spend (a wrap's commit gathers its send's
+ * BTC this way), and is honored only when the pool holds outputs with used inscriptions: then the
+ * change is clean BTC that may come from splitting such an output.
  *
  * @param build Builds the transaction from the given change reserve and UTXO pool.
- * @param hasInscribed Whether the UTXO pool holds outputs with used inscriptions.
- * @throws The plain build's error when even the inscribed outputs leave the funds short, and a
- *   "Not enough funds" error naming the used inscriptions when only they could pay but none of
- *   their layouts keeps the inscriptions out of the outputs.
+ * @param pool The UTXOs to select from.
+ * @param minChange The change to aim for, in sats.
+ * @throws The plain build's error when the funds fall short, and a "Not enough funds" error naming
+ *   the used inscriptions when only the best inscribed output could pay but no layout keeps its
+ *   inscriptions out of the outputs.
  */
 function withSetAsideReserve(
-  build: (reserve: number, plainOnly: boolean) => BuildTransactionResult,
-  hasInscribed: boolean
+  build: (reserve: number, pool: UtxoInfo[]) => BuildTransactionResult,
+  pool: UtxoInfo[],
+  minChange: number
 ) {
-  if (!hasInscribed) return build(0, false)
+  if (!pool.some(isInscribed)) return build(0, pool)
+  const plain = pool.filter(u => !isInscribed(u))
+  const best = bestRecoverable(pool)
   let plainError: unknown
   try {
-    return build(0, true)
+    return build(minChange, plain)
   } catch (e) {
     if (!isShortOfFunds(e)) throw e
     plainError = e
   }
-  let reserve = 0
-  for (let attempt = 0; attempt < 4; attempt++) {
-    try {
-      return build(reserve, false)
-    } catch (e) {
-      if (e instanceof SetAsideShortfallError) reserve += e.shortfall
-      else if (isShortOfFunds(e) && reserve === 0) throw plainError
-      else if (e instanceof SetAsideImpossibleError || isShortOfFunds(e)) break
-      else throw e
+  let setAsideBlocked = false
+  // minChange is best effort: without it the best inscribed output is still split, and its clean
+  // BTC returns as whatever change remains.
+  for (const base of best ? (minChange > 0 ? [minChange, 0] : [0]) : []) {
+    let reserve = base
+    for (let attempt = 0; attempt < 4; attempt++) {
+      try {
+        return build(reserve, [...plain, best!])
+      } catch (e) {
+        if (e instanceof SetAsideShortfallError) {
+          reserve += e.shortfall
+          setAsideBlocked = true
+        } else if (e instanceof SetAsideImpossibleError) {
+          setAsideBlocked = true
+          break
+        } else if (isShortOfFunds(e)) {
+          break
+        } else {
+          throw e
+        }
+      }
     }
   }
-  throw new Error(
-    'Not enough funds: this transaction cannot spend outputs with used BRC-20 inscriptions without sending them on, so it needs BTC on outputs without inscriptions'
-  )
+  if (minChange > 0) {
+    try {
+      return build(0, plain)
+    } catch (e) {
+      if (!isShortOfFunds(e)) throw e
+      plainError = e
+    }
+  }
+  if (setAsideBlocked) {
+    throw new Error(
+      'Not enough funds: this transaction cannot spend outputs with used BRC-20 inscriptions without sending them on, so it needs BTC on outputs without inscriptions'
+    )
+  }
+  throw plainError
 }
 
 const ADDITIONAL_INPUT_P2PKH_VBYTES = 147
@@ -996,6 +1033,7 @@ interface BuildTransactionResult {
 // amount is in sat
 // payment_wallet is the wallet to send the payment to (can be null)
 // payment is the amount to send to payment_wallet (can be null, must be bigger than DUST_LIMIT)
+// min_change is change a later transaction will spend (see withSetAsideReserve), 0 for none
 export function buildTransaction(
   utxoInfos: UtxoInfo[],
   forceInUtxos: UtxoInfoWithWallet[],
@@ -1006,12 +1044,13 @@ export function buildTransaction(
   feeRate: number,
   amount: number,
   paymentWallet: WalletInfo | null,
-  payment: number | null
+  payment: number | null,
+  minChange = 0
 ): BuildTransactionResult {
   return withSetAsideReserve(
-    (reserve, plainOnly) =>
+    (reserve, pool) =>
       buildTransactionWithReserve(
-        plainOnly ? utxoInfos.filter(u => !isInscribed(u)) : utxoInfos,
+        pool,
         forceInUtxos,
         payerWallet,
         opReturnWallets,
@@ -1023,7 +1062,8 @@ export function buildTransaction(
         payment,
         reserve
       ),
-    utxoInfos.some(isInscribed)
+    utxoInfos,
+    minChange
   )
 }
 
@@ -1401,7 +1441,8 @@ async function buildCommitTx(
   paymentWallet: WalletInfo | null,
   payment: number | null,
   forceInUtxos: UtxoInfoWithWallet[],
-  fetchedCardinalUtxos?: Utxo[]
+  fetchedCardinalUtxos?: Utxo[],
+  minChange = 0
 ): Promise<BuildCommitTxResult> {
   if (payment == null || payment < 0) payment = 0
   const changeWallet = payerWallet
@@ -1479,7 +1520,8 @@ async function buildCommitTx(
     feeRate,
     postage + revealFee + payment,
     null,
-    null
+    null,
+    minChange
   )
   const unsignedCommitTx = unsignedCommitTxResp.tx
   const commitFee = unsignedCommitTxResp.tx_fee
@@ -2566,9 +2608,9 @@ export function buildTransactionMultiOutput(
   fundingInput = false
 ): BuildTransactionResult {
   return withSetAsideReserve(
-    (reserve, plainOnly) =>
+    (reserve, pool) =>
       buildTransactionMultiOutputWithReserve(
-        plainOnly ? utxoArray.filter(u => !isInscribed(u)) : utxoArray,
+        pool,
         forceInUtxos,
         payerWallet,
         outputWallets,
@@ -2578,7 +2620,8 @@ export function buildTransactionMultiOutput(
         fundingInput,
         reserve
       ),
-    utxoArray.some(isInscribed)
+    utxoArray,
+    0
   )
 }
 
@@ -4624,6 +4667,7 @@ export async function sendInscriptionToOpReturnWithExtraInputsAndExtraOutputFeeR
  * @param payment - amount to pay (if payment is not null)
  * @param dryRun - if true, the transactions will not be broadcasted and the signed transaction hex will be returned for inspection
  * @param signFunc - function to sign the transactions
+ * @param minChange - change, in sats, the commit should leave for a later transaction (see `buildTransaction`)
  *
  * @returns an object containing the commit transaction ID, signed commit transaction hex, reveal transaction ID, signed reveal transaction hex, inscription ID, postage used, and the secret token used for minting
  */
@@ -4635,7 +4679,8 @@ export async function mintWithExtraInputInCommitAll(
   paymentAddr: string | null,
   payment: number | null,
   dryRun: boolean,
-  signFunc: SignFunction
+  signFunc: SignFunction,
+  minChange = 0
 ): Promise<InscribeResult> {
   // Get connected wallet
   const userPaymentWallet = getPaymentWallet()
@@ -4674,7 +4719,9 @@ export async function mintWithExtraInputInCommitAll(
     postage,
     paymentWallet,
     payment,
-    extraInputUtxos
+    extraInputUtxos,
+    undefined,
+    minChange
   )
   const signedCommitTx = await signFunc(
     commitTx.unsigned_psbt_hex,
@@ -4743,6 +4790,7 @@ export async function mintWithExtraInputInCommitAll(
  * @param paymentAddr - address to send the payment to (if payment is not null)
  * @param payment - amount to pay (if payment is not null)
  * @param fetchedCardinalUtxos - the payer's `fetchCardinalUtxos` response to fund the commit from in place of a new fetch
+ * @param minChange - change, in sats, the commit should leave for a later transaction (see `buildTransaction`)
  *
  * @returns an object containing the estimated commit fee, reveal fee, total fee, unsigned commit transaction hex, signed reveal transaction hex, inscription ID, and postage used
  */
@@ -4753,7 +4801,8 @@ export async function mintWithExtraInputInCommitFeeRate(
   postage: number | null,
   paymentAddr: string | null,
   payment: number | null,
-  fetchedCardinalUtxos?: Utxo[]
+  fetchedCardinalUtxos?: Utxo[],
+  minChange = 0
 ): Promise<InscribeCheckFeesResult> {
   // Get connected wallet
   const userPaymentWallet = getPaymentWallet()
@@ -4793,7 +4842,8 @@ export async function mintWithExtraInputInCommitFeeRate(
     paymentWallet,
     payment,
     extraInputUtxos,
-    fetchedCardinalUtxos
+    fetchedCardinalUtxos,
+    minChange
   )
   const dummyCommitTxId = commitTx.unsigned_commit_tx.getId()
   const revealTx = await buildRevealTx(
