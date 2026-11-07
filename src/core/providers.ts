@@ -1,4 +1,4 @@
-import type { BISProvider, SignFunction } from '../provider/api'
+import type { BISProvider, SignFunction, SignManyFunction } from '../provider/api'
 import type { BISSession, BISWallet, BISWalletProvider, BISWalletPurpose } from '../types/common'
 import { hasBrc20Rpc } from './chain-providers'
 import { verifySignature, verifySignatureLocal } from './helpers'
@@ -191,16 +191,11 @@ function getWallet(walletType: BISWalletPurpose): BISWallet | undefined {
     return undefined
   }
 
+  // A single-address session (any provider that connected with `purpose: 'all'`) serves every role.
   const wallets = walletInfo.wallets
-  const provider = walletInfo.provider
-
-  const singleWalletProviders = ['okx', 'unisat', 'local']
-
-  if (singleWalletProviders.includes(provider)) {
-    walletType = 'all'
-  }
-
-  const wallet = wallets.find(wallet => wallet.purpose === walletType)
+  const wallet =
+    wallets.find(wallet => wallet.purpose === 'all') ??
+    wallets.find(wallet => wallet.purpose === walletType)
 
   if (!wallet) {
     console.error(`${walletType} wallet not found. Provider: ${walletInfo.provider}`)
@@ -243,6 +238,17 @@ export function getSignFn(provider: BISWalletProvider): SignFunction {
   }
 
   return impl.sign
+}
+
+/**
+ * Returns the specified provider's function for signing several PSBTs in one wallet prompt, or
+ * null when the provider or its installed wallet has none.
+ *
+ * @param provider The wallet provider.
+ * @returns The provider's batch sign function, or null.
+ */
+export function getSignManyFn(provider: BISWalletProvider): SignManyFunction | null {
+  return PROVIDERS[provider]?.getSignMany?.() ?? null
 }
 
 /**

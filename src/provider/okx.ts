@@ -1,5 +1,5 @@
 import type { BISWallet } from '../types/common'
-import type { BISProvider, SignResponse } from './api'
+import type { BISProvider, SignPsbtRequest, SignResponse } from './api'
 import { Buffer } from 'node:buffer'
 import * as bitcoinjs from 'bitcoinjs-lib'
 import { getNetwork } from '../core/bis'
@@ -176,6 +176,30 @@ async function signPSBT(psbtBase64: string, broadcast: boolean, inputsToSign: an
   }
 }
 
+/** The `signPSBT` inputs to sign for a `sign` request; empty to let OKX pick them. */
+function inputsToSignOf(request: SignPsbtRequest): any[] {
+  const { unsignedPsbtHex, paymentAddr, ordAddr, ordAddrIdxes, noSignIdxes } = request
+  if (!paymentAddr) return []
+  const psbt = bitcoinjs.Psbt.fromHex(unsignedPsbtHex)
+  const insToSign = []
+  for (let i = 0; i < psbt.inputCount; i++) {
+    if (noSignIdxes && noSignIdxes.includes(i)) continue
+    if (ordAddrIdxes.includes(i)) continue
+    insToSign.push(i)
+  }
+  return [
+    { address: paymentAddr, signingIndexes: insToSign },
+    { address: ordAddr, signingIndexes: ordAddrIdxes },
+  ]
+}
+
+function signedResponse(signedPsbtHex: string, noSignIdxes?: number[]): SignResponse {
+  const signedPsbt = bitcoinjs.Psbt.fromHex(signedPsbtHex)
+  finalizePsbtInputs(signedPsbt, noSignIdxes)
+  const signedTx = signedPsbt.extractTransaction()
+  return { txId: signedTx.getId(), signedTxHex: signedTx.toHex() }
+}
+
 async function sign(
   unsignedPsbtHex: string,
   paymentAddr: string,
@@ -184,40 +208,49 @@ async function sign(
   _useTweakSignerIdxes?: number[], // not used in OKX
   noSignIdxes?: number[]
 ): Promise<SignResponse> {
-  let signed = null
-  if (!paymentAddr) {
-    signed = await signPSBT(hexToBase64(unsignedPsbtHex), false, [])
-  } else {
-    const psbt = bitcoinjs.Psbt.fromHex(unsignedPsbtHex)
-    const insToSign = []
-    for (let i = 0; i < psbt.inputCount; i++) {
-      if (noSignIdxes && noSignIdxes.includes(i)) continue
-      if (ordAddrIdxes.includes(i)) continue
-      insToSign.push(i)
-    }
-    signed = await signPSBT(hexToBase64(unsignedPsbtHex), false, [
-      {
-        address: paymentAddr,
-        signingIndexes: insToSign,
-      },
-      {
-        address: ordAddr,
-        signingIndexes: ordAddrIdxes,
-      },
-    ])
-  }
+  const inputsToSign = inputsToSignOf({
+    unsignedPsbtHex,
+    paymentAddr,
+    ordAddr,
+    ordAddrIdxes,
+    noSignIdxes,
+  })
+  const signed = await signPSBT(hexToBase64(unsignedPsbtHex), false, inputsToSign)
+  return signedResponse(signed, noSignIdxes)
+}
 
-  const signedPsbt = bitcoinjs.Psbt.fromHex(signed)
+/** The OKX provider object for the current network, or undefined when there is none. */
+function networkProvider(): any {
+  const network = getNetwork()
+  if (network === 'mainnet') return window.okxwallet?.bitcoin
+  if (network === 'testnet') return window.okxwallet?.bitcoinTestnet
+  if (network === 'signet') return window.okxwallet?.bitcoinSignet
+  return undefined
+}
 
-  finalizePsbtInputs(signedPsbt, noSignIdxes)
+async function signMany(requests: SignPsbtRequest[]): Promise<SignResponse[]> {
+  const provider = networkProvider()
+  if (typeof provider?.signPsbts !== 'function')
+    throw new Error('OKX cannot sign several PSBTs at once.')
+  const signed: string[] = await provider.signPsbts(
+    requests.map(r => r.unsignedPsbtHex),
+    requests.map(r => {
+      const toSignInputs = inputsToSignOf(r).flatMap(input =>
+        input.signingIndexes.map((index: number) => ({ address: input.address, index }))
+      )
+      return toSignInputs.length > 0
+        ? { autoFinalized: true, toSignInputs }
+        : { autoFinalized: true }
+    })
+  )
+  if (signed.length !== requests.length) throw new Error('OKX returned the wrong PSBT count.')
+  return signed.map((hex, i) => signedResponse(hex, requests[i]!.noSignIdxes))
+}
 
-  const signedTx = signedPsbt.extractTransaction()
-  const signedTxHex = signedTx.toHex()
-
-  return {
-    txId: signedTx.getId(),
-    signedTxHex,
-  }
+function getSignMany() {
+  return typeof window !== 'undefined' && typeof networkProvider()?.signPsbts === 'function'
+    ? signMany
+    : null
 }
 
 export const OKX: BISProvider = {
@@ -229,4 +262,5 @@ export const OKX: BISProvider = {
   sendBTC,
   signPSBT,
   sign,
+  getSignMany,
 }

@@ -1,23 +1,43 @@
-import type { BISWalletProvider, ConnectCallbacks, ModalState, ModalTheme } from '../types/common'
+import type {
+  BISWalletProvider,
+  ConnectCallbacks,
+  ModalLegalLinks,
+  ModalState,
+  ModalTheme,
+} from '../types/common'
 import errorImage from '../assets/img/error.png'
-import leatherLogo from '../assets/img/provider/leather.png'
-import okxLogo from '../assets/img/provider/okx.png'
+import metamaskLogo from '../assets/img/provider/metamask.svg'
+import okxLogo from '../assets/img/provider/okx.svg'
 import unisatLogo from '../assets/img/provider/unisat.png'
-import xverseLogo from '../assets/img/provider/xverse.png'
+import xverseLogo from '../assets/img/provider/xverse.svg'
 import wooGIF from '../assets/img/woo.gif'
 import { getWallets } from '../core/providers'
 
+// Logos are vectors or at least 128px, so they stay sharp at 2x and 3x screen densities.
 const PROVIDERS: Partial<Record<BISWalletProvider, { name: string; img: string }>> = {
   okx: { name: 'OKX', img: okxLogo },
   unisat: { name: 'Unisat', img: unisatLogo },
   xverse: { name: 'Xverse', img: xverseLogo },
-  leather: { name: 'Leather', img: leatherLogo },
+  metamask: { name: 'MetaMask', img: metamaskLogo },
 }
 
-const LINKS = {
-  terms: 'https://bestinslot.xyz/legal/terms',
-  privacy: 'https://bestinslot.xyz/legal/privacy',
-  api: 'https://bestinslot.xyz/api',
+export const DEFAULT_LEGAL_LINKS: ModalLegalLinks = {
+  terms: 'https://bisdex.io/legal/terms',
+  privacy: 'https://bisdex.io/legal/privacy',
+  owner: 'Best in Slot',
+}
+
+/**
+ * `url` resolved against the page when it is an http(s) URL or a path, else `fallback`. Legal
+ * links come from the app, and an href also runs `javascript:` URLs, so nothing else is set.
+ */
+function safeHref(url: string, fallback: string): string {
+  try {
+    const { href, protocol } = new URL(url, window.location.href)
+    return protocol === 'https:' || protocol === 'http:' ? href : fallback
+  } catch {
+    return fallback
+  }
 }
 
 const GENERIC_ERROR = 'An error occurred. Please try again.'
@@ -36,6 +56,7 @@ export class BisModalView {
   private errorMessage = ''
   private provider: BISWalletProvider | undefined
   private callbacks: ConnectCallbacks | null = null
+  private legal: ModalLegalLinks = DEFAULT_LEGAL_LINKS
 
   constructor(root: HTMLElement) {
     this.root = root
@@ -73,6 +94,11 @@ export class BisModalView {
 
   setTheme(theme: ModalTheme): void {
     this.theme = theme
+    this.render()
+  }
+
+  setLegalLinks(links: Partial<ModalLegalLinks>): void {
+    this.legal = { ...DEFAULT_LEGAL_LINKS, ...links }
     this.render()
   }
 
@@ -167,11 +193,18 @@ export class BisModalView {
           </div>
           <div class="overflow-y-auto px-4 sm:px-6 py-6 best-scrollbar">${this.screenMarkup()}</div>
           <div class="p-4 border-t border-border text-muted-foreground text-center">
-            <div class="mb-2">Powered by <a class="font-medium text-foreground hover:underline underline-offset-4" href="${LINKS.api}" target="_blank">BiS API</a></div>
-            <div class="text-sm">By connecting your wallet, you agree to Best in Slot's <a class="text-foreground hover:underline underline-offset-4" href="${LINKS.terms}" target="_blank">Terms of Service</a> and <a class="text-foreground hover:underline underline-offset-4" href="${LINKS.privacy}" target="_blank">Privacy Policy</a>.</div>
+            <div class="text-sm">By connecting your wallet, you agree to <span data-legal-owner></span>'s <a data-legal="terms" class="text-foreground hover:underline underline-offset-4" target="_blank" rel="noopener noreferrer">Terms of Service</a> and <a data-legal="privacy" class="text-foreground hover:underline underline-offset-4" target="_blank" rel="noopener noreferrer">Privacy Policy</a>.</div>
           </div>
         </div>
       </div>`
+
+    // App-supplied legal links and owner are set as properties and text, never written into the markup.
+    const owner = this.root.querySelector<HTMLElement>('[data-legal-owner]')
+    if (owner) owner.textContent = this.legal.owner
+    this.root.querySelectorAll<HTMLAnchorElement>('[data-legal]').forEach(link => {
+      const key = link.dataset.legal as 'terms' | 'privacy'
+      link.href = safeHref(this.legal[key], DEFAULT_LEGAL_LINKS[key])
+    })
 
     // Error text is assigned as text (never HTML) to avoid injection.
     if (this.state === 'error') {

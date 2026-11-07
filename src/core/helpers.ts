@@ -1,5 +1,11 @@
-import type { MempoolAcceptResult, OrdinalUtxo, Utxo } from './chain-providers'
+import type {
+  MempoolAcceptResult,
+  OrdinalUtxo,
+  UsedBrc20Inscription,
+  Utxo,
+} from './chain-providers'
 import type { Endpoints } from './store-network'
+import type { InscriptionAt } from './used-inscriptions'
 import { Buffer } from 'node:buffer'
 import { Verifier } from 'bip322-js'
 import * as bitcoinjs from 'bitcoinjs-lib'
@@ -13,6 +19,69 @@ import { getEndpoints, getNetwork } from './store-network'
 export const txHexByIdCache: { [txid: string]: any } = {}
 let currentExtraTxHexes: string[] = []
 let currentExtraInscriptions: string[] | null = null // [inscr_id, satpoint]
+
+/** The used inscriptions one output of a wallet-kit transaction carries; see {@link recordInscribedOutputs}. */
+export interface OutputInscriptions {
+  at: InscriptionAt[]
+  /** The output carries sats of an input whose inscription offsets are unknown. */
+  whole: boolean
+}
+
+/**
+ * Used inscriptions that wallet-kit's own transactions place on their outputs, keyed by
+ * {@link txLayoutKey}. A pending transaction's outputs return to coin selection through the saved
+ * extra transactions, and this is where their inscriptions are known from.
+ */
+const inscribedOutputsByLayout = new Map<string, OutputInscriptions[]>()
+
+/**
+ * Identifies a transaction by its spent outpoints (`txid:vout`) and its outputs, which signing
+ * leaves unchanged (its txid changes when a legacy or nested-segwit input is signed).
+ */
+function txLayoutKey(
+  outpoints: string[],
+  outs: { script: Uint8Array; value: number | bigint }[]
+): string {
+  const outputs = outs.map(o => `${Buffer.from(o.script).toString('hex')}:${o.value}`)
+  return `${outpoints.join(',')}|${outputs.join(',')}`
+}
+
+/**
+ * Records which used inscriptions each output of a wallet-kit transaction receives, so its outputs
+ * keep them when they come back from the saved extra transactions.
+ *
+ * @param outpoints The spent outpoints (`txid:vout`), in input order.
+ * @param outs The transaction's outputs.
+ * @param byOutput The inscriptions per output index.
+ */
+export function recordInscribedOutputs(
+  outpoints: string[],
+  outs: { script: Uint8Array; value: number | bigint }[],
+  byOutput: OutputInscriptions[]
+) {
+  if (byOutput.some(o => o.at.length > 0 || o.whole)) {
+    inscribedOutputsByLayout.set(txLayoutKey(outpoints, outs), byOutput)
+  }
+}
+
+/** The inscription fields of output `vout` of a saved extra transaction, empty when it carries none. */
+function extraOutputInscriptions(
+  tx: bitcoinjs.Transaction,
+  txid: string,
+  vout: number
+): { inscription_ids?: string[]; satpoints?: string[] } {
+  const outpoints = tx.ins.map(i => `${Buffer.from(i.hash).reverse().toString('hex')}:${i.index}`)
+  const entry = inscribedOutputsByLayout.get(txLayoutKey(outpoints, tx.outs))?.[vout]
+  if (!entry || (entry.at.length === 0 && !entry.whole)) return {}
+  if (entry.whole) {
+    // No usable satpoint: the inscription covers the whole output (see `inscriptionsOf`).
+    return { inscription_ids: [...entry.at.map(a => a.id), 'unknown'], satpoints: [] }
+  }
+  return {
+    inscription_ids: entry.at.map(a => a.id),
+    satpoints: entry.at.map(a => `${txid}:${vout}:${a.offset}`),
+  }
+}
 
 /**
  * Sequencer routes served by the `sequencerRead` endpoint: display reads that
@@ -382,9 +451,11 @@ function fixCardinalUtxos(utxos: Utxo[], addr: string): CardinalUtxoInfo[] {
       const vout = tx.outs[i]!
       if (checkIfUtxoIsExtraOrdinal(txid, i)) continue
       if (checkIfUtxoUsedInExtras(txid, i)) continue
+      // An OP_RETURN output pays no address.
+      if (vout.script[0] === bitcoinjs.opcodes.OP_RETURN) continue
 
       try {
-        // vout.script might be an OP_RETURN or a script without wallet address so this part may fail which is ok
+        // vout.script may still be a script without a wallet address, so this part may fail, which is ok
         const voutAddress = bitcoinjs.address.fromOutputScript(vout.script, network)
         if (voutAddress === addr) {
           newUtxos.push({
@@ -393,6 +464,7 @@ function fixCardinalUtxos(utxos: Utxo[], addr: string): CardinalUtxoInfo[] {
             value: vout.value,
             utxo: `${txid}:${i}`,
             script_type: utxoOutputTypeFromOutputScript(vout.script, network),
+            ...extraOutputInscriptions(tx, txid, i),
           })
         }
       } catch (e) {
@@ -507,6 +579,8 @@ export interface APIUtxoInfo {
   inscription_ids: string[] | null
   rune_ids: string[] | null
   satpoints: string[] | null
+  /** Set on outputs served because of `include_used_brc20`: what each inscription was used for. */
+  brc20_inscriptions?: UsedBrc20Inscription[]
   script: string
   script_type:
     | 'pubkeyhash'

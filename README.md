@@ -10,7 +10,7 @@ Bitcoin-native dApps and web apps needing simple, multi-wallet support.
 - ✅ OKX
 - ✅ Unisat
 - ✅ Xverse
-- ✅ Leather
+- ✅ MetaMask (mainnet and testnet; no signet)
 
 ## 📚 Documentation
 
@@ -108,4 +108,7 @@ const endpoints = wallet.getEndpoints() // effective URLs for the selected netwo
 
 // Theme - defaults to 'system'
 modal.setTheme('dark') // system, dark, light
+
+// Legal links in the modal footer - default to bisdex.io's pages
+modal.setLegalLinks({ terms: '/legal/terms', privacy: '/legal/privacy', owner: 'Acme' })
 ```

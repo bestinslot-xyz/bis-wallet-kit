@@ -17,6 +17,13 @@ export interface BisChainProviderOptions {
   indexer?: string
   /** Base URL for mempool acceptance tests and broadcasts. */
   tx?: string
+  /**
+   * Also spend outputs whose only inscriptions are used BRC-20 mint and transfer inscriptions
+   * (`cardinal_utxos?include_used_brc20=1`). Their sats only reach outputs that pay the change
+   * address, a small set-aside output to it, or the fee, so commits, recipients and OP_RETURNs
+   * receive clean sats. Off by default.
+   */
+  includeUsedBrc20?: boolean
 }
 
 /** Endpoint base URL for a {@link BisBrc20RpcProvider}. Left out, it reads `setEndpoints`. */
@@ -34,6 +41,7 @@ export interface BisBrc20RpcProviderOptions {
 export class BisChainProvider implements ChainProvider {
   private readonly indexer?: string
   private readonly tx?: string
+  private readonly includeUsedBrc20: boolean
 
   /**
    * @param options Endpoint base URLs that take the place of the `setEndpoints` values.
@@ -44,10 +52,12 @@ export class BisChainProvider implements ChainProvider {
     if (options.tx !== undefined) assertHttpUrl('BisChainProvider: tx', options.tx)
     this.indexer = options.indexer
     this.tx = options.tx
+    this.includeUsedBrc20 = options.includeUsedBrc20 === true
   }
 
   async cardinalUtxos(address: string): Promise<Utxo[]> {
-    const url = await getEndpointUrl('indexer', `cardinal_utxos/${address}`, this.indexer)
+    const query = this.includeUsedBrc20 ? '?include_used_brc20=1' : ''
+    const url = await getEndpointUrl('indexer', `cardinal_utxos/${address}${query}`, this.indexer)
     const json = await fetchWithErrors<{ data: APIUtxoInfo[] }>(url, { method: 'GET' })
     return json.data
   }

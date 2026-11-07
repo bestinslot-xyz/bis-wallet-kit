@@ -23,7 +23,45 @@ describe('bisModalView', () => {
     view.showConnect({ onSelect: vi.fn(), onError: vi.fn() })
     const buttons = root.querySelectorAll('[data-provider]')
     expect(buttons.length).toBe(4)
-    expect([...buttons].map(b => b.getAttribute('data-provider'))).toContain('unisat')
+    expect([...buttons].map(b => b.getAttribute('data-provider'))).toEqual(
+      expect.arrayContaining(['unisat', 'metamask'])
+    )
+  })
+
+  it('gives every wallet a bundled logo', () => {
+    new BisModalView(root).showConnect({ onSelect: vi.fn(), onError: vi.fn() })
+    root.querySelectorAll<HTMLImageElement>('[data-provider] img').forEach(img => {
+      expect(img.getAttribute('src')).toBeTruthy()
+    })
+  })
+
+  const legalLink = (key: string) => root.querySelector<HTMLAnchorElement>(`[data-legal="${key}"]`)!
+  const legalText = () => legalLink('terms').parentElement!.textContent
+
+  it("links the footer to bisdex.io's legal pages by default, with no BiS API line", () => {
+    new BisModalView(root).showConnect({ onSelect: vi.fn(), onError: vi.fn() })
+    expect(legalLink('terms').href).toBe('https://bisdex.io/legal/terms')
+    expect(legalLink('privacy').href).toBe('https://bisdex.io/legal/privacy')
+    expect(legalText()).toContain("you agree to Best in Slot's Terms of Service")
+    expect(root.textContent).not.toContain('Powered by')
+  })
+
+  it("uses an app's own legal links and owner, keeping defaults for the rest", () => {
+    const view = new BisModalView(root)
+    view.setLegalLinks({ terms: '/legal/terms', owner: 'Acme' })
+    view.showConnect({ onSelect: vi.fn(), onError: vi.fn() })
+    expect(legalLink('terms').href).toBe(`${window.location.origin}/legal/terms`)
+    expect(legalLink('privacy').href).toBe('https://bisdex.io/legal/privacy')
+    expect(legalText()).toContain("you agree to Acme's Terms of Service")
+  })
+
+  it('keeps the default for a link that is not http(s), and an owner as text', () => {
+    const view = new BisModalView(root)
+    view.setLegalLinks({ privacy: 'javascript:alert(1)', owner: '<img src=x onerror=alert(1)>' })
+    view.showConnect({ onSelect: vi.fn(), onError: vi.fn() })
+    expect(legalLink('privacy').href).toBe('https://bisdex.io/legal/privacy')
+    expect(legalLink('terms').parentElement!.querySelector('img')).toBeNull()
+    expect(legalText()).toContain('<img src=x onerror=alert(1)>')
   })
 
   it('clears the DOM on hide', () => {

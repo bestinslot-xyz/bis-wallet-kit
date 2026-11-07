@@ -113,6 +113,10 @@ neither, because the kit spends them as plain BTC and would otherwise burn or mo
 rune by accident. A provider that cannot tell, for example because its indexer does not track runes,
 throws instead of returning the output.
 
+The one exception is an output whose only inscriptions are used BRC-20 ones (see
+[Spending used BRC-20 inscriptions](#spending-used-brc-20-inscriptions)). A provider returns it with
+`inscription_ids` and `satpoints` set, so the kit knows where those inscriptions sit.
+
 **Mempool data is optional.** A provider can return confirmed outputs only, minus those that mempool
 transactions spend, and report `mempool: 0` from `balance`. wallet-kit tracks the outputs of its own
 pending transactions above the provider: while a flow chains a commit, a reveal and a
@@ -149,6 +153,41 @@ A key left out of a constructor reads `setEndpoints`.
 
 `BisChainProvider.inscriptionUtxo` reads the indexer's `inscription_utxo/<address>/<inscriptionId>`
 route. An indexer that answers that route with HTTP 404 is searched through `ordinal_utxos` instead.
+
+## Spending used BRC-20 inscriptions
+
+A BRC-20 mint inscription does its work when it is inscribed, and a transfer inscription when it is
+first sent. After that, moving them has no BRC-20 effect, so the sats under them are spendable BTC.
+`new BisChainProvider({ includeUsedBrc20: true })` asks `cardinal_utxos` for these outputs too
+(`?include_used_brc20=1`). Each one comes with `inscription_ids`, `satpoints` and
+`brc20_inscriptions` (the kind, ticker and amount of each inscription), which an app can use to tell
+the user before they spend it.
+
+```ts
+wallet.setProviders({
+  mainnet: { chain: new BisChainProvider({ includeUsedBrc20: true }) },
+  signet: { chain: new BisChainProvider({ includeUsedBrc20: true }) },
+})
+```
+
+The transaction builders keep those inscriptions' sats out of every output that does not pay the
+change address. That matters most for a commit: the reveal inscribes on the commit output's first
+sat, and BRC-20 ignores an inscription made on a sat that already carries one. It also keeps them
+out of recipients, OP_RETURNs and the swap handler.
+
+- **Outputs without inscriptions go first.** The used-inscription sats then land in the change or
+  the fee.
+- **A set-aside output takes the rest.** When an outside output would still receive one, for example
+  when a consolidated output carries an inscription on its first sat, the builder adds one output to
+  the change address right before it. It is at least the dust limit and reaches past the last
+  inscribed sat, so every later output starts clean. It and its fee come out of the change, and the
+  builders report where each output ended up.
+- **Otherwise the transaction does without them.** A set-aside output never goes where the sats of a
+  forced input (the inscription a send moves) would land. When that is the only place it could go,
+  the transaction is built from outputs without inscriptions alone.
+
+The kit remembers where the inscriptions of its own pending transactions land, so their change and
+set-aside outputs keep their inscriptions when a chained flow spends them.
 
 ## Testing a provider
 

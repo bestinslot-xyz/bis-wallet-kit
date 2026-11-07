@@ -1,4 +1,4 @@
-import type { SignFunction, SignResponse } from '../provider/api'
+import type { SignFunction, SignManyFunction, SignPsbtRequest, SignResponse } from '../provider/api'
 import type { PaymentOpts } from '../types/common'
 import type {
   InscribeFees,
@@ -22,8 +22,10 @@ import {
   getCardinalUtxos,
   getInscriptionUtxo,
   getTxhex,
+  recordInscribedOutputs,
   saveExtraUtxos,
   txHexByIdCache,
+  utxoOutputTypeFromOutputScript,
   validateTxes,
   witnessStackToScriptWitness,
 } from '../core/helpers'
@@ -32,6 +34,13 @@ import { getWalletInfo } from '../core/store'
 import { getBitcoinNetwork } from '../lib/bitcoin'
 import { InscriptionDetails } from '../types/inscription'
 import { WalletInfo } from '../types/wallet'
+import {
+  inscribedSatRanges,
+  inscriptionsByOutput,
+  isInscribed,
+  lastInscribedEndIn,
+  outputRanges,
+} from './used-inscriptions'
 
 const ENABLE_RBF_NO_LOCKTIME = 0xfffffffd
 
@@ -66,6 +75,12 @@ function convertInscriptionIdToBuffer(inscriptionId: string): Buff {
   const reversedTxId = Buff.hex(txid).reverse()
 
   return reversedTxId.append(inscriptionIdxBufferTrimmed)
+}
+
+/** Fee rates are sat/vB and may be fractional; every fee built from one is rounded up to whole sats. */
+export function assertFeeRate(feeRate: number): void {
+  if (typeof feeRate !== 'number' || !Number.isFinite(feeRate) || feeRate <= 0)
+    throw new Error('feeRate must be a positive number')
 }
 
 export function getDustValue(wallet: WalletInfo): number {
@@ -110,6 +125,9 @@ interface UtxoInfo {
   witnessUtxoScript?: Buffer
   sequence?: number
   finalScriptWitness?: Buffer
+  /** Used BRC-20 inscriptions on the output; see `Utxo.inscription_ids`. */
+  inscription_ids?: string[] | null
+  satpoints?: string[] | null
 }
 
 interface UtxoInfoWithWallet {
@@ -149,6 +167,162 @@ function estimateFee(inputs: TxInput[], outputs: TxOutput[], feeRate: number): n
   return Math.ceil(vbytes * feeRate)
 }
 
+/** Setting aside used inscriptions needs `shortfall` more sats than the selected inputs leave. */
+class SetAsideShortfallError extends Error {
+  constructor(readonly shortfall: number) {
+    super('Not enough funds to set aside used BRC-20 inscriptions')
+  }
+}
+
+/** No set-aside output keeps used inscriptions out of the outputs; build without them instead. */
+class SetAsideImpossibleError extends Error {
+  constructor() {
+    super('Cannot keep used BRC-20 inscriptions out of the transaction outputs')
+  }
+}
+
+/**
+ * Keeps the sats of used BRC-20 inscriptions on selected inputs out of every output that does not
+ * pay the change address.
+ *
+ * Selected inputs without inscriptions go first, right after the forced inputs, so inscribed sats
+ * fill the change or the fee where they can. When an output that does not pay the change address
+ * would still receive one, a set-aside output to the change address goes right before it, sized
+ * (at least the dust limit) to reach past the last inscribed sat, so it takes every inscribed sat
+ * from there on. The set-aside output and its fee come out of the change output.
+ *
+ * Forced inputs keep their place, and their inscriptions are the caller's to place.
+ *
+ * @param inputs The transaction inputs, forced inputs first. Reordered in place.
+ * @param forcedCount How many leading inputs are forced.
+ * @param outputs The outputs with their final values, fee already taken. Updated in place.
+ * @param changeIndex The index of the change output, or -1 when there is none.
+ * @param changeWallet The wallet change and set-aside outputs pay.
+ * @param feeRate The fee rate in sat/vB.
+ * @returns The new index of each output, by its index before the call.
+ * @throws {SetAsideShortfallError} When the change cannot pay the set-aside outputs and their fee.
+ */
+function setAsideUsedInscriptions(
+  inputs: TxInput[],
+  forcedCount: number,
+  outputs: TxOutput[],
+  changeIndex: number,
+  changeWallet: WalletInfo,
+  feeRate: number
+): number[] {
+  const original = outputs.slice()
+  const selected = inputs.slice(forcedCount)
+  if (!selected.some(input => isInscribed(input.utxo))) return original.map((_, i) => i)
+
+  inputs.splice(
+    forcedCount,
+    selected.length,
+    ...selected.filter(input => !isInscribed(input.utxo)),
+    ...selected.filter(input => isInscribed(input.utxo))
+  )
+
+  const ownScript = changeWallet.outputScript
+  const sinks = new Set<TxOutput>()
+  const paysChange = (o: TxOutput) => sinks.has(o) || o.out_script.equals(ownScript)
+  const inscribed = inscribedSatRanges(
+    inputs.map((input, i) => ({ utxo: input.utxo, skip: i < forcedCount }))
+  )
+  const change = changeIndex === -1 ? null : outputs[changeIndex]!
+  const dust = getDustValue(changeWallet)
+  const feeBefore =
+    inputs.reduce((sum, input) => sum + input.utxo.value, 0) -
+    outputs.reduce((sum, output) => sum + output.value, 0)
+
+  // One set-aside output before the first output that would receive an inscribed sat, reaching
+  // past the last inscribed sat, leaves every later output clean.
+  let setAside = 0
+  const ranges = outputRanges(outputs.map(o => o.value))
+  const k = outputs.findIndex(
+    (o, j) => !paysChange(o) && lastInscribedEndIn(ranges[j]!, inscribed) !== -1
+  )
+  if (k !== -1) {
+    // A set-aside output before an output that forced-input sats reach would take those sats.
+    const forcedEnd = inputs.slice(0, forcedCount).reduce((sum, input) => sum + input.utxo.value, 0)
+    if (ranges[k]![0] < forcedEnd) throw new SetAsideImpossibleError()
+    const lastInscribedEnd = Math.max(...inscribed.map(([, b]) => b))
+    const sink: TxOutput = {
+      wallet: changeWallet,
+      out_script: ownScript,
+      value: Math.max(dust, lastInscribedEnd - ranges[k]![0]),
+    }
+    outputs.splice(k, 0, sink)
+    sinks.add(sink)
+    setAside = sink.value
+  }
+  const finalRanges = outputRanges(outputs.map(o => o.value))
+  if (
+    outputs.some((o, j) => !paysChange(o) && lastInscribedEndIn(finalRanges[j]!, inscribed) !== -1)
+  ) {
+    throw new SetAsideImpossibleError()
+  }
+
+  if (setAside > 0) {
+    const feeIncrease = Math.max(0, estimateFee(inputs, outputs, feeRate) - feeBefore)
+    if (change == null) {
+      const changeOutputFee = Math.ceil((ownScript.length + 9) * feeRate)
+      throw new SetAsideShortfallError(setAside + feeIncrease + dust + changeOutputFee)
+    }
+    change.value -= setAside + feeIncrease
+    if (change.value < dust) throw new SetAsideShortfallError(dust - change.value)
+  }
+
+  return original.map(o => outputs.indexOf(o))
+}
+
+/** Records where the selected inputs' used inscriptions land, for the saved extra transactions. */
+function recordSetAside(
+  tx: bitcoinjs.Transaction,
+  inputs: TxInput[],
+  forcedCount: number,
+  outputs: TxOutput[]
+) {
+  if (!inputs.slice(forcedCount).some(input => isInscribed(input.utxo))) return
+  recordInscribedOutputs(
+    inputs.map(input => input.utxo.utxo),
+    tx.outs,
+    inscriptionsByOutput(
+      inputs.map((input, i) => ({ utxo: input.utxo, skip: i < forcedCount })),
+      outputs.map(o => o.value)
+    )
+  )
+}
+
+/**
+ * Runs a transaction build with a growing change reserve while setting aside used inscriptions
+ * runs short, so selection adds the inputs that pay for the set-aside output. When no set-aside
+ * output can keep them out, or the reserve still falls short, it builds from the outputs without
+ * inscriptions alone (`plainOnly`).
+ */
+function withSetAsideReserve(
+  build: (reserve: number, plainOnly: boolean) => BuildTransactionResult
+) {
+  let reserve = 0
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      return build(reserve, false)
+    } catch (e) {
+      if (e instanceof SetAsideShortfallError) reserve += e.shortfall
+      else if (e instanceof SetAsideImpossibleError || reserve > 0) break
+      else throw e
+    }
+  }
+  try {
+    return build(0, true)
+  } catch (e) {
+    if (e instanceof Error && e.message.startsWith('Not enough funds')) {
+      throw new Error(
+        `${e.message}: this transaction cannot spend outputs with used BRC-20 inscriptions without sending them on, so it needs BTC on outputs without inscriptions`
+      )
+    }
+    throw e
+  }
+}
+
 const ADDITIONAL_INPUT_P2PKH_VBYTES = 147
 const ADDITIONAL_INPUT_P2SH_VBYTES = 153 // TODO: fix here!!
 const ADDITIONAL_INPUT_P2WPKH_VBYTES = 68 // TODO: fix here!! (NOTE: P2WPKH in P2SH is 91)
@@ -156,13 +330,13 @@ const ADDITIONAL_INPUT_P2WSH_VBYTES = 68 // TODO: fix here!! (NOTE: P2WSH in P2S
 const ADDITIONAL_INPUT_P2TR_VBYTES = 58 // TODO: fix here!!
 
 function calculateAdditionalFee(scriptType: string, feeRate: number): number {
-  if (scriptType === 'pubkeyhash') return Math.ceil(ADDITIONAL_INPUT_P2PKH_VBYTES) * feeRate
-  if (scriptType === 'scripthash') return Math.ceil(ADDITIONAL_INPUT_P2SH_VBYTES) * feeRate
+  if (scriptType === 'pubkeyhash') return Math.ceil(ADDITIONAL_INPUT_P2PKH_VBYTES * feeRate)
+  if (scriptType === 'scripthash') return Math.ceil(ADDITIONAL_INPUT_P2SH_VBYTES * feeRate)
   if (scriptType === 'witness_v0_keyhash')
-    return Math.ceil(ADDITIONAL_INPUT_P2WPKH_VBYTES) * feeRate
+    return Math.ceil(ADDITIONAL_INPUT_P2WPKH_VBYTES * feeRate)
   if (scriptType === 'witness_v0_scripthash')
-    return Math.ceil(ADDITIONAL_INPUT_P2WSH_VBYTES) * feeRate
-  if (scriptType === 'witness_v1_taproot') return Math.ceil(ADDITIONAL_INPUT_P2TR_VBYTES) * feeRate
+    return Math.ceil(ADDITIONAL_INPUT_P2WSH_VBYTES * feeRate)
+  if (scriptType === 'witness_v1_taproot') return Math.ceil(ADDITIONAL_INPUT_P2TR_VBYTES * feeRate)
   return 0
 }
 
@@ -250,8 +424,7 @@ export async function getInscribeMultipleFee(
       throw new Error('inscriptionDetails must be of type bis.InscriptionDetails')
   }
 
-  if (typeof feeRate != 'number' || !Number.isInteger(feeRate))
-    throw new Error('feeRate must be an integer')
+  assertFeeRate(feeRate)
   if (postage != null && (typeof postage != 'number' || !Number.isInteger(postage)))
     throw new Error('postage must be an integer or null')
   if (paymentOpts != null) {
@@ -289,8 +462,7 @@ export async function inscribeWithParent(
     throw new Error('inscriptionDetails must be of type bis.InscriptionDetails')
   if (typeof parentInscriptionId !== 'string')
     throw new Error('parentInscriptionId must be a string')
-  if (typeof feeRate != 'number' || !Number.isInteger(feeRate))
-    throw new Error('feeRate must be an integer')
+  assertFeeRate(feeRate)
   if (postage != null && (typeof postage != 'number' || !Number.isInteger(postage)))
     throw new Error('postage must be an integer or null')
   if (paymentOpts != null) {
@@ -336,8 +508,7 @@ export async function inscribeMultiple(
     if (!(inscriptionDetails instanceof InscriptionDetails))
       throw new Error('inscriptionDetails must be of type bis.InscriptionDetails')
   }
-  if (typeof feeRate != 'number' || !Number.isInteger(feeRate))
-    throw new Error('feeRate must be an integer')
+  assertFeeRate(feeRate)
   if (postage != null && (typeof postage != 'number' || !Number.isInteger(postage)))
     throw new Error('postage must be an integer or null')
 
@@ -382,7 +553,8 @@ async function buildRevealTxMultiple(
   inscriptionDetailsArray: InscriptionDetails[],
   postage: number,
   paymentWallet: WalletInfo | null,
-  payment: number | null
+  payment: number | null,
+  commitVout: number
 ): Promise<BuildRevealTxMultipleResult> {
   if (!payment || payment < 0) payment = 0
 
@@ -395,7 +567,7 @@ async function buildRevealTxMultiple(
   const inputs = [
     {
       txid: commitTxId,
-      vout: 0,
+      vout: commitVout,
     },
   ]
 
@@ -507,7 +679,8 @@ async function mintMultipleAll(
     inscriptionDetailsArray,
     postage,
     paymentWallet,
-    payment
+    payment,
+    commitTx.commit_vout
   )
 
   const isValid = await validateTxes([signedCommitTx.signedTxHex, revealTx.signed_reveal_tx_hex])
@@ -787,6 +960,12 @@ function buildRevealScriptMultiple(
 interface BuildTransactionResult {
   tx: bitcoinjs.Transaction
   tx_fee: number
+  /**
+   * The index in `tx.outs` of each output, change included, in the order the builder lays them out
+   * without a set-aside output (see `setAsideUsedInscriptions`). It is the identity unless the
+   * transaction spends used BRC-20 inscriptions.
+   */
+  output_index: number[]
 }
 // NOTE: utxos input must have utxo, value and script_type parameters
 // selects from utxos
@@ -810,6 +989,37 @@ export function buildTransaction(
   amount: number,
   paymentWallet: WalletInfo | null,
   payment: number | null
+): BuildTransactionResult {
+  return withSetAsideReserve((reserve, plainOnly) =>
+    buildTransactionWithReserve(
+      plainOnly ? utxoInfos.filter(u => !isInscribed(u)) : utxoInfos,
+      forceInUtxos,
+      payerWallet,
+      opReturnWallets,
+      outputWallet,
+      changeWallet,
+      feeRate,
+      amount,
+      paymentWallet,
+      payment,
+      reserve
+    )
+  )
+}
+
+// `reserve` is extra input value selection gathers for change, to pay set-aside outputs.
+function buildTransactionWithReserve(
+  utxoInfos: UtxoInfo[],
+  forceInUtxos: UtxoInfoWithWallet[],
+  payerWallet: WalletInfo,
+  opReturnWallets: WalletInfo[],
+  outputWallet: WalletInfo | null,
+  changeWallet: WalletInfo,
+  feeRate: number,
+  amount: number,
+  paymentWallet: WalletInfo | null,
+  payment: number | null,
+  reserve: number
 ): BuildTransactionResult {
   const utxos = utxoInfos.slice()
 
@@ -862,8 +1072,8 @@ export function buildTransaction(
   }
 
   let fee = estimateFee(inputs, outputs, feeRate)
-  while (totalOutputAmount < amount + fee) {
-    let deficit = amount + fee - totalOutputAmount
+  while (totalOutputAmount < amount + fee + reserve) {
+    let deficit = amount + fee + reserve - totalOutputAmount
     // const additional_fee = Math.ceil(is_payer_p2sh ? bis.ADDITIONAL_INPUT_P2SH_VBYTES : bis.ADDITIONAL_INPUT_P2TR_VBYTES) * fee_rate // TODO: fix here!!
     while (deficit > 0) {
       if (utxos.length === 0) throw new Error('Not enough funds')
@@ -908,11 +1118,12 @@ export function buildTransaction(
     }
   }
 
-  const additionalOutputFee = Math.ceil(changeWallet.outputScript.length + 9) * feeRate // TODO: fix here!! is it done???
+  const additionalOutputFee = Math.ceil((changeWallet.outputScript.length + 9) * feeRate)
   fee = estimateFee(inputs, outputs, feeRate)
   const excess = totalOutputAmount - fee - amount
   let feePayerOutputIndex = -1
-  if (excess > getDustValue(changeWallet) + additionalOutputFee) {
+  const hasChange = excess > getDustValue(changeWallet) + additionalOutputFee
+  if (hasChange) {
     // we have enough to output to change
     const toStrip = totalOutputAmount - amount
     if (amount > 0) {
@@ -972,7 +1183,16 @@ export function buildTransaction(
     outputs[feePayerOutputIndex]!.value -= fee
   }
 
+  const outputIndex = setAsideUsedInscriptions(
+    inputs,
+    forceInUtxos.length,
+    outputs,
+    hasChange ? outputs.length - 1 : -1,
+    changeWallet,
+    feeRate
+  )
   const finalTx = constructTxFromInOuts(inputs, outputs)
+  recordSetAside(finalTx, inputs, forceInUtxos.length, outputs)
   let txFee = 0
   for (const input of inputs) {
     txFee += input.utxo.value
@@ -984,6 +1204,7 @@ export function buildTransaction(
   return {
     tx: finalTx,
     tx_fee: txFee,
+    output_index: outputIndex,
   }
 }
 
@@ -1144,6 +1365,8 @@ export async function buildPsbtFromTx(
 interface BuildCommitTxResult {
   unsigned_commit_tx: bitcoinjs.Transaction
   unsigned_psbt_hex: string
+  /** The index of the taproot commit output in `unsigned_commit_tx`. */
+  commit_vout: number
   output_value: number
   commit_fee: number
   reveal_fee: number
@@ -1222,7 +1445,7 @@ async function buildCommitTx(
     cblock,
   ]
 
-  const revealFee = Tx.util.getTxSize(dummyRevealTx).vsize * feeRate // TODO: check new version: dummy_reveal_tx.virtualSize() * fee_rate
+  const revealFee = Math.ceil(Tx.util.getTxSize(dummyRevealTx).vsize * feeRate)
 
   // get change addr pk
   const commitWallet = new WalletInfo(false, null, commitTxAddress.address, null, tpubkey)
@@ -1240,6 +1463,7 @@ async function buildCommitTx(
   )
   const unsignedCommitTx = unsignedCommitTxResp.tx
   const commitFee = unsignedCommitTxResp.tx_fee
+  const commitVout = unsignedCommitTxResp.output_index[0]!
 
   // psbt test for commit tx
   const unsignedCommitPsbt = await buildPsbtFromTx(
@@ -1252,7 +1476,8 @@ async function buildCommitTx(
   return {
     unsigned_commit_tx: unsignedCommitTx,
     unsigned_psbt_hex: unsignedCommitPsbt.toHex(),
-    output_value: unsignedCommitTx.outs[0]!.value,
+    commit_vout: commitVout,
+    output_value: unsignedCommitTx.outs[commitVout]!.value,
     commit_fee: commitFee,
     reveal_fee: revealFee,
   }
@@ -1324,7 +1549,7 @@ export async function buildReclaimCommitTx(
     vout: [{ value: 0, scriptPubKey: inscriptionWallet.outputScript }],
   })
   dummyRevealTx.vin[0]!.witness = [Buff.hex('00'.repeat(64)), script, cblock]
-  const revealFee = Tx.util.getTxSize(dummyRevealTx).vsize * feeRate
+  const revealFee = Math.ceil(Tx.util.getTxSize(dummyRevealTx).vsize * feeRate)
   const commitOutputValue = postage + revealFee
 
   const commitWallet = new WalletInfo(false, null, commitTxAddress.address, null, tpubkey)
@@ -1351,7 +1576,7 @@ export async function buildReclaimCommitTx(
     feeRate
   )
 
-  const commitVout = reclaimInputs.length
+  const commitVout = built.output_index[reclaimInputs.length]!
 
   const unsignedCommitPsbt = await buildPsbtFromTx(
     built.tx,
@@ -1517,6 +1742,497 @@ export async function mintWithReclaimsAll(
   return res
 }
 
+/** One inscription of an `inscribeAllToOpReturn` package. */
+export interface BatchedReveal {
+  revealTxId: string
+  signedRevealTxHex: string
+  inscriptionId: string
+  secret: string
+}
+
+/**
+ * How the send tx of `inscribeAllToOpReturn` moves its inscriptions into OP_RETURN outputs.
+ *
+ * - `single`: one OP_RETURN output worth `postage * (n - 1) + 1` sats, which covers the first sat
+ *   of every inscription input. The postage of all but the last inscription is burned.
+ * - `interleaved`: a 1-sat OP_RETURN output per inscription, each followed by a payer output that
+ *   takes back the rest of that inscription's postage (the last one merges into change). Only `n`
+ *   sats are burned. Multiple OP_RETURN outputs relay from Bitcoin Core 30.
+ * - `auto`: whichever of the two costs the payer less at the fee rate.
+ *
+ * Either layout leaves one postage minus a sat after its last OP_RETURN. The send pays the fee
+ * from it, or adds a payer input and returns it as change when that costs less (low fee rates).
+ */
+export type BatchedSendLayout = 'single' | 'interleaved' | 'auto'
+
+export interface InscribeAllToOpReturnResult {
+  commitTxId: string
+  signedCommitTxHex: string
+  /** One reveal per inscription, in the order the inscriptions were given. */
+  reveals: BatchedReveal[]
+  sendTxId: string
+  signedSendTxHex: string
+  /** The send layout used; `auto` resolves to one of the other two. */
+  sendLayout: Exclude<BatchedSendLayout, 'auto'>
+  /** Miner fees of the commit, the reveals and the send, plus the sats burned in OP_RETURN outputs. */
+  totalFee: number
+}
+
+interface BatchedSendPlan {
+  layout: Exclude<BatchedSendLayout, 'auto'>
+  /** Value of each reveal's inscription output. */
+  postage: number
+  outputWallets: WalletInfo[]
+  amounts: number[]
+  /** Sats the send puts into OP_RETURN outputs. */
+  burned: number
+  /**
+   * Whether the send adds a payer input so the postage left after the last OP_RETURN returns as
+   * change. Without one, that postage pays the fee when it covers it.
+   */
+  fundingInput: boolean
+}
+
+function batchedSendPlan(
+  layout: Exclude<BatchedSendLayout, 'auto'>,
+  fundingInput: boolean,
+  count: number,
+  inscriptionWallet: WalletInfo,
+  payerWallet: WalletInfo,
+  opReturnWallet: WalletInfo
+): BatchedSendPlan {
+  const dust = getDustValue(inscriptionWallet)
+  if (layout === 'single') {
+    const value = dust * (count - 1) + 1
+    return {
+      layout,
+      postage: dust,
+      outputWallets: [opReturnWallet],
+      amounts: [value],
+      burned: value,
+      fundingInput,
+    }
+  }
+  // Each input splits into 1 sat for its OP_RETURN and a payer output that must clear dust.
+  const postage = Math.max(dust, getDustValue(payerWallet) + 1)
+  const outputWallets: WalletInfo[] = []
+  const amounts: number[] = []
+  for (let i = 0; i < count; i++) {
+    outputWallets.push(opReturnWallet)
+    amounts.push(1)
+    if (i < count - 1) {
+      outputWallets.push(payerWallet)
+      amounts.push(postage - 1)
+    }
+  }
+  return { layout, postage, outputWallets, amounts, burned: count, fundingInput }
+}
+
+/**
+ * The sats a send under `plan` costs the payer (miner fee plus burned sats), built offline with
+ * placeholder inscription inputs, or `Infinity` when the cardinals cannot fund it.
+ */
+function batchedSendCost(
+  plan: BatchedSendPlan,
+  count: number,
+  cardinals: UtxoInfo[],
+  inscriptionWallet: WalletInfo,
+  payerWallet: WalletInfo,
+  feeRate: number
+): number {
+  const scriptType = utxoOutputTypeFromOutputScript(
+    inscriptionWallet.outputScript,
+    getBitcoinNetwork()
+  )
+  const placeholders: UtxoInfoWithWallet[] = Array.from({ length: count }, (_, i) => ({
+    utxo: `${'00'.repeat(32)}:${i}`,
+    value: plan.postage,
+    script_type: scriptType,
+    wallet: inscriptionWallet,
+  }))
+  try {
+    const send = buildTransactionMultiOutput(
+      cardinals,
+      placeholders,
+      payerWallet,
+      plan.outputWallets,
+      plan.amounts,
+      payerWallet,
+      feeRate,
+      plan.fundingInput
+    )
+    return send.tx_fee + plan.burned
+  } catch {
+    return Infinity
+  }
+}
+
+/**
+ * The unsigned part of an `inscribeAllToOpReturn` package: the wallets, the send plan, one reveal
+ * leaf per inscription and the unsigned commit tx. The send plan is the cheapest candidate at
+ * `feeRate`; on a tie the earlier one, so a send adds a funding input only when that saves sats.
+ * `cardinals` funds the commit in place of a fetch of the payer's cardinal UTXOs.
+ */
+async function planInscribeAllToOpReturn(
+  inscriptions: InscriptionDetails[],
+  reclaimInputs: ReclaimInput[],
+  opReturnWallet: WalletInfo,
+  feeRate: number,
+  sendLayout: BatchedSendLayout,
+  cardinals?: UtxoInfo[]
+) {
+  if (inscriptions.length === 0) throw new Error('inscribeAllToOpReturn requires an inscription')
+  assertFeeRate(feeRate)
+
+  const userPaymentWallet = getPaymentWallet()
+  const userOrdinalsWallet = getOrdinalsWallet()
+  if (!userPaymentWallet || !userOrdinalsWallet) throw new Error('Wallets not found')
+
+  const payerWallet = new WalletInfo(
+    false,
+    null,
+    userPaymentWallet.address,
+    null,
+    userPaymentWallet.pubkey
+  )
+  const inscriptionWallet = new WalletInfo(
+    false,
+    null,
+    userOrdinalsWallet.address,
+    null,
+    userOrdinalsWallet.pubkey
+  )
+  const payerAddr = payerWallet.addr
+  const inscriptionAddr = inscriptionWallet.addr
+  if (!payerAddr || !inscriptionAddr) throw new Error('Wallet address is not set.')
+
+  const networkType = getBitcoinNetwork()
+  const commitCardinals = cardinals ?? (await getCardinalUtxos(payerAddr))
+  const layouts: Exclude<BatchedSendLayout, 'auto'>[] =
+    sendLayout === 'auto' ? ['single', 'interleaved'] : [sendLayout]
+  let plan: BatchedSendPlan | null = null
+  let sendCost = Infinity
+  for (const layout of layouts) {
+    for (const fundingInput of [false, true]) {
+      const candidate = batchedSendPlan(
+        layout,
+        fundingInput,
+        inscriptions.length,
+        inscriptionWallet,
+        payerWallet,
+        opReturnWallet
+      )
+      const cost = batchedSendCost(
+        candidate,
+        inscriptions.length,
+        commitCardinals,
+        inscriptionWallet,
+        payerWallet,
+        feeRate
+      )
+      if (plan == null || cost < sendCost) {
+        plan = candidate
+        sendCost = cost
+      }
+    }
+  }
+  if (plan == null) throw new Error('No batched send layout')
+  const postage = plan.postage
+
+  const leaves = inscriptions.map(inscription => {
+    const secret = createSecretToken()
+    const pubkey = get_pubkey(get_seckey(secret), true)
+    const script = buildRevealScript(pubkey, inscription)
+    const [tpubkey, cblock] = Tap.getPubKey(pubkey, { target: Tap.encodeScript(script) })
+
+    const dummyRevealTx = Tx.create({
+      vin: [
+        {
+          txid: '00'.repeat(32),
+          vout: 0,
+          prevout: { value: 0, scriptPubKey: ['OP_1', tpubkey] },
+        },
+      ],
+      vout: [{ value: 0, scriptPubKey: inscriptionWallet.outputScript }],
+    })
+    dummyRevealTx.vin[0]!.witness = [Buff.hex('00'.repeat(64)), script, cblock]
+    const revealFee = Math.ceil(Tx.util.getTxSize(dummyRevealTx).vsize * feeRate)
+
+    const commitAddress = bitcoinjs.payments.p2tr({
+      pubkey: Buffer.from(tpubkey, 'hex'),
+      network: networkType,
+    }).address
+    return {
+      inscription,
+      secret,
+      revealFee,
+      commitWallet: new WalletInfo(false, null, commitAddress, null, tpubkey),
+      commitOutputValue: postage + revealFee,
+    }
+  })
+
+  const reclaimUtxos: UtxoInfoWithWallet[] = reclaimInputs.map(r => ({
+    utxo: r.utxo,
+    value: r.value,
+    script_type: r.script_type,
+    wallet: inscriptionWallet,
+  }))
+  const commit = buildTransactionMultiOutput(
+    commitCardinals,
+    reclaimUtxos,
+    payerWallet,
+    [...reclaimInputs.map(() => inscriptionWallet), ...leaves.map(l => l.commitWallet)],
+    [...reclaimInputs.map(r => r.value), ...leaves.map(l => l.commitOutputValue)],
+    payerWallet,
+    feeRate
+  )
+
+  return {
+    payerWallet,
+    inscriptionWallet,
+    payerAddr,
+    inscriptionAddr,
+    commitCardinals,
+    plan,
+    sendCost,
+    leaves,
+    reclaimUtxos,
+    commit,
+  }
+}
+
+/**
+ * The fees an `inscribeAllToOpReturn` package with the same arguments would pay, built offline
+ * without signing: the commit, the reveals, and the send's miner fee plus the sats it burns in
+ * OP_RETURN outputs. The send is priced against `cardinals` (or a fresh fetch) as they stand
+ * before the commit, the way `inscribeAllToOpReturn` picks its send plan.
+ */
+export async function getInscribeAllToOpReturnFee(
+  inscriptions: InscriptionDetails[],
+  reclaimInputs: ReclaimInput[],
+  opReturnWallet: WalletInfo,
+  feeRate: number,
+  sendLayout: BatchedSendLayout = 'single',
+  cardinals?: UtxoInfo[]
+): Promise<{ totalFee: number; sendLayout: Exclude<BatchedSendLayout, 'auto'> }> {
+  const { plan, sendCost, leaves, commit } = await planInscribeAllToOpReturn(
+    inscriptions,
+    reclaimInputs,
+    opReturnWallet,
+    feeRate,
+    sendLayout,
+    cardinals
+  )
+  if (!Number.isFinite(sendCost)) throw new Error('Not enough funds')
+  return {
+    totalFee: commit.tx_fee + leaves.reduce((sum, l) => sum + l.revealFee, 0) + sendCost,
+    sendLayout: plan.layout,
+  }
+}
+
+/**
+ * `psbt`'s unsigned transaction with each input's scriptSig as signing will leave it, so its txid
+ * is the signed tx's; or null when a signature lands in a scriptSig. SegWit and taproot inputs
+ * sign in the witness and keep an empty scriptSig, and a P2SH-P2WPKH input's scriptSig is the push
+ * of its redeem script. Any other input, such as legacy P2PKH, makes it null.
+ */
+export function unsignedTxOnceSigned(psbt: bitcoinjs.Psbt): bitcoinjs.Transaction | null {
+  const tx = bitcoinjs.Transaction.fromBuffer(
+    (psbt.data.globalMap.unsignedTx as unknown as { toBuffer: () => Buffer }).toBuffer()
+  )
+  const isWitnessProgram = (script: Buffer) =>
+    (script[0] === 0x00 || (script[0]! >= 0x51 && script[0]! <= 0x60)) &&
+    script.length === script[1]! + 2
+  for (const [i, input] of psbt.data.inputs.entries()) {
+    const txIn = tx.ins[i]!
+    if (input.redeemScript) {
+      if (!isWitnessProgram(input.redeemScript) || input.redeemScript[0] !== 0x00) return null
+      txIn.script = bitcoinjs.script.compile([input.redeemScript])
+      continue
+    }
+    const prevout =
+      input.witnessUtxo?.script ??
+      (input.nonWitnessUtxo
+        ? bitcoinjs.Transaction.fromBuffer(input.nonWitnessUtxo).outs[txIn.index]?.script
+        : undefined)
+    if (!prevout || !isWitnessProgram(prevout)) return null
+  }
+  return tx
+}
+
+/**
+ * Inscribes several inscriptions from one commit tx and sends them all to OP_RETURN outputs in
+ * one tx, so the wallet signs two transactions however many inscriptions there are. The signed
+ * package is validated with testmempoolaccept and returned for the caller to broadcast.
+ *
+ * Commit outputs: one self-send per reclaim input (same index and value as the input), then one
+ * taproot commit output per inscription, then payer change. Each inscription keeps its own reveal
+ * tx, because BRC-20 indexers only accept an inscription made in the first input of its reveal.
+ *
+ * The send tx spends the reveal outputs as inputs `0..n-1` in the given order, and its outputs
+ * follow `sendLayout`. Either way the first sat of every inscription input lands in an OP_RETURN
+ * output, in input order, so ord moves each inscription there and indexers process them in that
+ * order.
+ *
+ * With `signManyFunc`, the commit and the send are signed in one wallet prompt whenever the commit's
+ * txid is known before signing (see `unsignedTxOnceSigned`); the package is refused if the signed
+ * commit's txid differs. Otherwise `signFunc` signs the commit, then the send.
+ */
+export async function inscribeAllToOpReturn(
+  inscriptions: InscriptionDetails[],
+  reclaimInputs: ReclaimInput[],
+  opReturnWallet: WalletInfo,
+  feeRate: number,
+  signFunc: SignFunction,
+  sendLayout: BatchedSendLayout = 'single',
+  signManyFunc: SignManyFunction | null = null
+): Promise<InscribeAllToOpReturnResult> {
+  const {
+    payerWallet,
+    inscriptionWallet,
+    payerAddr,
+    inscriptionAddr,
+    commitCardinals,
+    plan,
+    leaves,
+    reclaimUtxos,
+    commit,
+  } = await planInscribeAllToOpReturn(
+    inscriptions,
+    reclaimInputs,
+    opReturnWallet,
+    feeRate,
+    sendLayout
+  )
+  const networkType = getBitcoinNetwork()
+  const postage = plan.postage
+
+  const commitPsbt = await buildPsbtFromTx(commit.tx, commitCardinals, payerWallet, reclaimUtxos)
+  const commitRequest: SignPsbtRequest = {
+    unsignedPsbtHex: commitPsbt.toHex(),
+    paymentAddr: payerAddr,
+    ordAddr: inscriptionAddr,
+    ordAddrIdxes: reclaimInputs.map((_, i) => i),
+  }
+  // With a batch signer and a commit txid that signing leaves alone, the send is built against the
+  // unsigned commit and both are signed in one prompt; otherwise the commit is signed first.
+  const presignedCommit = signManyFunc ? unsignedTxOnceSigned(commitPsbt) : null
+  let signedCommit: SignResponse | null = null
+  if (!presignedCommit) {
+    signedCommit = await signFunc(
+      commitRequest.unsignedPsbtHex,
+      commitRequest.paymentAddr,
+      commitRequest.ordAddr,
+      commitRequest.ordAddrIdxes
+    )
+  }
+  const commitTxId = presignedCommit ? presignedCommit.getId() : signedCommit!.txId
+  const commitTxHex = presignedCommit ? presignedCommit.toHex() : signedCommit!.signedTxHex
+
+  const reveals: BatchedReveal[] = []
+  for (const [i, leaf] of leaves.entries()) {
+    const reveal = await buildRevealTx(
+      inscriptionWallet,
+      commitTxId,
+      leaf.commitOutputValue,
+      leaf.secret,
+      leaf.inscription,
+      feeRate,
+      postage,
+      null,
+      null,
+      commit.output_index[reclaimInputs.length + i]!
+    )
+    reveals.push({
+      revealTxId: reveal.txId,
+      signedRevealTxHex: reveal.signedTxHex,
+      inscriptionId: `${reveal.txId}i0`,
+      secret: leaf.secret,
+    })
+  }
+
+  let send: BuildTransactionResult
+  let signedSend: SignResponse
+  try {
+    saveExtraUtxos([commitTxHex, ...reveals.map(r => r.signedRevealTxHex)], null)
+
+    // A single-address wallet sees the reveal and reclaim outputs as cardinal; they carry inscriptions.
+    const revealTxIds = new Set(reveals.map(r => r.revealTxId))
+    const sendCardinals = (await getCardinalUtxos(payerAddr)).filter(
+      u => !revealTxIds.has(u.txid) && !(u.txid === commitTxId && u.vout < reclaimInputs.length)
+    )
+    const inscriptionScriptType = utxoOutputTypeFromOutputScript(
+      inscriptionWallet.outputScript,
+      networkType
+    )
+    const inscriptionUtxos: UtxoInfoWithWallet[] = reveals.map(r => ({
+      utxo: `${r.revealTxId}:0`,
+      value: postage,
+      script_type: inscriptionScriptType,
+      wallet: inscriptionWallet,
+    }))
+    send = buildTransactionMultiOutput(
+      sendCardinals,
+      inscriptionUtxos,
+      payerWallet,
+      plan.outputWallets,
+      plan.amounts,
+      payerWallet,
+      feeRate,
+      plan.fundingInput
+    )
+    const sendPsbt = await buildPsbtFromTx(send.tx, sendCardinals, payerWallet, inscriptionUtxos)
+    const sendRequest: SignPsbtRequest = {
+      unsignedPsbtHex: sendPsbt.toHex(),
+      paymentAddr: payerAddr,
+      ordAddr: inscriptionAddr,
+      ordAddrIdxes: inscriptionUtxos.map((_, i) => i),
+    }
+    if (presignedCommit) {
+      const [commitResponse, sendResponse] = await signManyFunc!([commitRequest, sendRequest])
+      if (!commitResponse || !sendResponse)
+        throw new Error('The wallet returned too few signed txs.')
+      // The send spends the commit through the reveals, so a commit the wallet altered orphans it.
+      if (commitResponse.txId !== commitTxId)
+        throw new Error('The wallet changed the commit tx while signing; nothing was broadcast.')
+      signedCommit = commitResponse
+      signedSend = sendResponse
+    } else {
+      signedSend = await signFunc(
+        sendRequest.unsignedPsbtHex,
+        sendRequest.paymentAddr,
+        sendRequest.ordAddr,
+        sendRequest.ordAddrIdxes
+      )
+    }
+  } finally {
+    clearExtraUtxos()
+  }
+  if (!signedCommit) throw new Error('The commit tx is unsigned.')
+
+  const isValid = await validateTxes([
+    signedCommit.signedTxHex,
+    ...reveals.map(r => r.signedRevealTxHex),
+    signedSend.signedTxHex,
+  ])
+  if (isValid == null)
+    throw new Error('Batched inscription validation failed (testmempoolaccept request failed)')
+  for (const entry of isValid) {
+    if (!entry.allowed) throw new Error(entry['reject-reason'])
+  }
+
+  return {
+    commitTxId: signedCommit.txId,
+    signedCommitTxHex: signedCommit.signedTxHex,
+    reveals,
+    sendTxId: signedSend.txId,
+    signedSendTxHex: signedSend.signedTxHex,
+    sendLayout: plan.layout,
+    totalFee:
+      commit.tx_fee + leaves.reduce((sum, l) => sum + l.revealFee, 0) + send.tx_fee + plan.burned,
+  }
+}
+
 /**
  * Estimates the fees for a reclaim mint by building the unsigned reclaim
  * commit tx (Task 1) and a fee-sizing reveal tx offline, without signing or
@@ -1629,6 +2345,8 @@ export async function resolveReclaimInputs(
 
 interface BuildCommitTxMultipleResult {
   unsigned_psbt_hex: string
+  /** The index of the taproot commit output. */
+  commit_vout: number
   output_value: number
   commit_fee: number
   reveal_fee: number
@@ -1697,7 +2415,7 @@ async function buildCommitTxMultiple(
     cblock,
   ]
 
-  const revealFee = Tx.util.getTxSize(dummyRevealTx).vsize * feeRate // TODO: check new version: dummy_reveal_tx.virtualSize() * fee_rate
+  const revealFee = Math.ceil(Tx.util.getTxSize(dummyRevealTx).vsize * feeRate)
 
   // get change addr pk
   const commitWallet = new WalletInfo(false, null, commitTxAddress.address, null, tpubkey)
@@ -1716,12 +2434,15 @@ async function buildCommitTxMultiple(
   const unsignedCommitTx = unsignedCommitTxResp.tx
   const commitFee = unsignedCommitTxResp.tx_fee
 
+  const commitVout = unsignedCommitTxResp.output_index[0]!
+
   // psbt test for commit tx
   const unsignedCommitPsbt = await buildPsbtFromTx(unsignedCommitTx, cardinalUtxos, payerWallet, [])
 
   return {
     unsigned_psbt_hex: unsignedCommitPsbt.toHex(),
-    output_value: unsignedCommitTx.outs[0]!.value,
+    commit_vout: commitVout,
+    output_value: unsignedCommitTx.outs[commitVout]!.value,
     commit_fee: commitFee,
     reveal_fee: revealFee,
   }
@@ -1729,6 +2450,8 @@ async function buildCommitTxMultiple(
 
 interface BuildCommitTxWithParentResult {
   unsigned_psbt_hex: string
+  /** The index of the taproot commit output. */
+  commit_vout: number
   output_value: number
   commit_fee: number
 }
@@ -1784,13 +2507,15 @@ async function buildCommitTxWithParent(
   )
   const unsignedCommitTx = unsignedCommitTxResp.tx
   const commitFee = unsignedCommitTxResp.tx_fee
+  const commitVout = unsignedCommitTxResp.output_index[0]!
 
   // psbt test for commit tx
   const unsignedCommitPsbt = await buildPsbtFromTx(unsignedCommitTx, cardinalUtxos, payerWallet, [])
 
   return {
     unsigned_psbt_hex: unsignedCommitPsbt.toHex(),
-    output_value: unsignedCommitTx.outs[0]!.value,
+    commit_vout: commitVout,
+    output_value: unsignedCommitTx.outs[commitVout]!.value,
     commit_fee: commitFee,
   }
 }
@@ -1805,6 +2530,8 @@ async function buildCommitTxWithParent(
  * @param amounts - array of amounts to send to each output wallet (must be the same length as outputWallets)
  * @param changeWallet - the wallet to send the change to
  * @param feeRate - the fee rate in sat/vbyte
+ * @param fundingInput - add a payer UTXO even when `forceInUtxos` cover the outputs and the fee, so
+ *   their surplus returns as change instead of going to the miner
  *
  * @returns an object containing the built transaction and the fee paid for the transaction
  */
@@ -1815,7 +2542,35 @@ export function buildTransactionMultiOutput(
   outputWallets: WalletInfo[],
   amounts: number[],
   changeWallet: WalletInfo,
-  feeRate: number
+  feeRate: number,
+  fundingInput = false
+): BuildTransactionResult {
+  return withSetAsideReserve((reserve, plainOnly) =>
+    buildTransactionMultiOutputWithReserve(
+      plainOnly ? utxoArray.filter(u => !isInscribed(u)) : utxoArray,
+      forceInUtxos,
+      payerWallet,
+      outputWallets,
+      amounts,
+      changeWallet,
+      feeRate,
+      fundingInput,
+      reserve
+    )
+  )
+}
+
+// `reserve` is extra input value selection gathers for change, to pay set-aside outputs.
+function buildTransactionMultiOutputWithReserve(
+  utxoArray: UtxoInfo[],
+  forceInUtxos: UtxoInfoWithWallet[],
+  payerWallet: WalletInfo,
+  outputWallets: WalletInfo[],
+  amounts: number[],
+  changeWallet: WalletInfo,
+  feeRate: number,
+  fundingInput: boolean,
+  reserve: number
 ): BuildTransactionResult {
   if (outputWallets.length !== amounts.length)
     throw new Error('output_wallets and amounts must have the same length')
@@ -1851,9 +2606,23 @@ export function buildTransactionMultiOutput(
     }
   }
 
+  if (fundingInput) {
+    // The smallest UTXO worth more than the input and the change output it adds, one without
+    // used inscriptions when there is one.
+    const changeFee = Math.ceil((changeWallet.outputScript!.length + 9) * feeRate)
+    const worthIt = (u: UtxoInfo) =>
+      u.value > calculateAdditionalFee(u.script_type, feeRate) + changeFee
+    let index = utxos.findIndex(u => worthIt(u) && !isInscribed(u))
+    if (index === -1) index = utxos.findIndex(worthIt)
+    if (index === -1) throw new Error('Not enough funds')
+    const [utxo] = utxos.splice(index, 1)
+    inputs.push({ utxo: utxo!, wallet: payerWallet })
+    totalInputAmount += utxo!.value
+  }
+
   let fee = estimateFee(inputs, outputs, feeRate)
-  while (totalInputAmount < totalTargetAmount + fee) {
-    let deficit = totalTargetAmount + fee - totalInputAmount
+  while (totalInputAmount < totalTargetAmount + fee + reserve) {
+    let deficit = totalTargetAmount + fee + reserve - totalInputAmount
     // const additional_fee = Math.ceil(is_payer_p2sh ? bis.ADDITIONAL_INPUT_P2SH_VBYTES : bis.ADDITIONAL_INPUT_P2TR_VBYTES) * fee_rate // TODO: fix here!!
     while (deficit > 0) {
       if (utxos.length === 0) throw new Error('Not enough funds')
@@ -1901,7 +2670,7 @@ export function buildTransactionMultiOutput(
   if (!changeWallet.outputScript)
     throw new Error('build_transaction_multi_output change_wallet.outputScript is null')
 
-  const additionalChangeOutputFee = Math.ceil(changeWallet.outputScript.length + 9) * feeRate // TODO: fix here!! is it done???
+  const additionalChangeOutputFee = Math.ceil((changeWallet.outputScript.length + 9) * feeRate)
   fee = estimateFee(inputs, outputs, feeRate)
   const excess = totalInputAmount - fee - totalTargetAmount
   let feePayerOutputIdx = -1
@@ -1936,7 +2705,16 @@ export function buildTransactionMultiOutput(
     outputs[feePayerOutputIdx]!.value -= fee
   }
 
+  const outputIndex = setAsideUsedInscriptions(
+    inputs,
+    forceInUtxos.length,
+    outputs,
+    feePayerOutputIdx,
+    changeWallet,
+    feeRate
+  )
   const finalTx = constructTxFromInOuts(inputs, outputs)
+  recordSetAside(finalTx, inputs, forceInUtxos.length, outputs)
   let txFee = 0
   for (const input of inputs) {
     txFee += input.utxo.value
@@ -1948,6 +2726,7 @@ export function buildTransactionMultiOutput(
   return {
     tx: finalTx,
     tx_fee: txFee,
+    output_index: outputIndex,
   }
 }
 
@@ -1992,8 +2771,7 @@ export async function sendMultiInscriptionWithBuffer(
   for (const inscrId of inscriptionIds) {
     if (typeof inscrId != 'string') throw new Error('inscription_ids must be an array of strings')
   }
-  if (typeof feeRate != 'number' || !Number.isInteger(feeRate))
-    throw new Error('fee_rate must be an integer')
+  assertFeeRate(feeRate)
   if (typeof bufferValue != 'number' || !Number.isInteger(bufferValue))
     throw new Error('buffer_value must be an integer')
   if (typeof targetAddr != 'string') throw new Error('target_addr must be a string')
@@ -2157,11 +2935,13 @@ async function sendMultiInscriptionWithBufferAll(
   let bufferUtxo: string | null = null
   let bufferOutputValue: number | null = null
   for (let i = 0; i < inscriptionIds.length; i++) {
-    outputUtxos.push(`${signedTx.txId}:${i}`)
-    outputValues.push(unsignedTx.outs[i]!.value)
+    const vout = unsignedTxResp.output_index[i]!
+    outputUtxos.push(`${signedTx.txId}:${vout}`)
+    outputValues.push(unsignedTx.outs[vout]!.value)
   }
-  bufferUtxo = `${signedTx.txId}:${inscriptionIds.length}`
-  bufferOutputValue = unsignedTx.outs[inscriptionIds.length]!.value
+  const bufferVout = unsignedTxResp.output_index[inscriptionIds.length]!
+  bufferUtxo = `${signedTx.txId}:${bufferVout}`
+  bufferOutputValue = unsignedTx.outs[bufferVout]!.value
 
   if (dryRun) {
     // TODO: hacky part, change or remove
@@ -2493,8 +3273,7 @@ export async function getMultiInscriptionWithBufferFeeRate(
   for (const inscrId of inscriptionIds) {
     if (typeof inscrId != 'string') throw new Error('inscription_ids must be an array of strings')
   }
-  if (typeof feeRate != 'number' || !Number.isInteger(feeRate))
-    throw new Error('fee_rate must be an integer')
+  assertFeeRate(feeRate)
   if (typeof bufferValue != 'number' || !Number.isInteger(bufferValue))
     throw new Error('buffer_value must be an integer')
   if (typeof targetAddr != 'string') throw new Error('target_addr must be a string')
@@ -2614,7 +3393,8 @@ async function buildRevealTxWithParent(
   parentInscriptionId: string,
   feeRate: number,
   paymentWallet: WalletInfo | null,
-  payment: number | null
+  payment: number | null,
+  commitVout: number
 ): Promise<BuildRevealTxWithParentResult> {
   if (payment == null || payment < 0) payment = 0
   const changeWallet = payerWallet
@@ -2651,14 +3431,16 @@ async function buildRevealTxWithParent(
   })
 
   const commitWallet = new WalletInfo(false, null, commitTxAddress.address, null, tpubkey)
-  const utxos = cardinalUtxos.slice()
+  // This reveal selects its fee inputs by hand, so it spends no used-inscription outputs: their
+  // sats could reach the payment output.
+  const utxos = cardinalUtxos.filter(u => !isInscribed(u))
   utxos.sort((a, b) => a.value - b.value)
 
   const inputs: TxInput[] = [
     {
       utxo: {
         script_type: 'witness_v1_taproot',
-        utxo: `${commitTxid}:0`,
+        utxo: `${commitTxid}:${commitVout}`,
         tapLeafScript: [
           {
             leafVersion: 192,
@@ -2744,7 +3526,7 @@ async function buildRevealTxWithParent(
 
   if (!changeWallet.outputScript) throw new Error('Change wallet output script is not set.')
 
-  const changeOutputFee = Math.ceil(changeWallet.outputScript.length + 9) * feeRate
+  const changeOutputFee = Math.ceil((changeWallet.outputScript.length + 9) * feeRate)
   const minimumChange = getDustValue(changeWallet)
   const excess = currentMinerFee - fee
 
@@ -2974,7 +3756,8 @@ export async function mintAll(
     feeRate,
     postage,
     paymentWallet,
-    payment
+    payment,
+    commitTx.commit_vout
   )
 
   const isValid = await validateTxes([signedCommitTx.signedTxHex, revealTx.signedTxHex])
@@ -3081,7 +3864,8 @@ export async function mintAllPaymentWallet(
     feeRate,
     postage,
     paymentWallet,
-    payment
+    payment,
+    commitTx.commit_vout
   )
 
   const isValid = await validateTxes([signedCommitTx.signedTxHex, revealTx.signedTxHex])
@@ -3199,7 +3983,8 @@ export async function mintAllCheckFees(
     feeRate,
     postage,
     paymentWallet,
-    payment
+    payment,
+    commitTx.commit_vout
   )
 
   return {
@@ -3530,7 +4315,8 @@ export async function mintWithParentAll(
       parentInscriptionId,
       feeRate,
       paymentWallet,
-      payment
+      payment,
+      commitTx.commit_vout
     )
 
     signedRevealTx = await signFunc(
@@ -3885,7 +4671,8 @@ export async function mintWithExtraInputInCommitAll(
     feeRate,
     postage,
     paymentWallet,
-    payment
+    payment,
+    commitTx.commit_vout
   )
 
   const isValid = await validateTxes([signedCommitTx.signedTxHex, revealTx.signedTxHex])
@@ -3996,7 +4783,8 @@ export async function mintWithExtraInputInCommitFeeRate(
     feeRate,
     postage,
     paymentWallet,
-    payment
+    payment,
+    commitTx.commit_vout
   )
 
   return {

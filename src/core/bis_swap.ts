@@ -2,7 +2,9 @@ import type { FeePolicy } from '../lib/fee-policy'
 import type { SwapFees } from '../lib/swap-reporting'
 import type { RawSwapRoute, SwapBLSMessageFields, SwapRoute } from '../lib/swap-route'
 import type { UniswapInfoProxy } from '../lib/uniswap_ops'
+import type { SignFunction, SignManyFunction } from '../provider/api'
 import type { BISNetwork } from '../types/common'
+import type { BatchedReveal, BatchedSendLayout, ReclaimInput } from './mint'
 import type { SignProgressOptions } from './sign-progress'
 import type { BISSwapWalletInfo } from './store'
 import { Buffer } from 'node:buffer'
@@ -46,6 +48,8 @@ import {
   utxoOutputTypeFromOutputScript,
 } from './helpers'
 import {
+  getInscribeAllToOpReturnFee,
+  inscribeAllToOpReturn,
   mintAll,
   mintAllCheckFees,
   mintWithExtraInputInCommitAll,
@@ -60,6 +64,7 @@ import {
   getOrdinalsWallet,
   getPaymentWallet,
   getSignFn,
+  getSignManyFn,
   signMessageLocalVerify,
   signMessageLocalVerifyDeterministic,
 } from './providers'
@@ -1655,6 +1660,120 @@ export function sumReclaimAmounts(reclaims?: ReclaimInscription[] | null): bigin
   return reclaims.reduce((sum, r) => sum + r.amount, 0n)
 }
 
+export interface DepositOrderOptions extends SignProgressOptions {
+  /**
+   * Inscribes the base-layer conversion, the allowance and the deposit from one commit tx and
+   * sends all of them to the BRC20PROG OP_RETURN in one tx, so the deposit takes three wallet
+   * prompts (BIP-322, commit, send) whatever it needs. Applies when the conversion or the
+   * allowance is needed; a deposit alone takes its usual three prompts.
+   */
+  batchInscriptions?: boolean
+  /**
+   * How the batched send moves the inscriptions into OP_RETURN outputs (see `BatchedSendLayout`).
+   * Defaults to `single`.
+   */
+  batchSendLayout?: BatchedSendLayout
+  /**
+   * Signs a batched deposit's commit and send in one wallet prompt when the wallet can sign several
+   * PSBTs at once (UniSat, OKX, Xverse) and the payer is not a legacy P2PKH address, so the
+   * deposit takes two prompts (BIP-322, then both txs). Defaults to true; false keeps three.
+   */
+  batchSigning?: boolean
+}
+
+/**
+ * Whether a batched commit's txid is known before signing for these addresses, which holds for
+ * every address type but legacy P2PKH (see `unsignedTxOnceSigned`).
+ */
+function txidKnownBeforeSigning(addresses: string[]): boolean {
+  return addresses.every(addr => {
+    try {
+      return bitcoinjs.address.fromBase58Check(addr).version !== getBitcoinNetwork().pubKeyHash
+    } catch {
+      return true // bech32
+    }
+  })
+}
+
+function baseDepositInscription(ticker: string, amount: string): InscriptionDetails {
+  return new InscriptionDetails(
+    Buff.str('text/plain'),
+    null,
+    null,
+    null,
+    null,
+    Buff.str(`{"p":"brc-20","op":"transfer","tick":"${ticker}","amt":"${amount}"}`)
+  )
+}
+
+/** The `OP_RETURN "BRC20PROG"` output that hands an inscription to BRC2.0. */
+function brc20ProgOpReturnWallet(): WalletInfo {
+  return new WalletInfo(
+    true,
+    Buffer.from(Script.encode(['OP_RETURN', Buff.str('BRC20PROG')], false)),
+    null,
+    null,
+    null
+  )
+}
+
+/** A batched deposit's inscriptions in send-input order: conversion, allowance, deposit. */
+function batchedDepositInscriptions(
+  deposit: InscriptionDetails,
+  allowance: InscriptionDetails | null,
+  baseDeposit: InscriptionDetails | null
+): InscriptionDetails[] {
+  return [baseDeposit, allowance, deposit].filter((i): i is InscriptionDetails => i != null)
+}
+
+/**
+ * Inscribes the deposit with its base-layer conversion and allowance, when given, as one package
+ * (see `inscribeAllToOpReturn`) and hands it to the swap backend. Every bundle of the request
+ * names the shared commit and send txs and its own reveal; the send spends the conversion, the
+ * allowance and the deposit in that order.
+ */
+async function broadcastBatchedDepositOrder(
+  deposit: InscriptionDetails,
+  allowance: InscriptionDetails | null,
+  baseDeposit: InscriptionDetails | null,
+  reclaimInputs: ReclaimInput[],
+  feeRate: number,
+  signFn: SignFunction,
+  sendLayout: BatchedSendLayout,
+  signManyFn: SignManyFunction | null
+): Promise<string[]> {
+  const pkg = await inscribeAllToOpReturn(
+    batchedDepositInscriptions(deposit, allowance, baseDeposit),
+    reclaimInputs,
+    brc20ProgOpReturnWallet(),
+    feeRate,
+    signFn,
+    sendLayout,
+    signManyFn
+  )
+
+  const bundle = (reveal: BatchedReveal): ApproveDetails => ({
+    commit_txid: pkg.commitTxId,
+    commit_txhex: pkg.signedCommitTxHex,
+    reveal_txid: reveal.revealTxId,
+    reveal_txhex: reveal.signedRevealTxHex,
+    send_to_opreturn_txid: pkg.sendTxId,
+    send_to_opreturn_txhex: pkg.signedSendTxHex,
+    secret: reveal.secret,
+    inscription_id: reveal.inscriptionId,
+    fee_rate: feeRate,
+  })
+  const reveals = pkg.reveals.slice()
+  const baseDepositDetails = baseDeposit ? bundle(reveals.shift()!) : null
+  const approveDetails = allowance ? bundle(reveals.shift()!) : null
+  const broadcastRes = await broadcastDepositOrder({
+    ...bundle(reveals.shift()!),
+    approve_details: approveDetails,
+    base_deposit_details: baseDepositDetails,
+  })
+  return broadcastRes.result
+}
+
 /**
  * Creates and broadcasts a deposit order for swapping BRC-20 tokens by performing necessary checks, generating signatures, and making API calls to the swap backend. The function handles both BRC-2.0 and base BRC-20 token balances, checks allowances, and prepares the required data for the deposit order.
  *
@@ -1663,7 +1782,7 @@ export function sumReclaimAmounts(reclaims?: ReclaimInscription[] | null): bigin
  * @param feeRate The fee rate to use for the transactions, represented in sats/vbyte.
  * @param createAllowanceIfNeeded A boolean flag indicating whether to create an allowance for the BRC-2.0 token transfer if the current allowance is insufficient. Defaults to true.
  * @param reclaimInscriptions Optional transfer inscriptions to reclaim toward the base-layer sufficiency check, each with `inscriptionId` and `amount` (bigint, 18 decimals).
- * @param options `onSignRequest` is called before each wallet prompt, with `total` set: 3, plus 2 when base-layer balance is converted, plus 2 when an allowance is created.
+ * @param options `onSignRequest` is called before each wallet prompt, with `total` set: 3, plus 2 when base-layer balance is converted, plus 2 when an allowance is created. With `batchInscriptions`, `total` is 3.
  *
  * @returns {Promise<string[]>} A promise that resolves to an array of transaction IDs (txids) for the transactions involved in the deposit order, including the commit transaction, reveal transaction, and send-to-opreturn transaction.
  */
@@ -1673,7 +1792,7 @@ export async function createAndBroadcastDepositOrder(
   feeRate: number,
   createAllowanceIfNeeded: boolean = true,
   reclaimInscriptions?: ReclaimInscription[],
-  options: SignProgressOptions = {}
+  options: DepositOrderOptions = {}
 ): Promise<string[]> {
   // Get connected wallet
   const walletInfo = getWalletInfo()
@@ -1728,13 +1847,30 @@ export async function createAndBroadcastDepositOrder(
     needsAllowance = true
   }
 
+  const batched =
+    options.batchInscriptions === true && (useBaseAvailableBalanceAmount > 0n || needsAllowance)
+
+  const signManyImpl =
+    batched &&
+    options.batchSigning !== false &&
+    txidKnownBeforeSigning([payerAddress, ordinalsAddress])
+      ? getSignManyFn(walletInfo.provider)
+      : null
+
   // Wallet prompts: the BIP-322 message and the deposit's inscribe + send, then an inscribe + send
-  // for each of the base-layer conversion and the allowance when they are needed.
+  // for each of the base-layer conversion and the allowance when they are needed. A batched
+  // deposit inscribes and sends all of them with one prompt each, or both in one prompt when the
+  // wallet signs several PSBTs at once.
   const progress = new SignProgress(
     options,
-    3 + (useBaseAvailableBalanceAmount > 0n ? 2 : 0) + (needsAllowance ? 2 : 0)
+    batched
+      ? signManyImpl
+        ? 2
+        : 3
+      : 3 + (useBaseAvailableBalanceAmount > 0n ? 2 : 0) + (needsAllowance ? 2 : 0)
   )
   const signFn = progress.wrap(getSignFn(walletInfo.provider))
+  const signManyFn = signManyImpl ? progress.wrapMany(signManyImpl) : null
 
   const l1ContractAddress = getSwapContractAddress()
   const allowanceCalldata = `0x095ea7b3000000000000000000000000${l1ContractAddress.slice(2).toLowerCase()}ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff`
@@ -1808,6 +1944,26 @@ export async function createAndBroadcastDepositOrder(
     depositContent
   )
 
+  if (batched) {
+    return broadcastBatchedDepositOrder(
+      depositInscriptionDetails,
+      needsAllowance ? allowanceInscriptionDetails : null,
+      useBaseAvailableBalanceAmount > 0n
+        ? baseDepositInscription(
+            baseTokenTicker,
+            convertAmountToBRC20String(useBaseAvailableBalanceAmount, baseTokenDecimals)
+          )
+        : null,
+      useBaseAvailableBalanceAmount > 0n && (reclaimInscriptions?.length ?? 0) > 0
+        ? await resolveReclaimInputs(reclaimInscriptions!, ordinalsAddress)
+        : [],
+      feeRate,
+      signFn,
+      options.batchSendLayout ?? 'single',
+      signManyFn
+    )
+  }
+
   let baseDepositInscriptionId: string | null = null
   let baseDepositSecret: string | null = null
   let baseDepositCommitTxId: string | null = null
@@ -1822,16 +1978,7 @@ export async function createAndBroadcastDepositOrder(
       useBaseAvailableBalanceAmount,
       baseTokenDecimals
     )
-    const baseDepositInscriptionDetails = new InscriptionDetails(
-      Buff.str('text/plain'),
-      null,
-      null,
-      null,
-      null,
-      Buff.str(
-        `{"p":"brc-20","op":"transfer","tick":"${baseTokenTicker}","amt":"${amountToDeposit}"}`
-      )
-    )
+    const baseDepositInscriptionDetails = baseDepositInscription(baseTokenTicker, amountToDeposit)
 
     if ((reclaimInscriptions?.length ?? 0) > 0) {
       const reclaimInputs = await resolveReclaimInputs(reclaimInscriptions!, ordinalsAddress)
@@ -2137,12 +2284,15 @@ export async function createAndBroadcastDepositOrder(
  * @param tokenAmount The amount of the BRC-20 token to deposit, represented as a bigint in 18 decimals format.
  * @param feeRate The fee rate to use for the transactions, represented in sats/vbyte.
  * @param createAllowanceIfNeeded A boolean flag indicating whether to include the fees for creating an allowance inscription if the current allowance is insufficient. Defaults to true.
+ * @param reclaimInscriptions Optional transfer inscriptions the deposit reclaims, as for `createAndBroadcastDepositOrder`.
+ * @param options `batchInscriptions` and `batchSendLayout` as the deposit will be made with, so the fees are those of the package it builds.
  *
  * @returns A promise that resolves to an object containing the following properties:
  * - needs_approval: A boolean indicating whether an allowance inscription needs to be created.
- * - allowance_fees_total: The total miner fees for creating and sending the allowance inscription to OP_RETURN (0 if no allowance inscription is needed).
- * - base_deposit_fees_total: The total miner fees for creating and sending the base deposit inscription to OP_RETURN (0 if no base deposit inscription is needed).
- * - deposit_fees_total: The total miner fees for creating and sending the deposit inscription to OP_RETURN.
+ * - allowance_fees_total: The total miner fees for creating and sending the allowance inscription to OP_RETURN (0 if no allowance inscription is needed, and 0 when batched).
+ * - base_deposit_fees_total: The total miner fees for creating and sending the base deposit inscription to OP_RETURN (0 if no base deposit inscription is needed, and 0 when batched).
+ * - deposit_fees_total: The total miner fees for creating and sending the deposit inscription to OP_RETURN; when batched, the fees of the whole package, burned OP_RETURN sats included.
+ * - batched: Whether the deposit is one batched package.
  * - fee_rate: The fee rate used for the calculations, in sats/vbyte.
  */
 export async function getMinerFeesOfDepositOrder(
@@ -2150,12 +2300,14 @@ export async function getMinerFeesOfDepositOrder(
   tokenAmount: bigint,
   feeRate: number,
   createAllowanceIfNeeded: boolean = true,
-  reclaimInscriptions?: ReclaimInscription[]
+  reclaimInscriptions?: ReclaimInscription[],
+  options: Pick<DepositOrderOptions, 'batchInscriptions' | 'batchSendLayout'> = {}
 ): Promise<{
   needs_approval: boolean
   allowance_fees_total: number
   base_deposit_fees_total: number
   deposit_fees_total: number
+  batched: boolean
   fee_rate: number
 }> {
   // Get connected wallet
@@ -2259,6 +2411,39 @@ export async function getMinerFeesOfDepositOrder(
     null,
     depositContent
   )
+
+  if (options.batchInscriptions === true && (useBaseAvailableBalanceAmt > 0n || needsAllowance)) {
+    let reclaimInputs: ReclaimInput[] = []
+    if (useBaseAvailableBalanceAmt > 0n && (reclaimInscriptions?.length ?? 0) > 0) {
+      const ordinalsAddress = getOrdinalsWallet()?.address
+      if (!ordinalsAddress) throw new Error('Ordinals wallet address not found')
+      reclaimInputs = await resolveReclaimInputs(reclaimInscriptions!, ordinalsAddress)
+    }
+    const { totalFee } = await getInscribeAllToOpReturnFee(
+      batchedDepositInscriptions(
+        depositInscriptionDetails,
+        needsAllowance ? allowanceInscriptionDetails : null,
+        useBaseAvailableBalanceAmt > 0n
+          ? baseDepositInscription(
+              baseTokenTicker,
+              convertAmountToBRC20String(useBaseAvailableBalanceAmt, baseTokenDecimals)
+            )
+          : null
+      ),
+      reclaimInputs,
+      brc20ProgOpReturnWallet(),
+      feeRate,
+      options.batchSendLayout ?? 'single'
+    )
+    return {
+      needs_approval: needsAllowance,
+      allowance_fees_total: 0,
+      base_deposit_fees_total: 0,
+      deposit_fees_total: totalFee,
+      batched: true,
+      fee_rate: feeRate,
+    }
+  }
 
   // Every commit and OP_RETURN send below funds from the payer's cardinal UTXOs, so one
   // fetch serves them all; each later step sees the earlier spends and change through the
@@ -2524,6 +2709,7 @@ export async function getMinerFeesOfDepositOrder(
     base_deposit_fees_total: baseDepositFeesTotal,
     allowance_fees_total: allowanceFeesTotal,
     deposit_fees_total: depositFeesTotal,
+    batched: false,
     fee_rate: feeRate,
   }
   return toReturn

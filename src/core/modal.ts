@@ -1,8 +1,14 @@
-import type { BISWalletProvider, ConnectCallbacks, ModalTheme } from '../types/common'
+import type {
+  BISWalletProvider,
+  ConnectCallbacks,
+  ModalLegalLinks,
+  ModalTheme,
+} from '../types/common'
 import css from '../assets/style/main.css?inline' // https://vite.dev/guide/features#import-inlining-and-rebasing
 import { BisModalView } from '../components/connect-modal-view'
 
 let modalInstance: BisModalView | null = null
+let legalLinks: Partial<ModalLegalLinks> = {}
 
 /**
  * NOTE: The modal instance is created once and reused for subsequent calls to showConnect or showError. This ensures that only one modal is present in the DOM at any given time, and it can be easily shown or hidden as needed without creating multiple instances.
@@ -40,6 +46,7 @@ export function create() {
   shadowRoot.appendChild(style)
 
   modalInstance = new BisModalView(appRoot)
+  modalInstance.setLegalLinks(legalLinks)
 
   document.body.appendChild(container)
 }
@@ -72,4 +79,16 @@ export function hide() {
  */
 export function setTheme(theme: ModalTheme) {
   modalInstance?.setTheme(theme)
+}
+
+/**
+ * Points the connect modal's Terms of Service and Privacy Policy links, and the name they belong
+ * to, at the app's own. Fields left out keep their defaults (bisdex.io's pages, owned by Best in
+ * Slot). May be called before the modal is created.
+ *
+ * @param links URLs as http(s) or a path on the page's origin; anything else keeps the default.
+ */
+export function setLegalLinks(links: Partial<ModalLegalLinks>) {
+  legalLinks = links
+  modalInstance?.setLegalLinks(links)
 }
