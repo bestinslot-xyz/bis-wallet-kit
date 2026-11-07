@@ -128,3 +128,45 @@ export function inscriptionsByOutput(
   }
   return result
 }
+
+/** The dust limit of an output with this Bitcoin Core script type, in sats. */
+export function dustForScriptType(scriptType?: string): number {
+  if (scriptType === 'witness_v1_taproot') return 330
+  if (scriptType === 'witness_v0_keyhash') return 294
+  if (scriptType === 'scripthash') return 540
+  return 546
+}
+
+/**
+ * The BTC an output with used inscriptions can give a transaction, in sats: what follows its last
+ * inscribed sat, once a set-aside output (at least `dust`) has taken every inscribed sat. 0 for an
+ * output without inscriptions, with an inscription whose satpoint is unknown, or whose inscriptions
+ * reach its end. The spending input's own fee is not subtracted.
+ */
+export function recoverableSats(utxo: InscribedFields, dust: number): number {
+  if (!isInscribed(utxo)) return 0
+  const { at, whole } = inscriptionsOf(utxo)
+  if (whole) return 0
+  const lastInscribedEnd = Math.max(...at.map(a => a.offset + 1))
+  return Math.max(0, utxo.value - Math.max(dust, lastInscribedEnd))
+}
+
+/**
+ * The output with used inscriptions that gives the most recoverable BTC (see `recoverableSats`), or
+ * `null` when none gives any. A transaction spends at most this one of them, so the clean BTC of
+ * the others never ends up behind its set-aside output.
+ */
+export function bestRecoverable<T extends InscribedFields & { script_type?: string }>(
+  utxos: T[]
+): T | null {
+  let best: T | null = null
+  let bestSats = 0
+  for (const utxo of utxos) {
+    const sats = recoverableSats(utxo, dustForScriptType(utxo.script_type))
+    if (sats > bestSats) {
+      best = utxo
+      bestSats = sats
+    }
+  }
+  return best
+}

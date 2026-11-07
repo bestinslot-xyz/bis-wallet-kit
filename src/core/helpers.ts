@@ -15,6 +15,12 @@ import { BackendError, backendErrorFromBody, backendErrorFromResponse } from './
 import { evmEncodeFunctionCall } from './brc20'
 import { getBrc20RpcProvider, getChainProvider } from './chain-providers'
 import { getEndpoints, getNetwork } from './store-network'
+import {
+  bestRecoverable,
+  dustForScriptType,
+  isInscribed,
+  recoverableSats,
+} from './used-inscriptions'
 
 export const txHexByIdCache: { [txid: string]: any } = {}
 let currentExtraTxHexes: string[] = []
@@ -640,6 +646,44 @@ export async function getCardinalBalance(address: string): Promise<number> {
     totalBalance += utxo.value
   }
   return totalBalance
+}
+
+/** An address's spendable BTC, split by where it sits; see {@link getCardinalBalances}. */
+export interface CardinalBalances {
+  /** Sats on cardinal UTXOs without inscriptions. */
+  plain: number
+  /**
+   * Sats a transaction can take from the one UTXO with used BRC-20 inscriptions it would spend:
+   * what follows that UTXO's last inscribed sat, beyond a dust-sized set-aside output. 0 when no
+   * such UTXO has any.
+   */
+  recoverable: number
+  /** The UTXO `recoverable` comes from, or `null`. */
+  recoverableUtxo: CardinalUtxoInfo | null
+}
+
+/**
+ * Reads an address's spendable BTC as the transaction builders can spend it, with the saved extra
+ * transactions applied as in `getCardinalUtxos`: the cardinal UTXOs without inscriptions, plus the
+ * recoverable part of the single UTXO with used BRC-20 inscriptions a transaction would add when
+ * those run short. The inscribed sats themselves are never spendable, and the spending inputs' own
+ * fees are not subtracted.
+ *
+ * @param address The address for which to read the balances.
+ * @returns The plain and recoverable sats.
+ */
+export async function getCardinalBalances(address: string): Promise<CardinalBalances> {
+  const utxos = await getCardinalUtxos(address)
+  let plain = 0
+  for (const utxo of utxos) {
+    if (!isInscribed(utxo)) plain += utxo.value
+  }
+  const best = bestRecoverable(utxos)
+  return {
+    plain,
+    recoverable: best ? recoverableSats(best, dustForScriptType(best.script_type)) : 0,
+    recoverableUtxo: best,
+  }
 }
 
 export interface AllBalanceDetails {
