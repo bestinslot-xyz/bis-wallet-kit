@@ -3,7 +3,7 @@ import { BisBrc20RpcProvider, BisChainProvider } from './bis-providers'
 import { getEndpoints, getNetwork } from './store-network'
 
 /**
- * An unspent output that carries no inscriptions and no runes.
+ * An unspent output that carries no runes, and no inscriptions other than used BRC-20 ones.
  */
 export interface Utxo {
   /** The id of the transaction that created the output. */
@@ -12,6 +12,31 @@ export interface Utxo {
   vout: number
   /** The output's value in sats. */
   value: number
+  /**
+   * The used BRC-20 inscriptions on the output, set on outputs a provider returns because they
+   * carry only those (see {@link BisChainProviderOptions.includeUsedBrc20}). Transaction builders
+   * keep these inscriptions' sats out of every output that does not pay the change address.
+   */
+  inscription_ids?: string[] | null
+  /**
+   * The satpoint (`txid:vout:offset`) of each entry of `inscription_ids`, in the same order. An
+   * inscription without one is treated as covering the whole output.
+   */
+  satpoints?: string[] | null
+  /** What each entry of `inscription_ids` was used for, as the Best in Slot API reports it. */
+  brc20_inscriptions?: UsedBrc20Inscription[] | null
+}
+
+/** A used BRC-20 inscription on a cardinal output, as the Best in Slot API describes it. */
+export interface UsedBrc20Inscription {
+  inscription_id: string
+  inscription_number: number
+  /** `mint`, `transfer`, or `brc20prog-deploy`, `-call`, `-withdraw` or `-transact`. */
+  kind: string
+  /** The ticker, or `null` for brc20prog kinds that carry no token. */
+  tick: string | null
+  /** The amount as a raw integer string with 18 decimals, or `null` with `tick`. */
+  amount: string | null
 }
 
 /**
@@ -62,7 +87,8 @@ export interface ChainProvider {
    * Lists the address's unspent outputs that carry no inscriptions and no runes. A provider
    * that cannot tell whether an output carries an inscription or a rune throws instead of
    * returning it. A provider without mempool data returns the confirmed outputs, minus those
-   * that mempool transactions spend.
+   * that mempool transactions spend. A provider may also return outputs whose only inscriptions
+   * are used BRC-20 ones, with `inscription_ids` and `satpoints` set.
    */
   cardinalUtxos: (address: string) => Promise<Utxo[]>
   /** Lists the address's unspent outputs that carry inscriptions. */
