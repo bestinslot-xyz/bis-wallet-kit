@@ -1,4 +1,8 @@
-import type { GetRecentActivityRequest, WalletActivityKind } from '../core/bis_swap'
+import type {
+  DepositOrderOptions,
+  GetRecentActivityRequest,
+  WalletActivityKind,
+} from '../core/bis_swap'
 import type { SignProgressOptions } from '../core/sign-progress'
 import {
   createAndBroadcastDepositOrder,
@@ -308,7 +312,7 @@ export async function unwrapBtc(pkscript: string, amount: bigint) {
  * @param feeRate - The fee rate for the deposit operation.
  * @param createAllowanceIfNeeded - Whether to create an allowance if needed.
  * @param reclaimInscriptions - Optional transfer inscriptions to reclaim toward the deposit, each with `inscriptionId` and `amount` (bigint, 18 decimals).
- * @param options - `onSignRequest` is called before each wallet prompt with `{ step, total }`. `total` is 3, 5 or 7.
+ * @param options - `onSignRequest` is called before each wallet prompt with `{ step, total }`. `total` is 3, 5 or 7, and 3 whenever `batchInscriptions` is set. `batchInscriptions` inscribes the base-layer conversion, the allowance and the deposit from one commit and sends them to OP_RETURN in one tx. `batchSendLayout` (`single`, `interleaved` or `auto`, default `single`) picks how that tx lays out its OP_RETURN outputs.
  * @returns A promise that resolves to an array of transaction IDs related to the deposit operation.
  */
 export async function deposit(
@@ -317,7 +321,7 @@ export async function deposit(
   feeRate: number,
   createAllowanceIfNeeded: boolean = true,
   reclaimInscriptions?: { inscriptionId: string; amount: bigint }[],
-  options?: SignProgressOptions
+  options?: DepositOrderOptions
 ): Promise<string[]> {
   return await createAndBroadcastDepositOrder(
     tokenAddress,

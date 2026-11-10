@@ -33,6 +33,7 @@ stay configured through `setEndpoints`.
 interface ChainProvider {
   cardinalUtxos: (address: string) => Promise<Utxo[]>
   ordinalUtxos: (address: string) => Promise<OrdinalUtxo[]>
+  inscriptionUtxo?: (address: string, inscriptionId: string) => Promise<OrdinalUtxo | null> // optional
   balance: (address: string) => Promise<ChainBalance>
   txHex: (txid: string) => Promise<string>
   testMempoolAccept: (txHexes: string[]) => Promise<MempoolAcceptResult[]>
@@ -43,13 +44,18 @@ interface ChainProvider {
 | Method              | Returns                                                                                                                                 |
 | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | `cardinalUtxos`     | The address's unspent outputs that carry no inscriptions and no runes. These fund every transaction the kit builds.                     |
-| `ordinalUtxos`      | The address's unspent outputs that carry inscriptions. Used to find an inscription before sending it or using it as a parent.           |
+| `ordinalUtxos`      | The address's unspent outputs that carry inscriptions. Used to find an inscription when the provider has no `inscriptionUtxo`.          |
+| `inscriptionUtxo`   | Optional. The address's unspent output carrying one inscription, or `null`. Finds an inscription to send or use as a parent.            |
 | `balance`           | The address's confirmed balance, and the amount unconfirmed transactions add to it (negative when they spend from it).                  |
 | `txHex`             | The raw transaction, hex encoded. The kit reads the transactions that created the outputs it spends.                                    |
 | `testMempoolAccept` | One verdict per transaction, in order. Later transactions in the list may spend outputs of earlier ones, as `testmempoolaccept` allows. |
 | `broadcast`         | The txids of the broadcast transactions, in order. The list is a chain (commit, reveal, send), so broadcast them in the order given.    |
 
 Every method throws when it cannot answer.
+
+`inscriptionUtxo` answers in one lookup whatever else the address holds, and its `inscription_ids` /
+`satpoints` may list just the requested inscription. Without it, the kit searches the address's
+`ordinalUtxos`, whose cost grows with the number of inscriptions the address holds.
 
 ### Types
 
@@ -107,6 +113,10 @@ neither, because the kit spends them as plain BTC and would otherwise burn or mo
 rune by accident. A provider that cannot tell, for example because its indexer does not track runes,
 throws instead of returning the output.
 
+The one exception is an output whose only inscriptions are used BRC-20 ones (see
+[Spending used BRC-20 inscriptions](#spending-used-brc-20-inscriptions)). A provider returns it with
+`inscription_ids` and `satpoints` set, so the kit knows where those inscriptions sit.
+
 **Mempool data is optional.** A provider can return confirmed outputs only, minus those that mempool
 transactions spend, and report `mempool: 0` from `balance`. wallet-kit tracks the outputs of its own
 pending transactions above the provider: while a flow chains a commit, a reveal and a
@@ -140,6 +150,61 @@ wallet.setProviders({
 ```
 
 A key left out of a constructor reads `setEndpoints`.
+
+`BisChainProvider.inscriptionUtxo` reads the indexer's `inscription_utxo/<address>/<inscriptionId>`
+route. An indexer that answers that route with HTTP 404 is searched through `ordinal_utxos` instead.
+
+## Spending used BRC-20 inscriptions
+
+A BRC-20 mint inscription does its work when it is inscribed, and a transfer inscription when it is
+first sent. After that, moving them has no BRC-20 effect, so the sats under them are spendable BTC.
+`new BisChainProvider({ includeUsedBrc20: true })` asks `cardinal_utxos` for these outputs too
+(`?include_used_brc20=1`). Each one comes with `inscription_ids`, `satpoints` and
+`brc20_inscriptions` (the kind, ticker and amount of each inscription), which an app can use to tell
+the user before they spend it.
+
+```ts
+wallet.setProviders({
+  mainnet: { chain: new BisChainProvider({ includeUsedBrc20: true }) },
+  signet: { chain: new BisChainProvider({ includeUsedBrc20: true }) },
+})
+```
+
+The transaction builders keep those inscriptions' sats out of every output that does not pay the
+change address. That matters most for a commit: the reveal inscribes on the commit output's first
+sat, and BRC-20 ignores an inscription made on a sat that already carries one. It also keeps them
+out of recipients, OP_RETURNs and the swap handler.
+
+- **Only when needed, and one at a time.** A transaction spends an output with used inscriptions
+  only when the outputs without them cannot pay for it, and then only the one with the most
+  recoverable BTC (below). The outputs without inscriptions go first, so the used-inscription sats
+  land in the change or the fee.
+- **A set-aside output takes the rest.** When an outside output would still receive one, for example
+  when a consolidated output carries an inscription on its first sat, the builder adds one output to
+  the change address right before it. It is at least the dust limit and reaches past the last
+  inscribed sat, so every later output starts clean. It and its fee come out of the change, and the
+  builders report where each output ended up.
+- **Otherwise the transaction does without them.** A set-aside output never goes where the sats of a
+  forced input (the inscription a send moves) would land. When that is the only place it could go,
+  the transaction is built from outputs without inscriptions alone.
+
+The kit remembers where the inscriptions of its own pending transactions land, so their change and
+set-aside outputs keep their inscriptions when a chained flow spends them.
+
+### Recoverable BTC
+
+Only the BTC after an output's last inscribed sat can be spent: the set-aside output keeps the
+inscribed sats, and it is at least the dust limit. An output that is just an inscription's postage
+(330 or 546 sats, as most used inscriptions sit on) gives nothing. One that a consolidation filled
+with the postage of many inscriptions first and plain BTC after gives the plain BTC.
+
+`wallet.getCardinalBalances(address)` reports what the builders can spend: `plain` (outputs without
+inscriptions) and `recoverable` (from the one inscribed output a transaction would add), so an app
+can offer exactly that. The spending inputs' own fees are not subtracted.
+
+A wrap (`swap.wrapBtc`) pays the swap handler from its send, which cannot take inscribed sats. When
+the BTC outside used inscriptions cannot fund the whole wrap, its commit splits the inscribed output
+instead and hands the send its clean BTC as change.
 
 ## Testing a provider
 

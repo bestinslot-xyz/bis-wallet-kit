@@ -1,4 +1,4 @@
-import type { SignFunction } from '../provider/api'
+import type { SignFunction, SignManyFunction } from '../provider/api'
 
 /** A wallet prompt a multi-signature flow is about to raise. */
 export interface SignRequest {
@@ -47,6 +47,14 @@ export class SignProgress {
     return (...args) => {
       this.next()
       return signFn(...args)
+    }
+  }
+
+  /** As `wrap`, for a function that signs several PSBTs in one prompt: each call counts once. */
+  wrapMany(signMany: SignManyFunction): SignManyFunction {
+    return requests => {
+      this.next()
+      return signMany(requests)
     }
   }
 }

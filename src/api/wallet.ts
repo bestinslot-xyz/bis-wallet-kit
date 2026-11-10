@@ -7,6 +7,7 @@ import type { WalletInfo } from '../types/wallet'
 export {
   getAllBalanceDetails,
   getCardinalBalance,
+  getCardinalBalances,
   getEndpoints,
   getOrdinalsWallet,
   getPaymentWallet,
@@ -25,6 +26,7 @@ export {
 } from '../core/bis' // Export all wallet-related functions from the core BIS module
 export type {
   AccountChangeEvent,
+  CardinalBalances,
   Endpoints,
   EndpointsConfig,
   NetworkProviders,

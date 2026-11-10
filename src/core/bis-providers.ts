@@ -17,6 +17,13 @@ export interface BisChainProviderOptions {
   indexer?: string
   /** Base URL for mempool acceptance tests and broadcasts. */
   tx?: string
+  /**
+   * Also spend outputs whose only inscriptions are used BRC-20 mint and transfer inscriptions
+   * (`cardinal_utxos?include_used_brc20=1`). Their sats only reach outputs that pay the change
+   * address, a small set-aside output to it, or the fee, so commits, recipients and OP_RETURNs
+   * receive clean sats. Off by default.
+   */
+  includeUsedBrc20?: boolean
 }
 
 /** Endpoint base URL for a {@link BisBrc20RpcProvider}. Left out, it reads `setEndpoints`. */
@@ -34,6 +41,7 @@ export interface BisBrc20RpcProviderOptions {
 export class BisChainProvider implements ChainProvider {
   private readonly indexer?: string
   private readonly tx?: string
+  private readonly includeUsedBrc20: boolean
 
   /**
    * @param options Endpoint base URLs that take the place of the `setEndpoints` values.
@@ -44,10 +52,12 @@ export class BisChainProvider implements ChainProvider {
     if (options.tx !== undefined) assertHttpUrl('BisChainProvider: tx', options.tx)
     this.indexer = options.indexer
     this.tx = options.tx
+    this.includeUsedBrc20 = options.includeUsedBrc20 === true
   }
 
   async cardinalUtxos(address: string): Promise<Utxo[]> {
-    const url = await getEndpointUrl('indexer', `cardinal_utxos/${address}`, this.indexer)
+    const query = this.includeUsedBrc20 ? '?include_used_brc20=1' : ''
+    const url = await getEndpointUrl('indexer', `cardinal_utxos/${address}${query}`, this.indexer)
     const json = await fetchWithErrors<{ data: APIUtxoInfo[] }>(url, { method: 'GET' })
     return json.data
   }
@@ -56,6 +66,28 @@ export class BisChainProvider implements ChainProvider {
     const url = await getEndpointUrl('indexer', `ordinal_utxos/${address}`, this.indexer)
     const json = await fetchWithErrors<{ data: APIOrdinalUtxoInfo[] }>(url, { method: 'GET' })
     return json.data
+  }
+
+  /**
+   * Reads the inscription's output from the `inscription_utxo` route. An indexer without that
+   * route (HTTP 404) is searched through `ordinal_utxos` instead.
+   */
+  async inscriptionUtxo(address: string, inscriptionId: string): Promise<OrdinalUtxo | null> {
+    const url = await getEndpointUrl(
+      'indexer',
+      `inscription_utxo/${address}/${inscriptionId}`,
+      this.indexer
+    )
+    try {
+      const json = await fetchWithErrors<{ data: APIOrdinalUtxoInfo | null }>(url, {
+        method: 'GET',
+      })
+      return json.data
+    } catch (error) {
+      if (!(error instanceof BackendError) || error.status !== 404) throw error
+      const utxos = await this.ordinalUtxos(address)
+      return utxos.find(u => u.inscription_ids.includes(inscriptionId)) ?? null
+    }
   }
 
   async balance(address: string): Promise<ChainBalance> {

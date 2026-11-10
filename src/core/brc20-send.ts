@@ -21,6 +21,7 @@ import {
   utxoOutputTypeFromOutputScript,
 } from './helpers'
 import {
+  assertFeeRate,
   getDustValue,
   mintWithExtraInputInCommitAll,
   mintWithExtraInputInCommitFeeRate,
@@ -215,10 +216,7 @@ export function assertRecipient(recipient: string): void {
   }
 }
 
-export function assertFeeRate(feeRate: number): void {
-  if (typeof feeRate !== 'number' || !Number.isFinite(feeRate) || feeRate <= 0)
-    throw new Error('feeRate must be a positive number')
-}
+export { assertFeeRate }
 
 function connectedWallets() {
   const walletInfo = getWalletInfo()

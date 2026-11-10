@@ -180,7 +180,7 @@ describe('assembleReclaimCommitAndReveal', () => {
 
     expect(payerWallet.addr).not.toBe(inscriptionWallet.addr)
 
-    // A real split-wallet provider (unisat/xverse/okx/leather) holds a distinct key
+    // A real split-wallet provider (unisat/xverse/okx) holds a distinct key
     // per address and signs input i with the payment key unless i appears in
     // ordAddrIdxes, in which case it signs with the ordinals key (see e.g.
     // src/provider/unisat.ts / local.ts: `if (ordAddrIdxes.includes(i)) { ... ord key

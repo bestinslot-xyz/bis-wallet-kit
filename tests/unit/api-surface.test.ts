@@ -10,6 +10,7 @@ import * as node from '../../src/node.ts'
 const SHARED_WALLET_FNS = [
   'getAllBalanceDetails',
   'getCardinalBalance',
+  'getCardinalBalances',
   'getEndpoints',
   'getNetwork',
   'getOrdinalsWallet',

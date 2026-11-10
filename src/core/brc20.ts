@@ -11,6 +11,7 @@ import { InscriptionDetails } from '../types/inscription'
 import { WalletInfo } from '../types/wallet'
 import { broadcastTxes, clearExtraUtxos, saveExtraUtxos } from './helpers'
 import {
+  assertFeeRate,
   mintAll,
   mintAllPaymentWallet,
   sendInscriptionAll,
@@ -233,8 +234,7 @@ export async function deploySmartContract(
   if (!walletInfo || !walletInfo.wallets) throw new Error('Wallets not found')
 
   if (typeof inputHex != 'string') throw new Error('input_hex must be a string')
-  if (typeof feeRate != 'number' || !Number.isInteger(feeRate))
-    throw new Error('fee_rate must be an integer')
+  assertFeeRate(feeRate)
   if (postage != null && (typeof postage != 'number' || !Number.isInteger(postage)))
     throw new Error('postage must be an integer or null')
   if (paymentAddr != null && typeof paymentAddr != 'string')
@@ -412,8 +412,7 @@ export async function callSmartContract(
   if (typeof smartContractContractAddr != 'string')
     throw new Error('smart_contract_contract_addr must be a string')
   if (typeof inputHex != 'string') throw new Error('input_hex must be a string')
-  if (typeof feeRate != 'number' || !Number.isInteger(feeRate))
-    throw new Error('fee_rate must be an integer')
+  assertFeeRate(feeRate)
   if (postage != null && (typeof postage != 'number' || !Number.isInteger(postage)))
     throw new Error('postage must be an integer or null')
   if (paymentAddr != null && typeof paymentAddr != 'string')
@@ -597,8 +596,7 @@ export async function callSmartContractFromPaymentWallet(
   if (typeof smartContractContractAddr != 'string')
     throw new Error('smart_contract_contract_addr must be a string')
   if (typeof inputHex != 'string') throw new Error('input_hex must be a string')
-  if (typeof feeRate != 'number' || !Number.isInteger(feeRate))
-    throw new Error('fee_rate must be an integer')
+  assertFeeRate(feeRate)
   if (postage != null && (typeof postage != 'number' || !Number.isInteger(postage)))
     throw new Error('postage must be an integer or null')
   if (paymentAddr != null && typeof paymentAddr != 'string')
@@ -782,8 +780,7 @@ export async function depositToBrc20Prog(
 
   if (typeof tick != 'string') throw new Error('tick must be a string')
   if (typeof amount != 'string') throw new Error('amount must be a string')
-  if (typeof feeRate != 'number' || !Number.isInteger(feeRate))
-    throw new Error('fee_rate must be an integer')
+  assertFeeRate(feeRate)
   if (postage != null && (typeof postage != 'number' || !Number.isInteger(postage)))
     throw new Error('postage must be an integer or null')
   if (paymentAddr != null && typeof paymentAddr != 'string')
@@ -910,8 +907,7 @@ export async function withdrawFromBrc20Prog(
   if (typeof tick != 'string') throw new Error('tick must be a string')
   if (typeof amount != 'string') throw new Error('amount must be a string')
   if (typeof targetAddr != 'string') throw new Error('target_addr must be a string')
-  if (typeof feeRate != 'number' || !Number.isInteger(feeRate))
-    throw new Error('fee_rate must be an integer')
+  assertFeeRate(feeRate)
   if (postage != null && (typeof postage != 'number' || !Number.isInteger(postage)))
     throw new Error('postage must be an integer or null')
   if (paymentAddr != null && typeof paymentAddr != 'string')

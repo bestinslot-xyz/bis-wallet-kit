@@ -2,6 +2,16 @@
 export type ModalState = 'connect' | 'confirm_connection' | 'error'
 export type ModalTheme = 'light' | 'dark' | 'system'
 
+/**
+ * The legal pages the connect modal's footer links to: "By connecting your wallet, you agree to
+ * `owner`'s Terms of Service and Privacy Policy". URLs are http(s) or a path on the page's origin.
+ */
+export interface ModalLegalLinks {
+  terms: string
+  privacy: string
+  owner: string
+}
+
 /* Other */
 export type BISNetwork = 'mainnet' | 'testnet' | 'signet'
 
@@ -11,7 +21,7 @@ export interface ConnectCallbacks {
 }
 
 /* Wallet */
-export type BISWalletProvider = 'okx' | 'unisat' | 'xverse' | 'leather' | 'local'
+export type BISWalletProvider = 'okx' | 'unisat' | 'xverse' | 'metamask' | 'local'
 export type BISWalletPurpose = 'ordinals' | 'payment' | 'all'
 
 export interface BISSession {

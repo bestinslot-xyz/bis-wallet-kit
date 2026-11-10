@@ -1,5 +1,5 @@
 import type { BISWallet } from '../types/common'
-import type { BISProvider, SignResponse } from './api'
+import type { BISProvider, SignPsbtRequest, SignResponse } from './api'
 import { Buffer } from 'node:buffer'
 import * as bitcoinjs from 'bitcoinjs-lib'
 import { getNetwork } from '../core/bis'
@@ -131,27 +131,75 @@ async function signPSBT(psbtBase64: string, broadcast: boolean, inputsToSign: an
   if (inputsToSign.length === 0) {
     signedPsbt = await window.unisat.signPsbt(psbt) // hex result
   } else {
-    const toSignInputs = []
-    for (const input of inputsToSign) {
-      for (let i = 0; i < input.signingIndexes.length; i++) {
-        toSignInputs.push({
-          address: input.address,
-          index: input.signingIndexes[i],
-          useTweakedSigner: input.useTweakedSigner ? input.useTweakedSigner[i] : undefined,
-        })
-      }
-    }
-    const options = {
-      autoFinalized: true,
-      toSignInputs,
-    }
-    signedPsbt = await window.unisat.signPsbt(psbt, options) // hex result
+    signedPsbt = await window.unisat.signPsbt(psbt, signOptions(inputsToSign)) // hex result
   }
 
   if (broadcast) {
     signedPsbt = await window.unisat.pushPsbt(signedPsbt)
   }
   return signedPsbt
+}
+
+/** UniSat's `signPsbt` options for `signPSBT`-style inputs to sign. */
+function signOptions(inputsToSign: any[]) {
+  const toSignInputs = []
+  for (const input of inputsToSign) {
+    for (let i = 0; i < input.signingIndexes.length; i++) {
+      toSignInputs.push({
+        address: input.address,
+        index: input.signingIndexes[i],
+        useTweakedSigner: input.useTweakedSigner ? input.useTweakedSigner[i] : undefined,
+      })
+    }
+  }
+  return { autoFinalized: true, toSignInputs }
+}
+
+/** The `signPSBT` inputs to sign for a `sign` request; empty to let UniSat pick them. */
+function inputsToSignOf(request: SignPsbtRequest): any[] {
+  const { unsignedPsbtHex, paymentAddr, ordAddr, ordAddrIdxes, useTweakSignerIdxes, noSignIdxes } =
+    request
+  if (!paymentAddr) return []
+  const psbt = bitcoinjs.Psbt.fromHex(unsignedPsbtHex)
+  const insToSign = []
+  const useTweakSignerPayment = []
+  const useTweakSignerOrd = []
+  for (let i = 0; i < psbt.inputCount; i++) {
+    if (noSignIdxes && noSignIdxes.includes(i)) continue
+    if (ordAddrIdxes.includes(i)) {
+      if (useTweakSignerIdxes && useTweakSignerIdxes.includes(i)) {
+        useTweakSignerOrd.push(true)
+      } else if (useTweakSignerIdxes) {
+        useTweakSignerOrd.push(false)
+      }
+      continue
+    }
+    insToSign.push(i)
+    if (useTweakSignerIdxes && useTweakSignerIdxes.includes(i)) {
+      useTweakSignerPayment.push(true)
+    } else if (useTweakSignerIdxes) {
+      useTweakSignerPayment.push(false)
+    }
+  }
+  return [
+    {
+      address: paymentAddr,
+      signingIndexes: insToSign,
+      useTweakedSigner: useTweakSignerPayment,
+    },
+    {
+      address: ordAddr,
+      signingIndexes: ordAddrIdxes,
+      useTweakedSigner: useTweakSignerOrd,
+    },
+  ]
+}
+
+function signedResponse(signedPsbtHex: string, noSignIdxes?: number[]): SignResponse {
+  const signedPsbt = bitcoinjs.Psbt.fromHex(signedPsbtHex)
+  finalizePsbtInputs(signedPsbt, noSignIdxes)
+  const signedTx = signedPsbt.extractTransaction()
+  return { txId: signedTx.getId(), signedTxHex: signedTx.toHex() }
 }
 
 async function sign(
@@ -162,56 +210,33 @@ async function sign(
   useTweakSignerIdxes?: number[],
   noSignIdxes?: number[]
 ): Promise<SignResponse> {
-  let signed = null
-  if (!paymentAddr) {
-    signed = await signPSBT(hexToBase64(unsignedPsbtHex), false, [])
-  } else {
-    const psbt = bitcoinjs.Psbt.fromHex(unsignedPsbtHex)
-    const insToSign = []
-    const useTweakSignerPayment = []
-    const useTweakSignerOrd = []
-    for (let i = 0; i < psbt.inputCount; i++) {
-      if (noSignIdxes && noSignIdxes.includes(i)) continue
-      if (ordAddrIdxes.includes(i)) {
-        if (useTweakSignerIdxes && useTweakSignerIdxes.includes(i)) {
-          useTweakSignerOrd.push(true)
-        } else if (useTweakSignerIdxes) {
-          useTweakSignerOrd.push(false)
-        }
-        continue
-      }
-      insToSign.push(i)
-      if (useTweakSignerIdxes && useTweakSignerIdxes.includes(i)) {
-        useTweakSignerPayment.push(true)
-      } else if (useTweakSignerIdxes) {
-        useTweakSignerPayment.push(false)
-      }
-    }
-    signed = await signPSBT(hexToBase64(unsignedPsbtHex), false, [
-      {
-        address: paymentAddr,
-        signingIndexes: insToSign,
-        useTweakedSigner: useTweakSignerPayment,
-      },
-      {
-        address: ordAddr,
-        signingIndexes: ordAddrIdxes,
-        useTweakedSigner: useTweakSignerOrd,
-      },
-    ])
-  }
+  const inputsToSign = inputsToSignOf({
+    unsignedPsbtHex,
+    paymentAddr,
+    ordAddr,
+    ordAddrIdxes,
+    useTweakSignerIdxes,
+    noSignIdxes,
+  })
+  const signed = await signPSBT(hexToBase64(unsignedPsbtHex), false, inputsToSign)
+  return signedResponse(signed, noSignIdxes)
+}
 
-  const signedPsbt = bitcoinjs.Psbt.fromHex(signed)
+async function signMany(requests: SignPsbtRequest[]): Promise<SignResponse[]> {
+  await checkNetwork()
+  if (!window.unisat?.signPsbts) throw new Error('UniSat cannot sign several PSBTs at once.')
+  const signed = await window.unisat.signPsbts(
+    requests.map(r => r.unsignedPsbtHex),
+    requests.map(r => signOptions(inputsToSignOf(r)))
+  )
+  if (signed.length !== requests.length) throw new Error('UniSat returned the wrong PSBT count.')
+  return signed.map((hex, i) => signedResponse(hex, requests[i]!.noSignIdxes))
+}
 
-  finalizePsbtInputs(signedPsbt, noSignIdxes)
-
-  const signedTx = signedPsbt.extractTransaction()
-  const signedTxHex = signedTx.toHex()
-
-  return {
-    txId: signedTx.getId(),
-    signedTxHex,
-  }
+function getSignMany() {
+  return typeof window !== 'undefined' && typeof window.unisat?.signPsbts === 'function'
+    ? signMany
+    : null
 }
 
 export const UNISAT: BISProvider = {
@@ -224,4 +249,5 @@ export const UNISAT: BISProvider = {
   sendBTC,
   signPSBT,
   sign,
+  getSignMany,
 }
