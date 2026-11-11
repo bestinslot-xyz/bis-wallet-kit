@@ -21,6 +21,19 @@ import {
 import { getSignFn } from './providers'
 import { getWalletInfo } from './store'
 
+/** BRC2.0 grants each inscription `content bytes × GAS_PER_BYTE` gas. */
+export const GAS_PER_BYTE = 12000
+
+/**
+ * Pads `content` with spaces until its byte length grants at least `estimatedGas` at
+ * `GAS_PER_BYTE` gas per byte.
+ */
+function padContentToGas(content: Buff, estimatedGas: number): Buff {
+  if (content.length * GAS_PER_BYTE >= estimatedGas) return content
+  const neededPadding = Math.ceil((estimatedGas - content.length * GAS_PER_BYTE) / GAS_PER_BYTE)
+  return content.append('20'.repeat(neededPadding))
+}
+
 /**
  * Compresses the input hex string using both Zstd and Nada compression algorithms, and returns the shortest result encoded in base64 without padding.
  *
@@ -209,7 +222,6 @@ function decodeTupleComponents(components: any[], decoded: any) {
  *
  * @param inputHex - The input data for the smart contract deployment, represented as a hexadecimal string. This data will be compressed and included in the inscription.
  * @param estimatedGas - The estimated gas required for the smart contract deployment, used to determine if padding is needed for the inscription content.
- * @param gasPerVbyte - The gas cost per virtual byte, used to calculate the total gas cost of the inscription content and determine if padding is needed.
  * @param feeRate - The fee rate in sats/vbyte to be used for the transactions involved in the deployment process.
  * @param postage - An optional parameter representing the postage to be included in the minting transaction, specified in sats. If null, no postage will be included.
  * @param paymentAddr - An optional parameter representing the Bitcoin address to which payment should be sent for the minting transaction. If null, no payment will be made.
@@ -221,7 +233,6 @@ function decodeTupleComponents(components: any[], decoded: any) {
 export async function deploySmartContract(
   inputHex: string,
   estimatedGas: number,
-  gasPerVbyte: number,
   feeRate: number,
   postage: number | null,
   paymentAddr: string | null,
@@ -247,12 +258,7 @@ export async function deploySmartContract(
   const inputB64 = await compressSmartContractData(inputHex)
 
   let content = Buff.str(`{"p":"brc20-prog","op":"d","b":"${inputB64}"}`)
-  if (content.length * gasPerVbyte < estimatedGas) {
-    const gasDeficit = estimatedGas - content.length * gasPerVbyte
-    const neededPadding = Math.ceil(gasDeficit / gasPerVbyte)
-    const padding = '20'.repeat(neededPadding)
-    content = content.append(padding)
-  }
+  content = padContentToGas(content, estimatedGas)
 
   const inscriptionDetails = new InscriptionDetails(
     Buff.str('text/plain'),
@@ -340,7 +346,6 @@ export async function deploySmartContract(
  * @param abi - The ABI of the smart contract, used to encode the deployment data along with the bytecode.
  * @param params - An array of parameters to be passed to the contract constructor, which will be encoded along with the bytecode using the ABI.
  * @param estimatedGas - The estimated gas required for the smart contract deployment, used to determine if padding is needed for the inscription content.
- * @param gasPerVbyte - The gas cost per virtual byte, used to calculate the total gas cost of the inscription content and determine if padding is needed.
  * @param feeRate - The fee rate in sats/vbyte to be used for the transactions involved in the deployment process.
  * @param postage - An optional parameter representing the postage to be included in the minting transaction, specified in sats. If null, no postage will be included.
  * @param paymentAddr - An optional parameter representing the Bitcoin address to which payment should be sent for the minting transaction. If null, no payment will be made.
@@ -354,7 +359,6 @@ export async function deploySmartContractAbi(
   abi: any,
   params: any,
   estimatedGas: number,
-  gasPerVbyte: number,
   feeRate: number,
   postage: number | null,
   paymentAddr: string | null,
@@ -369,7 +373,6 @@ export async function deploySmartContractAbi(
   return await deploySmartContract(
     encodedDeploy,
     estimatedGas,
-    gasPerVbyte,
     feeRate,
     postage,
     paymentAddr,
@@ -384,7 +387,6 @@ export async function deploySmartContractAbi(
  * @param smartContractContractAddr - The address of the smart contract to call, represented as a string. This address will be included in the inscription content to indicate which contract function is being called.
  * @param inputHex - The input data for the smart contract function call, represented as a hexadecimal string. This data will be compressed and included in the inscription.
  * @param estimatedGas - The estimated gas required for the smart contract function call, used to determine if padding is needed for the inscription content.
- * @param gasPerVbyte - The gas cost per virtual byte, used to calculate the total gas cost of the inscription content and determine if padding is needed.
  * @param feeRate - The fee rate in sats/vbyte to be used for the transactions involved in the function call process.
  * @param postage - An optional parameter representing the postage to be included in the minting transaction, specified in sats. If null, no postage will be included.
  * @param paymentAddr - An optional parameter representing the Bitcoin address to which payment should be sent for the minting transaction. If null, no payment will be made.
@@ -397,7 +399,6 @@ export async function callSmartContract(
   smartContractContractAddr: string,
   inputHex: string,
   estimatedGas: number,
-  gasPerVbyte: number,
   feeRate: number,
   postage: number | null,
   paymentAddr: string | null,
@@ -427,12 +428,7 @@ export async function callSmartContract(
   let content = Buff.str(
     `{"p":"brc20-prog","op":"c","c":"${smartContractContractAddr}","b":"${inputB64}"}`
   )
-  if (content.length * gasPerVbyte < estimatedGas) {
-    const gasDeficit = estimatedGas - content.length * gasPerVbyte
-    const neededPadding = Math.ceil(gasDeficit / gasPerVbyte)
-    const padding = '20'.repeat(neededPadding)
-    content = content.append(padding)
-  }
+  content = padContentToGas(content, estimatedGas)
 
   const inscriptionDetails = new InscriptionDetails(
     Buff.str('text/plain'),
@@ -521,7 +517,6 @@ export async function callSmartContract(
  * @param funcName - The name of the function to call on the smart contract, represented as a string. This will be used along with the ABI to encode the function call data.
  * @param params - An array of parameters to be passed to the contract function, which will be encoded using the ABI along with the function name.
  * @param estimatedGas - The estimated gas required for the smart contract function call, used to determine if padding is needed for the inscription content.
- * @param gasPerVbyte - The gas cost per virtual byte, used to calculate the total gas cost of the inscription content and determine if padding is needed.
  * @param feeRate - The fee rate in sats/vbyte to be used for the transactions involved in the function call process.
  * @param postage - An optional parameter representing the postage to be included in the minting transaction, specified in sats. If null, no postage will be included.
  * @param paymentAddr - An optional parameter representing the Bitcoin address to which payment should be sent for the minting transaction. If null, no payment will be made.
@@ -536,7 +531,6 @@ export async function callSmartContractAbi(
   funcName: string,
   params: any,
   estimatedGas: number,
-  gasPerVbyte: number,
   feeRate: number,
   postage: number | null,
   paymentAddr: string | null,
@@ -552,7 +546,6 @@ export async function callSmartContractAbi(
     smartContractContractAddr,
     encodedFuncCall,
     estimatedGas,
-    gasPerVbyte,
     feeRate,
     postage,
     paymentAddr,
@@ -567,7 +560,6 @@ export async function callSmartContractAbi(
  * @param smartContractContractAddr - The address of the smart contract to call, represented as a string. This address will be included in the inscription content to indicate which contract function is being called.
  * @param inputHex - The input data for the smart contract function call, represented as a hexadecimal string. This data will be compressed and included in the inscription.
  * @param estimatedGas - The estimated gas required for the smart contract function call, used to determine if padding is needed for the inscription content.
- * @param gasPerVbyte - The gas cost per virtual byte, used to calculate the total gas cost of the inscription content and determine if padding is needed.
  * @param feeRate - The fee rate in sats/vbyte to be used for the transactions involved in the function call process.
  * @param postage - An optional parameter representing the postage to be included in the minting transaction, specified in sats. If null, no postage will be included.
  * @param paymentAddr - An optional parameter representing the Bitcoin address to which payment should be sent for the minting transaction. If null, no payment will be made.
@@ -581,7 +573,6 @@ export async function callSmartContractFromPaymentWallet(
   smartContractContractAddr: string,
   inputHex: string,
   estimatedGas: number,
-  gasPerVbyte: number,
   feeRate: number,
   postage: number | null,
   paymentAddr: string | null,
@@ -611,12 +602,7 @@ export async function callSmartContractFromPaymentWallet(
   let content = Buff.str(
     `{"p":"brc20-prog","op":"c","c":"${smartContractContractAddr}","b":"${inputB64}"}`
   )
-  if (content.length * gasPerVbyte < estimatedGas) {
-    const gasDeficit = estimatedGas - content.length * gasPerVbyte
-    const neededPadding = Math.ceil(gasDeficit / gasPerVbyte)
-    const padding = '20'.repeat(neededPadding)
-    content = content.append(padding)
-  }
+  content = padContentToGas(content, estimatedGas)
 
   const inscriptionDetails = new InscriptionDetails(
     Buff.str('text/plain'),
@@ -712,7 +698,6 @@ export async function callSmartContractFromPaymentWallet(
  * @param funcName - The name of the function to call on the smart contract, represented as a string. This will be used along with the ABI to encode the function call data.
  * @param params - An array of parameters to be passed to the contract function, which will be encoded using the ABI along with the function name.
  * @param estimatedGas - The estimated gas required for the smart contract function call, used to determine if padding is needed for the inscription content.
- * @param gasPerVbyte - The gas cost per virtual byte, used to calculate the total gas cost of the inscription content and determine if padding is needed.
  * @param feeRate - The fee rate in sats/vbyte to be used for the transactions involved in the function call process.
  * @param postage - An optional parameter representing the postage to be included in the minting transaction, specified in sats. If null, no postage will be included.
  * @param paymentAddr - An optional parameter representing the Bitcoin address to which payment should be sent for the minting transaction. If null, no payment will be made.
@@ -727,7 +712,6 @@ export async function callSmartContractAbiFromPaymentWallet(
   funcName: string,
   params: any,
   estimatedGas: number,
-  gasPerVbyte: number,
   feeRate: number,
   postage: number | null,
   paymentAddr: string | null,
@@ -743,7 +727,6 @@ export async function callSmartContractAbiFromPaymentWallet(
     smartContractContractAddr,
     encodedFuncCall,
     estimatedGas,
-    gasPerVbyte,
     feeRate,
     postage,
     paymentAddr,

@@ -10,6 +10,7 @@ import { WalletInfo } from '../types/wallet'
 import {
   compressSmartContractData,
   evmEncodeFunctionCall,
+  GAS_PER_BYTE,
   getEvmAddressFromBitcoinAddress,
 } from './brc20'
 import { transferBrc20Inscription } from './brc20-inscriptions'
@@ -32,8 +33,7 @@ import { getOrdinalsWallet, getPaymentWallet, getSignFn } from './providers'
 import { SignProgress } from './sign-progress'
 import { getWalletInfo } from './store'
 
-/** BRC2.0 grants each inscription `content bytes × GAS_PER_BYTE` gas. */
-export const GAS_PER_BYTE = 12000
+export { GAS_PER_BYTE }
 /**
  * Gas ceiling for an ERC-20 `transfer`. A transfer to a fresh holder costs about 52k gas; the call
  * inscription's own bytes grant well over this ceiling, so its content is padded only if it ever

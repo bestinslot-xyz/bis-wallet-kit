@@ -275,18 +275,38 @@ describe('brc20.deploySmartContract', () => {
     expect(res.inscriptionId).toMatch(/i0$/)
     expect(broadcastBodies.length).toBe(0)
 
-    // The envelope's content is the pushes between the last OP_0 (the body tag) and OP_ENDIF.
-    const reveal = bitcoin.Transaction.fromHex(res.signedRevealTxHex)
-    const chunks = bitcoin.script.decompile(reveal.ins[0]!.witness[1]!)!
-    const body = chunks.slice(
-      chunks.lastIndexOf(bitcoin.opcodes.OP_0!) + 1,
-      chunks.lastIndexOf(bitcoin.opcodes.OP_ENDIF!)
+    const len = revealContentLength(res.signedRevealTxHex)
+    expect(len * 12000).toBeGreaterThanOrEqual(5_000_000)
+    expect((len - 1) * 12000).toBeLessThan(5_000_000)
+  })
+
+  it('callSmartContract pads the call content to estimatedGas at 12000 gas per byte', async () => {
+    const res = await brc20.callSmartContract(
+      '0x0000000000000000000000000000000000000001',
+      '0x70a08231',
+      5_000_000,
+      2,
+      null,
+      true
     )
-    const len = body.filter(c => Buffer.isBuffer(c)).reduce((n, c) => n + (c as Buffer).length, 0)
+    expect(broadcastBodies.length).toBe(0)
+
+    const len = revealContentLength(res.signedRevealTxHex)
     expect(len * 12000).toBeGreaterThanOrEqual(5_000_000)
     expect((len - 1) * 12000).toBeLessThan(5_000_000)
   })
 })
+
+/** Byte length of a reveal's inscription content: the pushes between the body tag (last OP_0) and OP_ENDIF. */
+function revealContentLength(signedRevealTxHex: string): number {
+  const reveal = bitcoin.Transaction.fromHex(signedRevealTxHex)
+  const chunks = bitcoin.script.decompile(reveal.ins[0]!.witness[1]!)!
+  const body = chunks.slice(
+    chunks.lastIndexOf(bitcoin.opcodes.OP_0!) + 1,
+    chunks.lastIndexOf(bitcoin.opcodes.OP_ENDIF!)
+  )
+  return body.filter(c => Buffer.isBuffer(c)).reduce((n, c) => n + (c as Buffer).length, 0)
+}
 
 describe('brc20.transact', () => {
   beforeEach(installChainMocks)
