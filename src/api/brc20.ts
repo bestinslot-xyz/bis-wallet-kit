@@ -5,19 +5,24 @@ import type {
   SendAsBrc20ProgResult,
   SendAsBrc20Result,
 } from '../core/brc20-send'
+import type { TransactArgs, TransactResult } from '../core/brc20-transact'
 import type { FrBtcResult, UnwrapBtcFromBrc20ProgArgs, WrapBtcToBrc20ProgArgs } from '../core/frbtc'
 import type { BISWalletPurpose, PaymentOpts } from '../types/common'
 import {
   callSmartContract as callSmartContractFromOrdinalsWallet,
   callSmartContractFromPaymentWallet,
+  deploySmartContractAbi as deploySmartContractAbiCore,
+  deploySmartContract as deploySmartContractCore,
   depositToBrc20Prog as depositToBrc20ProgCore,
   evmEncodeFunctionCall,
   withdrawFromBrc20Prog as withdrawFromBrc20ProgCore,
 } from '../core/brc20'
 import {
+  GAS_PER_BYTE,
   sendAsBrc20 as sendAsBrc20Core,
   sendAsBrc20Prog as sendAsBrc20ProgCore,
 } from '../core/brc20-send'
+import { transact as transactCore } from '../core/brc20-transact'
 import {
   unwrapBtcFromBrc20Prog as unwrapBtcFromBrc20ProgCore,
   wrapBtcToBrc20Prog as wrapBtcToBrc20ProgCore,
@@ -101,6 +106,29 @@ export async function sendAsBrc20Prog(
   args: SendAsBrc20ProgArgs
 ): Promise<Brc20SendQuote | SendAsBrc20ProgResult> {
   return await sendAsBrc20ProgCore(args)
+}
+
+export type { TransactArgs, TransactResult } from '../core/brc20-transact'
+
+/**
+ * Inscribes a pre-signed legacy EVM transaction as a BRC2.0 `transact` op, so a signature made
+ * outside the kit (for example with a BRC2.0 EVM wallet) executes on BRC2.0. Only legacy (type 0)
+ * transactions carrying the BRC2.0 EIP-155 chain ID of the current network are accepted. The
+ * inscription is padded so its content bytes cover the transaction's gas limit, and its send
+ * transaction moves it to `OP_RETURN "BRC20PROG"`.
+ *
+ * With `dryRun: true` nothing is signed or broadcast and the result is a fee quote.
+ * `onSignRequest` is called before each wallet prompt with `{ step, total }`; `total` is 2.
+ *
+ * @param args - `rawTx` (signed legacy transaction hex, with or without `0x`), `feeRate` (sats/vB), `dryRun`, and optional `onSignRequest`.
+ * @returns The quote for a dry run; otherwise the inscription's transaction ids, every txid in chain order, and `txHash`, the BRC2.0 transaction hash (`keccak256(rawTx)`).
+ * @throws {Error} When `rawTx` is not a canonically encoded, low-s signed legacy transaction for this network's BRC2.0 chain, carries a non-zero value, sends to the zero address, its gas limit needs more inscription content than fits, or its nonce is below the signer's BRC2.0 account nonce or more than 9 above it, before anything is signed.
+ */
+export function transact(args: TransactArgs & { dryRun: true }): Promise<Brc20SendQuote>
+export function transact(args: TransactArgs & { dryRun: false }): Promise<TransactResult>
+export function transact(args: TransactArgs): Promise<Brc20SendQuote | TransactResult>
+export async function transact(args: TransactArgs): Promise<Brc20SendQuote | TransactResult> {
+  return await transactCore(args)
 }
 
 export type { FrBtcResult, UnwrapBtcFromBrc20ProgArgs, WrapBtcToBrc20ProgArgs } from '../core/frbtc'
@@ -314,6 +342,81 @@ export async function callSmartContractAbi(
     dryRun,
     paymentOpts,
     walletTypeString
+  )
+}
+
+/**
+ * Deploys a smart contract on BRC2.0 from the ordinals identity. The deploy is inscribed from the
+ * ordinals address, so the contract's deployer is `getEvmAddressFromBitcoinAddress(ordinalsAddress)`.
+ *
+ * @param bytecodeHex - The contract creation bytecode, as a hexadecimal string.
+ * @param estimatedGas - The gas the deployment needs. BRC2.0 grants 12000 gas per inscription content byte, so the kit pads the content with spaces until it grants at least this much.
+ * @param feeRate - The fee rate in sats/vbyte, an integer.
+ * @param postage - The postage in sats for the inscription, or null for none.
+ * @param dryRun - If true, the transactions are signed or built but not broadcast.
+ * @param paymentOpts - Optional extra payment output: when `paymentOpts.paymentAmount` is greater than 0, the transaction sends that many sats to `paymentOpts.paymentAddress` (funded by the connected wallet). Omit, or pass a non-positive amount, for no extra payment.
+ *
+ * @returns The commit, reveal and send transaction ids and signed hexes, the inscription id, the postage and the secret.
+ * @throws {Error} When the broadcast request fails.
+ */
+export async function deploySmartContract(
+  bytecodeHex: string,
+  estimatedGas: number,
+  feeRate: number,
+  postage: number | null,
+  dryRun: boolean,
+  paymentOpts?: PaymentOpts
+): Promise<InscribeAndSendToOpReturn> {
+  return await deploySmartContractCore(
+    bytecodeHex,
+    estimatedGas,
+    GAS_PER_BYTE,
+    feeRate,
+    postage,
+    paymentOpts?.paymentAddress || null,
+    paymentOpts?.paymentAmount || null,
+    dryRun
+  )
+}
+
+/**
+ * Deploys a smart contract on BRC2.0 from the ordinals identity, encoding the bytecode with its
+ * constructor parameters from the ABI first. The deploy is inscribed from the ordinals address, so the
+ * contract's deployer is `getEvmAddressFromBitcoinAddress(ordinalsAddress)`.
+ *
+ * @param bytecode - The contract creation bytecode, as a hexadecimal string.
+ * @param abi - The contract ABI, used to encode the constructor parameters.
+ * @param params - The constructor parameters, encoded with the bytecode.
+ * @param estimatedGas - The gas the deployment needs. BRC2.0 grants 12000 gas per inscription content byte, so the kit pads the content with spaces until it grants at least this much.
+ * @param feeRate - The fee rate in sats/vbyte, an integer.
+ * @param postage - The postage in sats for the inscription, or null for none.
+ * @param dryRun - If true, the transactions are signed or built but not broadcast.
+ * @param paymentOpts - Optional extra payment output: when `paymentOpts.paymentAmount` is greater than 0, the transaction sends that many sats to `paymentOpts.paymentAddress` (funded by the connected wallet). Omit, or pass a non-positive amount, for no extra payment.
+ *
+ * @returns The commit, reveal and send transaction ids and signed hexes, the inscription id, the postage and the secret.
+ * @throws {Error} When the broadcast request fails.
+ */
+export async function deploySmartContractAbi(
+  bytecode: string,
+  abi: any,
+  params: any[],
+  estimatedGas: number,
+  feeRate: number,
+  postage: number | null,
+  dryRun: boolean,
+  paymentOpts?: PaymentOpts
+): Promise<InscribeAndSendToOpReturn> {
+  return await deploySmartContractAbiCore(
+    bytecode,
+    abi,
+    params,
+    estimatedGas,
+    GAS_PER_BYTE,
+    feeRate,
+    postage,
+    paymentOpts?.paymentAddress || null,
+    paymentOpts?.paymentAmount || null,
+    dryRun
   )
 }
 

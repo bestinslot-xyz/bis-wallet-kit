@@ -1,7 +1,15 @@
 /* eslint-disable no-console */
+import type { Brc20SendQuote } from '../../src/core/brc20-send.ts'
+import { createRequire } from 'node:module'
 import process from 'node:process'
+import { ethers } from 'ethers'
 import { assert, beforeAll, describe, it } from 'vitest'
 import { brc20, getEvmAddressFromBitcoinAddress, wallet } from '../../src/node.ts'
+import { env } from './_helpers.ts'
+
+const solc = createRequire(import.meta.url)('solc') as { compile: (input: string) => string }
+
+const HAS_WIF = Boolean(process.env.PRIVATE_KEY_WIF)
 
 // The deposit/withdraw dry-runs build real transactions against the wallet's
 // balance, so they need a ticker the wallet actually holds — skip unless set.
@@ -87,4 +95,55 @@ describe('tests for BRC2.0 programmable module (signet)', () => {
       assert.ok(typeof result.revealTxId === 'string')
     }
   )
+
+  // Signs a legacy tx on the BRC2.0 signet chain: frBTC.balanceOf(address(0)).
+  async function signBalanceOfTx(): Promise<string> {
+    const signer = ethers.Wallet.createRandom()
+    const data = ethers.concat([
+      ethers.id('balanceOf(address)').slice(0, 10),
+      ethers.zeroPadValue(ethers.ZeroAddress, 32),
+    ])
+    return await signer.signTransaction({
+      type: 0,
+      chainId: 0x425243323073n,
+      nonce: 0,
+      gasPrice: 0n,
+      gasLimit: 100_000n,
+      to: brc20.getFrBtcAddress(),
+      data,
+    })
+  }
+
+  it.skipIf(!HAS_WIF)('should quote a transact of a signed legacy tx', async () => {
+    const quote = (await brc20.transact({
+      rawTx: await signBalanceOfTx(),
+      feeRate: 2,
+      dryRun: true,
+    })) as Brc20SendQuote
+    assert.equal(quote.steps[0].step, 'progTransact')
+    assert.ok(quote.totalSats > 0)
+  })
+
+  it.skipIf(!HAS_WIF || !env.execute)('should broadcast a transact', async () => {
+    const raw = await signBalanceOfTx()
+    const result = (await brc20.transact({ rawTx: raw, feeRate: 2, dryRun: false })) as {
+      txHash: string
+      txIds: string[]
+    }
+    assert.equal(result.txIds.length, 3)
+    assert.equal(result.txHash, ethers.keccak256(raw))
+  })
+
+  it.skipIf(!HAS_WIF)('should quote a contract deploy', async () => {
+    const input = {
+      language: 'Solidity',
+      sources: { 'Empty.sol': { content: 'contract Empty {}' } },
+      settings: { outputSelection: { '*': { '*': ['evm.bytecode.object'] } } },
+    }
+    const output = JSON.parse(solc.compile(JSON.stringify(input)))
+    const bytecode: string = output.contracts['Empty.sol'].Empty.evm.bytecode.object
+    assert.ok(bytecode.length > 0)
+    const result = await brc20.deploySmartContract(bytecode, 100_000, 2, null, true)
+    assert.ok(typeof result.revealTxId === 'string')
+  })
 })

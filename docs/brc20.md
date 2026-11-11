@@ -120,7 +120,7 @@ const quote = await brc20.sendAsBrc20({ ...args, dryRun: true })
 //   walletPrompts,  // 2 per step
 //   feeRate,
 //   steps: [{ step: 'brc20Transfer' | 'progWithdraw' | 'progDeposit' | 'progTransfer'
-//                 | 'frBtcWrap' | 'frBtcUnwrap',
+//                 | 'frBtcWrap' | 'frBtcUnwrap' | 'progTransact',
 //             minerFeeSats, postageSats, paymentSats, walletPrompts }],
 // }
 ```
@@ -174,6 +174,81 @@ Both calls read their own send transaction through the BRC2.0 tx-details precomp
 inputs (about 4M gas, roughly 85 vB of padding) and refuses a send that would spend more, before
 broadcast. A call short of gas reverts on BRC2.0 while its Bitcoin transactions still confirm, so
 the BTC paid to the signer would not be credited.
+
+## Transact a pre-signed EVM transaction
+
+`transact` inscribes a signed EVM transaction as a BRC2.0 `transact` op. The transaction's `from` is
+the EVM key that signed it, not the Bitcoin wallet: the wallet only pays for the inscription, and
+the EVM signer owns the nonce, the gas and the resulting state changes.
+
+```ts
+const quote = await brc20.transact({ rawTx, feeRate: 2, dryRun: true })
+// Brc20SendQuote with steps: [{ step: 'progTransact', ... }]
+
+const { transact, txHash, txIds } = await brc20.transact({ rawTx, feeRate: 2, dryRun: false })
+// transact: { commitTxId, revealTxId, sendTxId, inscriptionId }
+// txHash:   keccak256(rawTx), the BRC2.0 transaction hash
+// txIds:    commit, reveal and send transaction ids, in chain order
+```
+
+- Only legacy (type 0) transactions are accepted, signed with the EIP-155 chain ID of the selected
+  network: `0x4252433230` (284847977008) on mainnet, `0x425243323073` (72921082114163) on signet and
+  testnet. `rawTx` is hex with or without `0x`. An unsigned, typed or wrong-chain transaction is
+  refused before anything is signed, as is one with non-canonical RLP or a high-s signature, which
+  the BRC2.0 module cannot decode.
+- `value` must be 0, since BRC2.0 has no native value transfer, and `to` must not be the zero
+  address, which BRC2.0 runs as a contract creation. Omit `to` to create a contract.
+- The kit reads the signer's account nonce with `eth_getTransactionCount` and accepts a `nonce` from
+  that value to 9 above it. A transaction with a used nonce, or one 10 or more ahead, still spends
+  the BTC for its inscription while BRC2.0 drops it and nothing executes, so the kit refuses both,
+  as it does a non-zero `value`. A nonce above the account nonce is held for up to 10 blocks for the
+  transactions that fill the gap; BRC2.0 drops it if the gap is still open after that.
+- BRC2.0 grants each inscription `content bytes × 12000` gas. The kit pads the content with spaces
+  until it covers the transaction's gas limit, and refuses a gas limit that needs more than 350,000
+  content bytes.
+- `txHash` is `keccak256(rawTx)`, so it can be looked up on the BRC2.0 RPC once the send transaction
+  confirms.
+- The send goes to `OP_RETURN "BRC20PROG"` from the ordinals identity, so the quote and
+  `onSignRequest` behave as in [Fee quote](#fee-quote) with one step and 2 wallet prompts.
+
+## Deploy a smart contract
+
+```ts
+await brc20.deploySmartContract(
+  bytecodeHex, // creation bytecode, constructor arguments already appended
+  estimatedGas,
+  feeRate, // integer sats/vB
+  postage, // or null
+  dryRun,
+  paymentOpts // optional
+)
+```
+
+Or by ABI and constructor parameters (the kit encodes the arguments and appends them to the
+bytecode):
+
+```ts
+await brc20.deploySmartContractAbi(
+  bytecode,
+  abi,
+  [constructorArg1, constructorArg2],
+  estimatedGas,
+  feeRate, // integer sats/vB
+  postage,
+  dryRun
+)
+```
+
+Each is one deploy inscription sent to `OP_RETURN "BRC20PROG"` from the ordinals identity. The
+deployer, and so `from` of the creation, is `getEvmAddressFromBitcoinAddress(ordinalsAddress)`, and
+the contract address derives from that address and its nonce. The result carries the commit, reveal
+and send transaction ids and signed hexes, the inscription id, the postage and the secret. With
+`dryRun: true` nothing is broadcast.
+
+- BRC2.0 grants each inscription `content bytes × 12000` gas. The kit pads the deploy inscription
+  with spaces until that covers `estimatedGas`.
+- `feeRate` must be an integer.
+- A failed broadcast request throws.
 
 ## Call a smart contract
 

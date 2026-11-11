@@ -767,7 +767,8 @@ async function mintMultipleAll(
     }
   }
 
-  await broadcastTxes([signedCommitTx.signedTxHex, revealTx.signed_reveal_tx_hex])
+  if ((await broadcastTxes([signedCommitTx.signedTxHex, revealTx.signed_reveal_tx_hex])) == null)
+    throw new Error('Broadcast request failed')
 
   return {
     commitTxId: signedCommitTx.txId,
@@ -1799,7 +1800,8 @@ export async function mintWithReclaimsAll(
     signFunc
   )
 
-  if (!dryRun) await broadcastTxes([res.signedCommitTxHex, res.signedRevealTxHex])
+  if (!dryRun && (await broadcastTxes([res.signedCommitTxHex, res.signedRevealTxHex])) == null)
+    throw new Error('Broadcast request failed')
 
   return res
 }
@@ -3021,7 +3023,8 @@ async function sendMultiInscriptionWithBufferAll(
     }
   }
 
-  await broadcastTxes([signedTx.signedTxHex])
+  if ((await broadcastTxes([signedTx.signedTxHex])) == null)
+    throw new Error('Broadcast request failed')
 
   return {
     txid: signedTx.txId,
@@ -3136,7 +3139,8 @@ export async function sendInscriptionAll(
     }
   }
 
-  await broadcastTxes([signedTx.signedTxHex])
+  if ((await broadcastTxes([signedTx.signedTxHex])) == null)
+    throw new Error('Broadcast request failed')
 
   return {
     txId: signedTx.txId,
@@ -3847,7 +3851,8 @@ export async function mintAll(
     }
   }
 
-  await broadcastTxes([signedCommitTx.signedTxHex, revealTx.signedTxHex])
+  if ((await broadcastTxes([signedCommitTx.signedTxHex, revealTx.signedTxHex])) == null)
+    throw new Error('Broadcast request failed')
   return {
     commit_txid: signedCommitTx.txId,
     signed_commit_tx_hex: signedCommitTx.signedTxHex,
@@ -3957,7 +3962,8 @@ export async function mintAllPaymentWallet(
     }
   }
 
-  await broadcastTxes([signedCommitTx.signedTxHex, revealTx.signedTxHex])
+  if ((await broadcastTxes([signedCommitTx.signedTxHex, revealTx.signedTxHex])) == null)
+    throw new Error('Broadcast request failed')
   return {
     commitTxId: signedCommitTx.txId,
     signedCommitTxHex: signedCommitTx.signedTxHex,
@@ -4172,7 +4178,8 @@ export async function sendInscriptionToOpReturnAll(
     }
   }
 
-  await broadcastTxes([signedTx.signedTxHex])
+  if ((await broadcastTxes([signedTx.signedTxHex])) == null)
+    throw new Error('Broadcast request failed')
 
   return {
     txId: signedTx.txId,
@@ -4286,7 +4293,8 @@ export async function sendInscriptionInPaymentWalletToOpReturnAll(
     }
   }
 
-  await broadcastTxes([signedTx.signedTxHex])
+  if ((await broadcastTxes([signedTx.signedTxHex])) == null)
+    throw new Error('Broadcast request failed')
   return {
     txId: signedTx.txId,
     signedTxHex: signedTx.signedTxHex,
@@ -4419,7 +4427,8 @@ export async function mintWithParentAll(
       secret,
     }
   }
-  await broadcastTxes([signedCommitTx.signedTxHex, signedRevealTx.signedTxHex])
+  if ((await broadcastTxes([signedCommitTx.signedTxHex, signedRevealTx.signedTxHex])) == null)
+    throw new Error('Broadcast request failed')
   return {
     commitTxId: signedCommitTx.txId,
     signedCommitTxHex: signedCommitTx.signedTxHex,
@@ -4549,7 +4558,8 @@ export async function sendInscriptionToOpReturnWithExtraInputsAndExtraOutputAll(
     }
   }
 
-  await broadcastTxes([signedTx.signedTxHex])
+  if ((await broadcastTxes([signedTx.signedTxHex])) == null)
+    throw new Error('Broadcast request failed')
   return {
     txId: signedTx.txId,
     signedTxHex: signedTx.signedTxHex,
@@ -4768,7 +4778,8 @@ export async function mintWithExtraInputInCommitAll(
     }
   }
 
-  await broadcastTxes([signedCommitTx.signedTxHex, revealTx.signedTxHex])
+  if ((await broadcastTxes([signedCommitTx.signedTxHex, revealTx.signedTxHex])) == null)
+    throw new Error('Broadcast request failed')
   return {
     commitTxId: signedCommitTx.txId,
     signedCommitTxHex: signedCommitTx.signedTxHex,
