@@ -143,7 +143,7 @@ describe('tests for BRC2.0 programmable module (signet)', () => {
     const output = JSON.parse(solc.compile(JSON.stringify(input)))
     const bytecode: string = output.contracts['Empty.sol'].Empty.evm.bytecode.object
     assert.ok(bytecode.length > 0)
-    const result = await brc20.deploySmartContract(bytecode, 100_000, 12000, 2, null, true)
+    const result = await brc20.deploySmartContract(bytecode, 100_000, 2, null, true)
     assert.ok(typeof result.revealTxId === 'string')
   })
 })

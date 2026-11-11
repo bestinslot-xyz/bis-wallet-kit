@@ -264,26 +264,27 @@ describe('brc20.deploySmartContract', () => {
 
   it('deploySmartContract throws when the broadcast request fails', async () => {
     broadcastFails = true
-    await expect(
-      brc20.deploySmartContract('0x6080', 50_000, 12000, 2, null, false)
-    ).rejects.toThrow('Broadcast request failed')
+    await expect(brc20.deploySmartContract('0x6080', 50_000, 2, null, false)).rejects.toThrow(
+      'Broadcast request failed'
+    )
     expect(broadcastBodies.length).toBe(1)
   })
 
-  it('deploySmartContract and deploySmartContractAbi refuse gasPerVbyte above 12000', async () => {
-    await expect(brc20.deploySmartContract('0x6080', 50_000, 12001, 2, null, true)).rejects.toThrow(
-      /12000 gas per byte/
-    )
-    await expect(
-      brc20.deploySmartContractAbi('0x6080', [], [], 50_000, 12001, 2, null, true)
-    ).rejects.toThrow(/12000 gas per byte/)
-    expect(fetchMock).not.toHaveBeenCalled()
-  })
-
-  it('deploySmartContract accepts gasPerVbyte 12000', async () => {
-    const res = await brc20.deploySmartContract('0x6080', 50_000, 12000, 2, null, true)
+  it('deploySmartContract pads the deploy content to estimatedGas at 12000 gas per byte', async () => {
+    const res = await brc20.deploySmartContract('0x6080', 5_000_000, 2, null, true)
     expect(res.inscriptionId).toMatch(/i0$/)
     expect(broadcastBodies.length).toBe(0)
+
+    // The envelope's content is the pushes between the last OP_0 (the body tag) and OP_ENDIF.
+    const reveal = bitcoin.Transaction.fromHex(res.signedRevealTxHex)
+    const chunks = bitcoin.script.decompile(reveal.ins[0]!.witness[1]!)!
+    const body = chunks.slice(
+      chunks.lastIndexOf(bitcoin.opcodes.OP_0!) + 1,
+      chunks.lastIndexOf(bitcoin.opcodes.OP_ENDIF!)
+    )
+    const len = body.filter(c => Buffer.isBuffer(c)).reduce((n, c) => n + (c as Buffer).length, 0)
+    expect(len * 12000).toBeGreaterThanOrEqual(5_000_000)
+    expect((len - 1) * 12000).toBeLessThan(5_000_000)
   })
 })
 

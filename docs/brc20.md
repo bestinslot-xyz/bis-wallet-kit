@@ -217,7 +217,6 @@ const { transact, txHash, txIds } = await brc20.transact({ rawTx, feeRate: 2, dr
 await brc20.deploySmartContract(
   bytecodeHex, // creation bytecode, constructor arguments already appended
   estimatedGas,
-  12000, // gasPerVbyte: BRC2.0 grants 12000 gas per content byte
   feeRate, // integer sats/vB
   postage, // or null
   dryRun,
@@ -234,7 +233,6 @@ await brc20.deploySmartContractAbi(
   abi,
   [constructorArg1, constructorArg2],
   estimatedGas,
-  12000, // gasPerVbyte
   feeRate, // integer sats/vB
   postage,
   dryRun
@@ -247,9 +245,8 @@ the contract address derives from that address and its nonce. The result carries
 and send transaction ids and signed hexes, the inscription id, the postage and the secret. With
 `dryRun: true` nothing is broadcast.
 
-- The kit pads the deploy inscription until `content bytes × gasPerVbyte` covers `estimatedGas`.
-  BRC2.0 grants 12000 gas per content byte, so pass 12000; a value above 12000 would pad too little
-  and is refused.
+- BRC2.0 grants each inscription `content bytes × 12000` gas. The kit pads the deploy inscription
+  with spaces until that covers `estimatedGas`.
 - `feeRate` must be an integer.
 - A failed broadcast request throws.
 
