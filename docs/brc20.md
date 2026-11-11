@@ -259,8 +259,7 @@ await brc20.callSmartContract(
   contractAddress,
   calldataHex,
   estimatedGas,
-  gasPerVbyte,
-  feeRate,
+  feeRate, // integer sats/vB
   postage, // or null
   dryRun,
   paymentOpts, // optional
@@ -277,12 +276,14 @@ await brc20.callSmartContractAbi(
   'transfer',
   [recipient, amount],
   estimatedGas,
-  gasPerVbyte,
-  feeRate,
+  feeRate, // integer sats/vB
   postage,
   dryRun
 )
 ```
+
+The kit pads the call inscription with spaces until its `content bytes × 12000` gas covers
+`estimatedGas`.
 
 Every function takes a final optional `paymentOpts` (`{ paymentAddress, paymentAmount }`); the
 contract-call functions also take an optional `walletType`. Use `dryRun: true` to assemble

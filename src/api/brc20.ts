@@ -18,7 +18,6 @@ import {
   withdrawFromBrc20Prog as withdrawFromBrc20ProgCore,
 } from '../core/brc20'
 import {
-  GAS_PER_BYTE,
   sendAsBrc20 as sendAsBrc20Core,
   sendAsBrc20Prog as sendAsBrc20ProgCore,
 } from '../core/brc20-send'
@@ -245,8 +244,7 @@ export interface InscribeAndSendToAddress {
  *
  * @param contractAddress The address of the smart contract to call.
  * @param calldataHex The calldata to send to the smart contract, encoded as a hexadecimal string.
- * @param estimatedGas The estimated amount of gas required for the transaction.
- * @param gasPerVbyte The gas cost per vbyte for the transaction.
+ * @param estimatedGas The gas the call needs. BRC2.0 grants 12000 gas per inscription content byte, so the kit pads the content with spaces until it grants at least this much.
  * @param feeRate The fee rate to use for the transaction, in satoshis per vbyte.
  * @param postage The amount of postage to include with the transaction, or null if no postage is needed.
  * @param dryRun A boolean indicating whether to perform a dry run of the transaction (i.e., simulate the transaction without actually sending it).
@@ -259,7 +257,6 @@ export async function callSmartContract(
   contractAddress: string,
   calldataHex: string,
   estimatedGas: number,
-  gasPerVbyte: number,
   feeRate: number,
   postage: number | null,
   dryRun: boolean,
@@ -271,7 +268,6 @@ export async function callSmartContract(
       contractAddress,
       calldataHex,
       estimatedGas,
-      gasPerVbyte,
       feeRate,
       postage,
       paymentOpts?.paymentAddress || null,
@@ -283,7 +279,6 @@ export async function callSmartContract(
       contractAddress,
       calldataHex,
       estimatedGas,
-      gasPerVbyte,
       feeRate,
       postage,
       paymentOpts?.paymentAddress || null,
@@ -302,9 +297,8 @@ export async function callSmartContract(
  * @param abi The ABI (Application Binary Interface) of the smart contract, which defines the functions and their parameters for encoding the function call.
  * @param funcName The name of the function to call on the smart contract, which should be defined in the provided ABI.
  * @param params The parameters to pass to the smart contract function, which should be provided as an array and will be encoded according to the ABI specifications.
- * @param estimatedGas The estimated amount of gas required for the transaction, which is used to calculate the transaction fee and ensure that sufficient funds are available for the transaction to be processed.
- * @param gasPerVbyte The gas cost per vbyte for the transaction, which is used in conjunction with the estimated gas to calculate the total transaction fee.
- * @param feeRate The fee rate to use for the transaction, in satoshis per vbyte, which is used to calculate the total transaction fee based on the estimated gas and gas cost per vbyte.
+ * @param estimatedGas The gas the call needs. BRC2.0 grants 12000 gas per inscription content byte, so the kit pads the content with spaces until it grants at least this much.
+ * @param feeRate The fee rate to use for the transaction, in satoshis per vbyte.
  * @param postage The amount of postage to include with the transaction, or null if no postage is needed. Postage may be required for certain transactions to ensure that they are processed in a timely manner, especially during periods of high network congestion.
  * @param dryRun A boolean indicating whether to perform a dry run of the transaction (i.e., simulate the transaction without actually sending it). This can be useful for testing and debugging purposes to ensure that the function call is correctly encoded and that the transaction would succeed before actually sending it to the network.
  * @param paymentOpts Optional extra payment output: when `paymentOpts.paymentAmount` is greater than 0, the transaction sends that many sats to `paymentOpts.paymentAddress` (funded by the connected wallet — e.g. a service fee). Omit, or pass a non-positive amount, for no extra payment.
@@ -318,7 +312,6 @@ export async function callSmartContractAbi(
   funcName: string,
   params: any,
   estimatedGas: number,
-  gasPerVbyte: number,
   feeRate: number,
   postage: number | null,
   dryRun: boolean,
@@ -336,7 +329,6 @@ export async function callSmartContractAbi(
     contractAddress,
     encodedFuncCall,
     estimatedGas,
-    gasPerVbyte,
     feeRate,
     postage,
     dryRun,
@@ -370,7 +362,6 @@ export async function deploySmartContract(
   return await deploySmartContractCore(
     bytecodeHex,
     estimatedGas,
-    GAS_PER_BYTE,
     feeRate,
     postage,
     paymentOpts?.paymentAddress || null,
@@ -411,7 +402,6 @@ export async function deploySmartContractAbi(
     abi,
     params,
     estimatedGas,
-    GAS_PER_BYTE,
     feeRate,
     postage,
     paymentOpts?.paymentAddress || null,

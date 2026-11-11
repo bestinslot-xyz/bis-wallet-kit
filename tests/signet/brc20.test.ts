@@ -86,7 +86,6 @@ describe('tests for BRC2.0 programmable module (signet)', () => {
         'balanceOf',
         [evmAddress],
         100000, // estimatedGas
-        2, // gasPerVbyte
         2, // feeRate
         null, // postage
         true // dryRun
