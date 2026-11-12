@@ -28,6 +28,11 @@ import {
   swapOrderSignatureText,
 } from '../lib/swap-route'
 import {
+  swapPubkeyHash,
+  transferBLSMessage,
+  transferOrderSignatureText,
+} from '../lib/swap-transfer'
+import {
   addLiquidityRequest,
   calculatePairAddress,
   removeLiquidityRequest,
@@ -40,6 +45,7 @@ import {
 import { InscriptionDetails } from '../types/inscription'
 import { WalletInfo } from '../types/wallet'
 import { compressSmartContractData } from './brc20'
+import { getBrc20ProgChainId } from './brc20-transact'
 import {
   clearExtraUtxos,
   fetchCardinalUtxos,
@@ -465,13 +471,20 @@ export interface SwapInfo {
   // return a 3-token path and the swap functions accept one. False when the
   // backend does not serve it; swaps then use the direct pool only.
   allow_multi_hop_routes: boolean
+  // Whether the backend accepts transfers between swap wallets (prepareAndSendTransferOrder).
+  // False when the backend does not serve it.
+  allow_transfers: boolean
 }
 interface SwapInfoResponse {
   success: boolean
-  result: Omit<SwapInfo, 'fee_policy' | 'allow_token_token_pairs' | 'allow_multi_hop_routes'> & {
+  result: Omit<
+    SwapInfo,
+    'fee_policy' | 'allow_token_token_pairs' | 'allow_multi_hop_routes' | 'allow_transfers'
+  > & {
     fee_policy?: unknown
     allow_token_token_pairs?: unknown
     allow_multi_hop_routes?: unknown
+    allow_transfers?: unknown
   }
 }
 // Keyed by network: each network has its own swap backend and therefore its own
@@ -529,6 +542,7 @@ export async function getSwapInfo(): Promise<SwapInfo> {
     fee_policy: feePolicy,
     allow_token_token_pairs: result.result.allow_token_token_pairs === true,
     allow_multi_hop_routes: result.result.allow_multi_hop_routes === true,
+    allow_transfers: result.result.allow_transfers === true,
   }
   if (swapInfo.fee_policy !== null) {
     swapInfoCache.set(network, { info: swapInfo, fetchedAt: Date.now() })
@@ -880,11 +894,11 @@ interface RequestMinerFeeResponse {
 /**
  * Requests the estimated miner fee for a specific swap operation type by making an API call to the swap backend.
  *
- * @param type The type of swap operation to estimate the miner fee for. Valid values are 'add_liquidity', 'remove_liquidity', 'swap', 'withdraw', or 'unwrap'.
+ * @param type The type of swap operation to estimate the miner fee for. Valid values are 'add_liquidity', 'remove_liquidity', 'swap', 'withdraw', 'unwrap', or 'transfer'.
  * @returns {Promise<bigint>} A promise that resolves to a bigint representing the estimated miner fee for the specified swap operation type. The fee is returned as a string from the API and converted to bigint in this function.
  */
 export async function requestMinerFee(
-  type: 'add_liquidity' | 'remove_liquidity' | 'swap' | 'withdraw' | 'unwrap'
+  type: 'add_liquidity' | 'remove_liquidity' | 'swap' | 'withdraw' | 'unwrap' | 'transfer'
 ): Promise<bigint> {
   // 2. Prepare and execute the API call
   const url = await getSwapBackendUrl('get_miner_fee')
@@ -1252,7 +1266,8 @@ export async function getActivityOfPair(
 }
 
 /** A kind of operation `getRecentActivity` can filter on; `swap` covers swap1 and swap2. */
-export type RecentActivityKind = 'swap' | 'add_liq' | 'remove_liq' | 'withdraw' | 'unwrap'
+export type RecentActivityKind =
+  'swap' | 'add_liq' | 'remove_liq' | 'withdraw' | 'unwrap' | 'transfer'
 
 const RECENT_ACTIVITY_KINDS: readonly RecentActivityKind[] = [
   'swap',
@@ -1260,6 +1275,7 @@ const RECENT_ACTIVITY_KINDS: readonly RecentActivityKind[] = [
   'remove_liq',
   'withdraw',
   'unwrap',
+  'transfer',
 ]
 
 export interface GetRecentActivityRequest {
@@ -1280,7 +1296,7 @@ export interface RecentActivityToken {
 export interface RecentActivityEntry {
   id: string
   op_type: number
-  type: 'add_liq' | 'remove_liq' | 'swap1' | 'swap2' | 'withdraw' | 'unwrap'
+  type: 'add_liq' | 'remove_liq' | 'swap1' | 'swap2' | 'withdraw' | 'unwrap' | 'transfer'
   /** Milliseconds since the epoch, when the operation was placed. */
   timestamp: number
   block_height: number | null
@@ -1288,15 +1304,17 @@ export interface RecentActivityEntry {
   success: boolean
   user_address: string | null
   user_pubkey: string | null
-  /** A swap's input token, a liquidity change's first token, or a withdraw/unwrap's token. */
+  /** A swap's input token, a liquidity change's first token, or a withdraw/unwrap/transfer's token. */
   token_1: RecentActivityToken | null
-  /** A swap's output token or a liquidity change's second token; null for withdraw/unwrap. */
+  /** A swap's output token or a liquidity change's second token; null for withdraw/unwrap/transfer. */
   token_2: RecentActivityToken | null
   amount1: string | null
   amount2: string | null
   liquidity?: string | null
   target_address?: string
   target_pkscript?: string
+  /** A transfer's recipient BTC address; the sender is `user_address`. */
+  to_address?: string
 }
 
 export interface GetRecentActivityResponse {
@@ -1349,7 +1367,7 @@ export async function getRecentActivity(
 
 /** A kind of wallet activity that `getWalletActivities` can filter on. */
 export type WalletActivityKind =
-  'swap' | 'add_liq' | 'remove_liq' | 'deposit' | 'withdraw' | 'unwrap'
+  'swap' | 'add_liq' | 'remove_liq' | 'deposit' | 'withdraw' | 'unwrap' | 'transfer'
 
 const WALLET_ACTIVITY_KINDS: readonly WalletActivityKind[] = [
   'swap',
@@ -1358,6 +1376,7 @@ const WALLET_ACTIVITY_KINDS: readonly WalletActivityKind[] = [
   'deposit',
   'withdraw',
   'unwrap',
+  'transfer',
 ]
 
 interface GetWalletActivitiesRequest {
@@ -1386,6 +1405,7 @@ export interface WalletActivityEntry {
     | 'unwrap'
     | 'withdraw'
     | 'withdraw (lp)'
+    | 'transfer'
   timestamp: number | null
   block_height: number | null
   success: boolean // did the transaction succeed
@@ -1408,6 +1428,13 @@ export interface WalletActivityEntry {
 
   target_address?: string | null // evm address of the target for withdrawals
   target_pkscript?: string | null // pkscript of the target for unwraps
+
+  /** A transfer this wallet sent or received. */
+  direction?: 'sent' | 'received'
+  /** A transfer's sender BTC address. */
+  from_address?: string | null
+  /** A transfer's recipient BTC address. */
+  to_address?: string | null
 }
 
 export interface GetWalletActivitiesResponse {
@@ -4647,5 +4674,159 @@ export async function prepareAndSendUnwrapOrder(
     token2FeeBps: token2FeeBPS.toString(),
     btc_fee: btcFee.toString(),
     bip322_signature: bip322Signature,
+  })
+}
+
+/**
+ * Whether a BTC address can receive a transfer between swap wallets, as the backend sees it.
+ */
+export interface TransferRecipient {
+  /** The address has a swap wallet registered with the backend. A transfer to any other address is refused. */
+  registered: boolean
+  /** The recipient's swap wallet has an emergency exit open or queued; the backend refuses transfers to it. */
+  exiting: boolean
+  /** The recipient's BLS pubkey, whose hash the transfer signature covers; null when not registered. */
+  pubkey: string | null
+}
+interface TransferRecipientResponse {
+  success: boolean
+  result: { registered?: unknown; exiting?: unknown; pubkey?: unknown }
+}
+/**
+ * Looks up whether a BTC address has a swap wallet that can receive a transfer. Check it before
+ * asking the user to sign, so a typo or an unregistered address is caught without a wallet prompt.
+ *
+ * This does not require a connected wallet or a smart wallet.
+ *
+ * @param btcAddress The recipient's BTC (ordinals) address.
+ * @returns {Promise<TransferRecipient>} Whether the address is registered, whether it is exiting, and its swap pubkey.
+ * @throws If the address is empty, before any request is sent.
+ */
+export async function getTransferRecipient(btcAddress: string): Promise<TransferRecipient> {
+  const address = btcAddress.trim()
+  if (address === '') {
+    throw new Error('Recipient address is empty.')
+  }
+  const url = await getSwapBackendUrl('get_transfer_recipient')
+  const response = await fetchWithErrors<TransferRecipientResponse>(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ btc_address: address }),
+  })
+  const registered = response.result.registered === true
+  const pubkey = typeof response.result.pubkey === 'string' ? response.result.pubkey : null
+  return {
+    registered: registered && pubkey !== null,
+    exiting: response.result.exiting === true,
+    pubkey: registered ? pubkey : null,
+  }
+}
+
+async function signSwapKeyMessage(message: Buffer): Promise<string> {
+  const P = bls12_381.G1.hashToCurve(message, {
+    DST: 'BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_NUL_',
+  })
+  const swapWallet = await getSwapWalletFromDB()
+  if (!swapWallet?.swapPrivkey) {
+    throw new Error('Smart wallet not found. Please generate a smart wallet first.')
+  }
+  const blsPrivateKey = swapWallet.swapPrivkey.startsWith('0x')
+    ? swapWallet.swapPrivkey.slice(2)
+    : swapWallet.swapPrivkey
+  const blsSignature = bls12_381.shortSignatures.sign(P, Buffer.from(blsPrivateKey, 'hex'))
+  return `0x${blsSignature.x.toString(16).padStart(128, '0')}${blsSignature.y.toString(16).padStart(128, '0')}`
+}
+
+export interface TransferOrderResponse {
+  success: boolean
+}
+
+/**
+ * Sends a token balance from the user's smart wallet to another user's smart wallet, inside the
+ * swap contract: no withdraw and re-deposit, and the token never leaves the swap. The fee is the
+ * withdraw fee, in WBTC. Only registered tokens can be sent, not LP tokens.
+ *
+ * The recipient is named by BTC address and must have a swap wallet registered with the backend
+ * (`getTransferRecipient`), and the backend must allow transfers (`getSwapInfo().allow_transfers`).
+ * The ordinals wallet signs the order text, then the swap key signs the contract message.
+ *
+ * @param tokenAddr The address of the token to send.
+ * @param toBtcAddress The recipient's BTC (ordinals) address.
+ * @param amt The amount to send, in the token's base units.
+ * @returns A promise that resolves to `{ success: true }` once the backend queues the transfer.
+ * @throws If the amount is not positive, transfers are off, or the recipient is unknown, exiting or the sender's own wallet, before any signature is requested.
+ */
+export async function prepareAndSendTransferOrder(
+  tokenAddr: string,
+  toBtcAddress: string,
+  amt: bigint
+): Promise<TransferOrderResponse> {
+  if (amt <= 0n) {
+    throw new Error('Transfer amount must be positive.')
+  }
+  const pubkey = (await getSwapWalletFromDB())?.swapPubkey
+  if (!pubkey) {
+    throw new Error('Smart wallet not found. Please generate a smart wallet first.')
+  }
+  const swapInfo = await getSwapInfo()
+  if (!swapInfo.allow_transfers) {
+    throw new Error('Transfers between swap wallets are not enabled on this network.')
+  }
+  const toAddress = toBtcAddress.trim()
+  const recipient = await getTransferRecipient(toAddress)
+  if (!recipient.registered || recipient.pubkey === null) {
+    throw new Error(
+      'The recipient has no swap wallet. They need to deposit once before they can receive transfers.'
+    )
+  }
+  if (recipient.exiting) {
+    throw new Error(
+      'The recipient is leaving through an emergency exit and cannot receive transfers.'
+    )
+  }
+  if (swapPubkeyHash(recipient.pubkey) === swapPubkeyHash(pubkey)) {
+    throw new Error('A wallet cannot transfer to itself.')
+  }
+
+  const tokenAddress = tokenAddr.toLowerCase()
+  const nonce = await getSwapWalletNonce()
+  const btcFee = await requestMinerFee('transfer')
+
+  const bip322Signature = await signMessageLocalVerify(
+    transferOrderSignatureText({ toBtcAddress: toAddress, tokenAddress, amt, btcFee }),
+    'ordinals'
+  )
+  const blsSignature = await signSwapKeyMessage(
+    transferBLSMessage({
+      chainId: getBrc20ProgChainId(),
+      contractAddress: getSwapContractAddress(),
+      fromPubkey: pubkey,
+      nonce,
+      tokenAddress,
+      toPubkey: recipient.pubkey,
+      amt,
+      btcFee,
+    })
+  )
+
+  const url = await getSwapBackendUrl('transfer')
+  return fetchWithErrors<TransferOrderResponse>(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      pubkey,
+      to_btc_address: toAddress,
+      token_addr: tokenAddress,
+      amt: amt.toString(),
+      bls_signature: blsSignature,
+      token1FeeBps: '0',
+      token2FeeBps: '0',
+      btc_fee: btcFee.toString(),
+      bip322_signature: bip322Signature,
+    }),
   })
 }

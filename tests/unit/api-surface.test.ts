@@ -66,6 +66,8 @@ const SHARED_NAMESPACES: Record<string, string[]> = {
     'deposit',
     'wrapBtc',
     'withdraw',
+    'transfer',
+    'getTransferRecipient',
     'tryGetSwapReferrerInfo',
     'swapSide',
     'satsToBtc',
