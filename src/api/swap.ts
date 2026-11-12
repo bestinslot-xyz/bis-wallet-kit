@@ -14,6 +14,7 @@ import {
   prepareAndSendRemoveLiquidityOrder,
   prepareAndSendSwap2Order,
   prepareAndSendSwapOrder,
+  prepareAndSendTransferOrder,
   prepareAndSendUnwrapOrder,
   prepareAndSendWithdrawOrderToOrdinalWallet,
   prepareAndSendWithdrawOrderToSelfOrdinalWallet,
@@ -39,6 +40,7 @@ export {
   getSwapStatus,
   getSwapWalletSecurityCode,
   getTokenDecimals,
+  getTransferRecipient,
   getTvlHistory,
   getUnwrapResult as getUnwrapBtcResult,
   importSwapWallet,
@@ -73,6 +75,7 @@ export type {
   SwapBalance,
   SwapInfo,
   TokenInfo,
+  TransferRecipient,
   TvlPoint,
   WalletActivityEntry,
   WalletActivityKind,
@@ -369,4 +372,26 @@ export async function withdraw(
   } else {
     return (await prepareAndSendWithdrawOrderToSelfOrdinalWallet(tokenAddress, amount)).success
   }
+}
+
+/**
+ * Sends a token balance from the user's smart wallet to another user's smart wallet, inside the
+ * swap: the token never leaves it, so there is no withdraw and re-deposit. The fee is the withdraw
+ * fee, in WBTC. Only registered tokens can be sent, not LP tokens.
+ *
+ * Needs a backend with `getSwapInfo().allow_transfers`. Check the recipient first with
+ * `getTransferRecipient`: it must have a swap wallet and no emergency exit in progress.
+ *
+ * @param tokenAddress - The address of the token to send.
+ * @param toBtcAddress - The recipient's BTC (ordinals) address.
+ * @param amount - The amount to send, in the token's base units.
+ * @returns A promise that resolves to true once the backend queues the transfer.
+ * @throws If the amount is not positive, transfers are off, or the recipient is unknown, exiting or the sender's own wallet, before any signature is requested.
+ */
+export async function transfer(
+  tokenAddress: string,
+  toBtcAddress: string,
+  amount: bigint
+): Promise<boolean> {
+  return (await prepareAndSendTransferOrder(tokenAddress, toBtcAddress, amount)).success
 }
