@@ -62,6 +62,7 @@ describe('getSwapInfo fee_policy', () => {
       fee_policy: { ...FEE_POLICY, token_pair_swap_fee_bps: FEE_POLICY.swap_fee_bps },
       allow_token_token_pairs: false,
       allow_multi_hop_routes: false,
+      allow_transfers: false,
     })
     await getSwapInfo()
     assert.equal(fetchMock.mock.calls.length, 1)
@@ -106,6 +107,21 @@ describe('getSwapInfo fee_policy', () => {
     }
   })
 
+  it('reads allow_transfers, treating anything but true (or its absence) as false', async () => {
+    for (const [served, expected] of [
+      [true, true],
+      [false, false],
+      ['true', false],
+      [undefined, false],
+    ] as const) {
+      const body = swapInfoBody(FEE_POLICY)
+      if (served !== undefined) Object.assign(body.result, { allow_transfers: served })
+      serve(body)
+      const { getSwapInfo } = await freshSwapModule()
+      assert.equal((await getSwapInfo()).allow_transfers, expected, `served ${String(served)}`)
+    }
+  })
+
   it('returns fee_policy: null for an older backend and does not cache it', async () => {
     serve(swapInfoBody())
     const { getSwapInfo } = await freshSwapModule()
@@ -127,6 +143,7 @@ describe('getSwapInfo fee_policy', () => {
       fee_policy: null,
       allow_token_token_pairs: false,
       allow_multi_hop_routes: false,
+      allow_transfers: false,
     })
     await assertRejects(getSwapFeesBps(WBTC, XYZ), /Invalid fee_policy/)
   })

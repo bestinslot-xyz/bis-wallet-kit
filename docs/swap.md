@@ -238,6 +238,25 @@ await swap.deposit(tokenAddress, amount, feeRate /* , createAllowanceIfNeeded = 
 await swap.withdraw(tokenAddress, amount /* , targetAddress? */) // omit target → self
 ```
 
+### Send to another swap wallet
+
+`transfer` moves a token balance to another user's smart wallet inside the swap, so the token never
+leaves it. The fee is the withdraw fee, in WBTC; LP tokens cannot be sent. It needs a backend with
+`getSwapInfo().allow_transfers`, and a recipient with a swap wallet registered under their BTC
+address. Check the recipient before asking the user to sign:
+
+```ts
+const info = await swap.getSwapInfo()
+const recipient = await swap.getTransferRecipient(btcAddress) // { registered, exiting, pubkey }
+if (info.allow_transfers && recipient.registered && !recipient.exiting) {
+  await swap.transfer(tokenAddress, btcAddress, amount)
+}
+```
+
+The ordinals wallet signs the order text, then the swap key signs a message bound to the network's
+chain id and swap contract. `transfer` repeats the checks above and throws before any prompt when
+one fails. A recipient sees the transfer in `getWalletActivities` with `direction: 'received'`.
+
 `deposit` also takes an optional 5th param, `reclaimInscriptions: { inscriptionId, amount }[]`. When
 the wallet's depositable balance is locked in transfer inscriptions (`transferrable_balance`), pass
 those inscriptions to reclaim; the kit sends them back to self inside the same deposit package (no
@@ -295,8 +314,10 @@ await swap.getWalletActivities(pubkey, pairAddress, limit, offset, kinds) // all
 `getWalletActivities` without a `pairAddress` (pass `undefined`) returns the wallet's activity
 across every pair and token, with `pair_address: null` on the response. Each row carries its own
 tokens' symbol and decimals. `kinds` keeps only the listed kinds (`swap`, `add_liq`, `remove_liq`,
-`deposit`, `withdraw`, `unwrap`), filtered by the backend, so paging and `has_more` count only those
-rows: `['deposit', 'withdraw', 'unwrap']` is the wallet's transfer history.
+`deposit`, `withdraw`, `unwrap`, `transfer`), filtered by the backend, so paging and `has_more`
+count only those rows: `['deposit', 'withdraw', 'unwrap']` is the wallet's in-and-out history. A
+`transfer` row is one the wallet sent or received (`direction`), with `from_address` and
+`to_address`.
 
 Both activity endpoints page with `limit` (max 200) and `offset`. `getActivityOfPair` defaults to 20
 and 0. `getWalletActivities` sends each only when given; without `limit` it returns every activity,
@@ -321,8 +342,8 @@ the full list, which ends the loop above after one page.
 newest first by op id. It pages by cursor rather than offset, so rows landing at the top never shift
 a page: pass the last row's `id` as `before` for the next older page, and stop when `has_more` is
 not `true`. `limit` is 1-100 (the backend defaults to 15) and `kinds` keeps only `swap`, `add_liq`,
-`remove_liq`, `withdraw` or `unwrap` operations. Each row carries its tokens' symbol and decimals;
-`token_2` is null for a withdraw or unwrap.
+`remove_liq`, `withdraw`, `unwrap` or `transfer` operations. Each row carries its tokens' symbol and
+decimals; `token_2` is null for a withdraw, unwrap or transfer.
 
 ```ts
 const first = await swap.getRecentActivity({ limit: 25, kinds: ['swap', 'add_liq', 'remove_liq'] })
