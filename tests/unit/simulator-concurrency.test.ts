@@ -31,8 +31,7 @@ describe('overlapping simulations', () => {
   it('price each exact-input quote against the real balance', async () => {
     saveInfo(WBTC, FACTORY)
     const spend = (BALANCE * 9n) / 10n
-    const quote = () =>
-      swapRequest(proxy, PUBKEY, WBTC, TOKEN, spend, 0n, '', 0n, 0n, 0n, MINER_FEE)
+    const quote = () => swapRequest(proxy, PUBKEY, WBTC, TOKEN, spend, 0n, 0n, 0n, MINER_FEE)
 
     const [a, b] = await Promise.all([quote(), quote()])
 
@@ -44,7 +43,7 @@ describe('overlapping simulations', () => {
   it('price an exact-output quote alongside an exact-input one', async () => {
     saveInfo(WBTC, FACTORY)
     const spend = (BALANCE * 9n) / 10n
-    const exactIn = swapRequest(proxy, PUBKEY, WBTC, TOKEN, spend, 0n, '', 0n, 0n, 0n, MINER_FEE)
+    const exactIn = swapRequest(proxy, PUBKEY, WBTC, TOKEN, spend, 0n, 0n, 0n, MINER_FEE)
     const exactOut = swap2Request(
       proxy,
       PUBKEY,
@@ -52,8 +51,6 @@ describe('overlapping simulations', () => {
       TOKEN,
       2n ** 256n - 1n,
       800_000_000n,
-      '',
-      0n,
       0n,
       0n,
       MINER_FEE
@@ -67,7 +64,7 @@ describe('overlapping simulations', () => {
 
   it('hand the ledger on after a request fails', async () => {
     const quote = (spend: bigint) =>
-      swapRequest(proxy, PUBKEY, WBTC, TOKEN, spend, 0n, '', 0n, 0n, 0n, MINER_FEE)
+      swapRequest(proxy, PUBKEY, WBTC, TOKEN, spend, 0n, 0n, 0n, MINER_FEE)
 
     saveInfo('', '')
     await quote(1_000n).then(

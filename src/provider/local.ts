@@ -22,12 +22,6 @@ import { getNetwork, setNetwork } from '../core/store-network'
 import { getBitcoinNetwork } from '../lib/bitcoin'
 import { WalletInfo } from '../types/wallet'
 
-// @ts-expect-error not in use
-// eslint-disable-next-line unused-imports/no-unused-vars
-function isInstalled() {
-  return true
-}
-
 export type LocalWalletSource = 'unisat' | 'okx'
 export type LocalWalletType = 'p2wpkh' | 'p2tr'
 

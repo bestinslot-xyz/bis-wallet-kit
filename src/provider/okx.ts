@@ -128,7 +128,6 @@ async function signPSBT(psbtBase64: string, broadcast: boolean, inputsToSign: an
         toSignInputs.push({
           address: input.address,
           index: input.signingIndexes[i],
-          // disableTweakSigner: i == 0 ? true : false // TODO: remove this hack!!
         })
       }
     }
