@@ -41,7 +41,6 @@ import {
   swap2Request,
   swapRequest,
   unwrapRequest,
-  withdrawRequest,
 } from '../lib/uniswap_ops'
 import { InscriptionDetails } from '../types/inscription'
 import { WalletInfo } from '../types/wallet'
@@ -3192,8 +3191,6 @@ export async function getAddLiquidityResult(
     amt2,
     0n, // minamt1
     0n, // minamt2
-    '', // bls_signature
-    0n, // nonce
     0n, // token1FeeBps
     0n, // token2FeeBps
     btcFee // btc_fee
@@ -3436,8 +3433,6 @@ export async function getRemoveLiquidityResult(
     lpAmt,
     0n, // minamt1
     0n, // minamt2
-    '', // bls_signature
-    0n, // nonce
     0n, // token1FeeBps
     0n, // token2FeeBps
     btcFee // btc_fee
@@ -3706,8 +3701,6 @@ export async function getSwapResult(
     tokenOutAddr,
     amtIn,
     0n, // min_out_amt
-    '', // bls_signature
-    0n, // nonce
     token1FeeBps,
     token2FeeBps,
     btcFee
@@ -4013,8 +4006,6 @@ export async function getSwap2Result(
     tokenOutAddr,
     BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'), // max_in_amt
     amtOut,
-    '', // bls_signature
-    0n, // nonce
     token1FeeBps,
     token2FeeBps,
     btcFee
@@ -4169,120 +4160,6 @@ export async function prepareAndSendSwap2Order(
 function btcAddressToEvmAddress(btcAddr: string): string {
   const network = getBitcoinNetwork()
   return `0x${ethers.keccak256(bitcoinjs.address.toOutputScript(btcAddr, network)).slice(26)}`
-}
-
-/**
- * Prepares and sends a withdraw request to transfer tokens from the smart wallet to an ordinal wallet. The function retrieves the necessary swap information and connected wallet details, converts the target ordinal Bitcoin address to an Ethereum-compatible address, and generates the required signatures for the withdraw request. It then constructs the withdraw request parameters and sends the request to the backend API.
- *
- * @param tokenAddress The address of the token to be withdrawn.
- * @param ordinalAddress The Bitcoin address of the target ordinal wallet.
- * @param amt The amount of the token to be withdrawn, represented as a bigint.
- *
- * @returns A promise that resolves to an object containing the amount withdrawn, represented as a bigint.
- */
-export async function getWithdrawToOrdinalWalletResult(
-  tokenAddress: string,
-  ordinalAddress: string,
-  amt: bigint
-): Promise<{ amt: bigint }> {
-  const swapInfo = await getSwapInfo()
-  saveInfo(swapInfo.wbtc_address, swapInfo.factory_address)
-
-  const pubkey = (await getSwapWalletFromDB())?.swapPubkey
-  if (!pubkey) {
-    throw new Error('Smart wallet not found. Please generate a smart wallet first.')
-  }
-
-  const targetBtcAddr = ordinalAddress
-  const targetAddress = btcAddressToEvmAddress(targetBtcAddr)
-
-  const proxy: UniswapInfoProxy = {
-    balanceOf: getSwapBalanceOf,
-    reservesOf: getPairReserves,
-  }
-
-  const btcFee = await requestMinerFee('withdraw')
-  const result = await withdrawRequest(
-    proxy,
-    pubkey,
-    tokenAddress,
-    targetAddress,
-    amt,
-    '', // bls_signature
-    0n, // nonce
-    btcFee
-  )
-
-  if (!result.success) {
-    if (result.error_message) {
-      throw new Error(`${result.error_message}`)
-    }
-    throw new Error('Failed to create withdraw request.')
-  }
-  if (!result.data) {
-    throw new Error('No data returned from withdraw request.')
-  }
-
-  return { amt: result.data.amt }
-}
-
-/**
- * Prepares and sends a withdraw request to transfer tokens from the smart wallet to the user's own ordinal wallet. The function retrieves the necessary swap information and connected wallet details, obtains the user's ordinal wallet address, converts it to an Ethereum-compatible address, and generates the required signatures for the withdraw request. It then constructs the withdraw request parameters and sends the request to the backend API.
- *
- * @param tokenAddress The address of the token to be withdrawn.
- * @param amt The amount of the token to be withdrawn, represented as a bigint.
- *
- * @returns A promise that resolves to an object containing the amount withdrawn, represented as a bigint.
- */
-export async function getWithdrawToSelfOrdinalWalletResult(
-  tokenAddress: string,
-  amt: bigint
-): Promise<{ amt: bigint }> {
-  const swapInfo = await getSwapInfo()
-  saveInfo(swapInfo.wbtc_address, swapInfo.factory_address)
-
-  const pubkey = (await getSwapWalletFromDB())?.swapPubkey
-  if (!pubkey) {
-    throw new Error('Smart wallet not found. Please generate a smart wallet first.')
-  }
-
-  const ordinalsWallet = getOrdinalsWallet()
-  if (!ordinalsWallet || !ordinalsWallet.address) {
-    throw new Error('Ordinals wallet not found. Please generate an ordinals wallet first.')
-  }
-  const ordinalAddress = ordinalsWallet.address
-
-  const targetBtcAddr = ordinalAddress
-  const targetAddress = btcAddressToEvmAddress(targetBtcAddr)
-
-  const proxy: UniswapInfoProxy = {
-    balanceOf: getSwapBalanceOf,
-    reservesOf: getPairReserves,
-  }
-
-  const btcFee = await requestMinerFee('withdraw')
-  const result = await withdrawRequest(
-    proxy,
-    pubkey,
-    tokenAddress,
-    targetAddress,
-    amt,
-    '', // bls_signature
-    0n, // nonce
-    btcFee
-  )
-
-  if (!result.success) {
-    if (result.error_message) {
-      throw new Error(`${result.error_message}`)
-    }
-    throw new Error('Failed to create withdraw request.')
-  }
-  if (!result.data) {
-    throw new Error('No data returned from withdraw request.')
-  }
-
-  return { amt: result.data.amt }
 }
 
 interface WithdrawOrderSignatureRequest {
@@ -4561,15 +4438,7 @@ export async function getUnwrapResult(pkscript: string, amt: bigint): Promise<{ 
   }
 
   const btcFee = await requestMinerFee('unwrap')
-  const result = await unwrapRequest(
-    proxy,
-    pubkey,
-    pkscript,
-    amt,
-    '', // bls_signature
-    0n, // nonce
-    btcFee
-  )
+  const result = await unwrapRequest(proxy, pubkey, pkscript, amt, btcFee)
 
   if (!result.success) {
     if (result.error_message) {

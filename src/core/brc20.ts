@@ -5,8 +5,8 @@ import { Buff } from '@cmdcode/buff-utils'
 import { Script } from '@cmdcode/tapscript'
 import { encode as base64Encode } from 'base64-arraybuffer'
 import * as bitcoinjs from 'bitcoinjs-lib'
+import { ethers } from 'ethers'
 import { getBitcoinNetwork } from '../lib/bitcoin'
-import { getWeb3 } from '../lib/web3'
 import { InscriptionDetails } from '../types/inscription'
 import { WalletInfo } from '../types/wallet'
 import { broadcastTxes, clearExtraUtxos, saveExtraUtxos } from './helpers'
@@ -86,31 +86,38 @@ function evmEncodeDeploy(bytecode: string, abi: any, params: any): string {
     bytecode = `0x${bytecode}`
   }
 
-  const web3 = getWeb3()
-  const contract = new web3.eth.Contract(abi)
-  const transaction = contract.deploy({ data: bytecode, arguments: params })
-  const encoded = transaction.encodeABI()
-  return encoded
+  if (bytecode === '0x') throw new Error('contract creation without any data provided.')
+
+  return bytecode + new ethers.Interface(abi).encodeDeploy(params).slice(2)
 }
 
 /**
- * Encodes a function call to a smart contract using the provided ABI and function name, along with the parameters for the function call. This function uses the Web3 library to create a contract instance and encode the function call data according to the ABI specification. It also includes error handling to ensure that the specified function exists in the ABI and that the parameters are correctly formatted.
+ * Encodes a function call to a smart contract using the provided ABI and function name, along with the parameters for the function call. The function call data is encoded with ethers according to the ABI specification; an overloaded name is resolved by argument count. It also includes error handling to ensure that the specified function exists in the ABI and that the parameters are correctly formatted.
  *
  * @param abi - The ABI of the smart contract, which defines the functions and their parameters.
  * @param functionName - The name of the function to call on the smart contract.
  * @param params - An array of parameters to be passed to the function call, which should match the types defined in the ABI for the specified function.
  * @returns A hexadecimal string representing the encoded function call data, which can be included in a transaction to call the smart contract function. The encoding is done according to the ABI specification, and the resulting string can be used as the calldata for a transaction.
- * @throws Will throw an error if the specified function name does not exist in the ABI or if the parameters do not match the expected types defined in the ABI for that function. It will also throw an error if there is an issue with the Web3 library during encoding.
+ * @throws Will throw an error if the specified function name does not exist in the ABI or if the parameters do not match the expected types defined in the ABI for that function.
  */
 export function evmEncodeFunctionCall(abi: any, functionName: string, params: any): string {
-  const web3 = getWeb3()
-  const contract = new web3.eth.Contract(abi)
-  if (typeof contract.methods[functionName] !== 'function') {
+  const iface = new ethers.Interface(abi)
+  let fragment: ethers.FunctionFragment | null
+  try {
+    fragment = iface.getFunction(functionName)
+  } catch (e) {
+    // An overloaded name: pick the overload by argument count.
+    const byArity: ethers.FunctionFragment[] = []
+    iface.forEachFunction(f => {
+      if (f.name === functionName && f.inputs.length === params.length) byArity.push(f)
+    })
+    if (byArity.length !== 1) throw e
+    fragment = byArity[0]!
+  }
+  if (!fragment) {
     throw new TypeError(`Function "${functionName}" not found in ABI.`)
   }
-  const method = contract.methods[functionName](...params)
-  const encoded = method.encodeABI()
-  return encoded
+  return iface.encodeFunctionData(fragment, params)
 }
 
 export function getEvmAddressFromBitcoinAddress(bitcoinAddress: string) {
@@ -119,8 +126,7 @@ export function getEvmAddressFromBitcoinAddress(bitcoinAddress: string) {
   const pkscriptBuffer = Buff.hex(pkscript)
 
   // get keccak256 hash of pkscript
-  const web3 = getWeb3()
-  const hash = web3.utils.keccak256(pkscriptBuffer)
+  const hash = ethers.keccak256(pkscriptBuffer)
   // get the last 20 bytes of the hash
   const addr = hash.slice(-40)
   return `0x${addr}`
@@ -130,8 +136,7 @@ export function getEvmAddressFromPkScript(pkscript: string) {
   const pkscriptBuffer = Buff.hex(pkscript)
 
   // get keccak256 hash of pkscript
-  const web3 = getWeb3()
-  const hash = web3.utils.keccak256(pkscriptBuffer)
+  const hash = ethers.keccak256(pkscriptBuffer)
   // get the last 20 bytes of the hash
   const addr = hash.slice(-40)
   return `0x${addr}`
@@ -510,51 +515,6 @@ export async function callSmartContract(
 }
 
 /**
- * Calls a smart contract function by creating an inscription with the encoded function call data and sending it to the OP_RETURN output. The function takes the smart contract address, ABI, function name, and parameters, encodes the function call using the ABI, and then follows a similar process as `deploySmartContract` to create and send the inscription. It also handles optional payment parameters and allows for a dry run mode where the transaction hexes are returned without broadcasting.
- *
- * @param smartContractContractAddr - The address of the smart contract to call, represented as a string. This address will be included in the inscription content to indicate which contract function is being called.
- * @param abi - The ABI of the smart contract, used to encode the function call data along with the function name and parameters.
- * @param funcName - The name of the function to call on the smart contract, represented as a string. This will be used along with the ABI to encode the function call data.
- * @param params - An array of parameters to be passed to the contract function, which will be encoded using the ABI along with the function name.
- * @param estimatedGas - The estimated gas required for the smart contract function call, used to determine if padding is needed for the inscription content.
- * @param feeRate - The fee rate in sats/vbyte to be used for the transactions involved in the function call process.
- * @param postage - An optional parameter representing the postage to be included in the minting transaction, specified in sats. If null, no postage will be included.
- * @param paymentAddr - An optional parameter representing the Bitcoin address to which payment should be sent for the minting transaction. If null, no payment will be made.
- * @param payment - An optional parameter representing the amount of payment to be sent for the minting transaction, specified in sats. If null or less than or equal to 0, no payment will be made.
- * @param dryRun - A boolean flag indicating whether to perform a dry run. If true, the function will return the transaction hexes without broadcasting them to the network. If false, the transactions will be broadcasted after creation.
- *
- * @returns An object containing details of the function call process, including transaction IDs, signed transaction hexes, inscription ID, postage, and secret used in the minting process. If dryRun is true, the transactions will not be broadcasted and the hexes will be returned for inspection.
- */
-export async function callSmartContractAbi(
-  smartContractContractAddr: string,
-  abi: any,
-  funcName: string,
-  params: any,
-  estimatedGas: number,
-  feeRate: number,
-  postage: number | null,
-  paymentAddr: string | null,
-  payment: number | null,
-  dryRun: boolean
-) {
-  if (typeof abi != 'object') throw new Error('abi must be an object')
-  if (typeof funcName != 'string') throw new Error('func_name must be a string')
-  if (!Array.isArray(params)) throw new Error('params must be an array')
-
-  const encodedFuncCall = evmEncodeFunctionCall(abi, funcName, params)
-  return await callSmartContract(
-    smartContractContractAddr,
-    encodedFuncCall,
-    estimatedGas,
-    feeRate,
-    postage,
-    paymentAddr,
-    payment,
-    dryRun
-  )
-}
-
-/**
  * Calls a smart contract function by creating an inscription with the provided input data and sending it to the OP_RETURN output. The function first compresses the input data, then creates an inscription with the compressed data and mints it. After minting, it sends the inscription to an OP_RETURN output with a specific format. The function also handles optional payment parameters and allows for a dry run mode where the transaction hexes are returned without broadcasting.
  *
  * @param smartContractContractAddr - The address of the smart contract to call, represented as a string. This address will be included in the inscription content to indicate which contract function is being called.
@@ -688,51 +648,6 @@ export async function callSmartContractFromPaymentWallet(
     sendToOpReturnTxId: sendInscriptionTx.txId,
     signedSendToOpReturnTxHex: sendInscriptionTx.signedTxHex,
   }
-}
-
-/**
- * Calls a smart contract function using the provided ABI and function name by encoding the function call data, creating an inscription with the encoded data, and sending it to the OP_RETURN output. The function takes the smart contract address, ABI, function name, and parameters, encodes the function call using the ABI, and then follows a similar process as `callSmartContract` to create and send the inscription. It also handles optional payment parameters and allows for a dry run mode where the transaction hexes are returned without broadcasting.
- *
- * @param smartContractContractAddr - The address of the smart contract to call, represented as a string. This address will be included in the inscription content to indicate which contract function is being called.
- * @param abi - The ABI of the smart contract, used to encode the function call data along with the function name and parameters.
- * @param funcName - The name of the function to call on the smart contract, represented as a string. This will be used along with the ABI to encode the function call data.
- * @param params - An array of parameters to be passed to the contract function, which will be encoded using the ABI along with the function name.
- * @param estimatedGas - The estimated gas required for the smart contract function call, used to determine if padding is needed for the inscription content.
- * @param feeRate - The fee rate in sats/vbyte to be used for the transactions involved in the function call process.
- * @param postage - An optional parameter representing the postage to be included in the minting transaction, specified in sats. If null, no postage will be included.
- * @param paymentAddr - An optional parameter representing the Bitcoin address to which payment should be sent for the minting transaction. If null, no payment will be made.
- * @param payment - An optional parameter representing the amount of payment to be sent for the minting transaction, specified in sats. If null or less than or equal to 0, no payment will be made.
- * @param dryRun - A boolean flag indicating whether to perform a dry run. If true, the function will return the transaction hexes without broadcasting them to the network. If false, the transactions will be broadcasted after creation.
- *
- * @returns An object containing details of the function call process, including transaction IDs, signed transaction hexes, inscription ID, postage, and secret used in the minting process. If dryRun is true, the transactions will not be broadcasted and the hexes will be returned for inspection.
- */
-export async function callSmartContractAbiFromPaymentWallet(
-  smartContractContractAddr: string,
-  abi: any,
-  funcName: string,
-  params: any,
-  estimatedGas: number,
-  feeRate: number,
-  postage: number | null,
-  paymentAddr: string | null,
-  payment: number | null,
-  dryRun: boolean
-) {
-  if (typeof abi != 'object') throw new Error('abi must be an object')
-  if (typeof funcName != 'string') throw new Error('func_name must be a string')
-  if (!Array.isArray(params)) throw new Error('params must be an array')
-
-  const encodedFuncCall = evmEncodeFunctionCall(abi, funcName, params)
-  return await callSmartContractFromPaymentWallet(
-    smartContractContractAddr,
-    encodedFuncCall,
-    estimatedGas,
-    feeRate,
-    postage,
-    paymentAddr,
-    payment,
-    dryRun
-  )
 }
 
 /**

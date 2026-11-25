@@ -6,12 +6,6 @@ import { getNetwork } from '../core/bis'
 import { base64ToHex, finalizePsbtInputs, hexToBase64 } from '../core/helpers'
 import { getPaymentWallet } from '../core/providers'
 
-// @ts-expect-error not in use
-// eslint-disable-next-line unused-imports/no-unused-vars
-function isInstalled() {
-  return typeof window.unisat !== 'undefined'
-}
-
 async function checkNetwork() {
   // Check UniSat extension
   if (!window.unisat) throw new Error('UniSat not found.')

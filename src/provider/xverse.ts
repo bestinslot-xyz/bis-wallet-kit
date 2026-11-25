@@ -11,12 +11,6 @@ import { createUnsecuredToken, finalizePsbtInputs, hexToBase64 } from '../core/h
  * NOTE: use window.XverseProviders.BitcoinProvider instead of window.BitcoinProvider
  */
 
-// @ts-expect-error not in use
-// eslint-disable-next-line unused-imports/no-unused-vars
-function isInstalled() {
-  return typeof window.XverseProviders?.BitcoinProvider !== 'undefined'
-}
-
 function getNetworkType() {
   const bisNetwork = getNetwork()
 

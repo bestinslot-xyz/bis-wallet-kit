@@ -93,19 +93,16 @@
     "@metamask/multichain-api-client": "^0.12.0",
     "@noble/curves": "2.0.1",
     "@noble/hashes": "2.0.1",
-    "@noble/secp256k1": "^3.0.0",
     "@wallet-standard/app": "^1.1.1",
     "@wallet-standard/base": "^1.1.1",
     "base64-arraybuffer": "^1.0.2",
     "bip322-js": "^3.0.0",
     "bitcoinjs-lib": "^6.1.7",
     "bitcoinjs-message": "^2.2.0",
-    "cbor2": "^1.12.0",
     "ecpair": "^3.0.0",
     "ethers": "^6.16.0",
     "tiny-secp256k1": "^2.2.4",
-    "varuint-bitcoin": "^2.0.0",
-    "web3": "^4.16.0"
+    "varuint-bitcoin": "^2.0.0"
   },
   "devDependencies": {
     "@antfu/eslint-config": "^6.7.3",

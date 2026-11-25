@@ -58,8 +58,6 @@ describe('swap price impact with a mixed-case WBTC address', () => {
         TOKEN,
         100_000_000n,
         0n,
-        '',
-        0n,
         25n,
         0n,
         MINER_FEE
@@ -79,8 +77,6 @@ describe('swap price impact with a mixed-case WBTC address', () => {
         TOKEN,
         2n ** 256n - 1n,
         90_661_089_388n,
-        '',
-        0n,
         25n,
         0n,
         MINER_FEE
@@ -98,8 +94,6 @@ describe('swap price impact with a mixed-case WBTC address', () => {
       TOKEN,
       OTHER,
       1_000_000n,
-      0n,
-      '',
       0n,
       13n,
       12n,

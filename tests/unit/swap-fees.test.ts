@@ -68,8 +68,6 @@ describe('buildSwapFees reconciles with swapRequest (exact input)', () => {
       WBTC,
       AMOUNT_IN,
       0n,
-      '',
-      0n,
       TOKEN_IN_FEE_BPS,
       TOKEN_OUT_FEE_BPS,
       MINER_FEE
@@ -103,8 +101,6 @@ describe('buildSwapFees reconciles with swapRequest (exact input)', () => {
       WBTC,
       AMOUNT_IN,
       0n,
-      '',
-      0n,
       TOKEN_IN_FEE_BPS,
       TOKEN_OUT_FEE_BPS,
       MINER_FEE
@@ -122,19 +118,7 @@ describe('buildSwapFees reconciles with swapRequest (exact input)', () => {
   it('carries a non-zero input-leg fee when WBTC is the input', async () => {
     // Buying TOKEN with WBTC flips which leg the protocol fee sits on.
     const wbtcIn = 1_000_000n
-    const result = await swapRequest(
-      proxy,
-      PUBKEY,
-      WBTC,
-      TOKEN,
-      wbtcIn,
-      0n,
-      '',
-      0n,
-      25n,
-      0n,
-      MINER_FEE
-    )
+    const result = await swapRequest(proxy, PUBKEY, WBTC, TOKEN, wbtcIn, 0n, 25n, 0n, MINER_FEE)
     assert.equal(result.success, true)
 
     const fees = buildSwapFees(wbtcIn, result.amounts![1]!, 25n, 0n, MINER_FEE)
@@ -155,8 +139,6 @@ describe('buildSwapFees reconciles with swap2Request (exact output)', () => {
       WBTC,
       2n ** 256n - 1n,
       AMOUNT_OUT,
-      '',
-      0n,
       0n,
       25n,
       MINER_FEE
@@ -191,8 +173,6 @@ describe('swapRequest / swap2Request surface the pre-swap reserves', () => {
       WBTC,
       1_000_000_000n,
       0n,
-      '',
-      0n,
       0n,
       25n,
       MINER_FEE
@@ -202,19 +182,7 @@ describe('swapRequest / swap2Request surface the pre-swap reserves', () => {
     assert.equal(sell.reserve_out, RESERVE_WBTC)
 
     // Flipping the input token flips the orientation.
-    const buy = await swapRequest(
-      proxy,
-      PUBKEY,
-      WBTC,
-      TOKEN,
-      1_000_000n,
-      0n,
-      '',
-      0n,
-      25n,
-      0n,
-      MINER_FEE
-    )
+    const buy = await swapRequest(proxy, PUBKEY, WBTC, TOKEN, 1_000_000n, 0n, 25n, 0n, MINER_FEE)
     assert.equal(buy.success, true)
     assert.equal(buy.reserve_in, RESERVE_WBTC)
     assert.equal(buy.reserve_out, RESERVE_TOKEN)
@@ -228,8 +196,6 @@ describe('swapRequest / swap2Request surface the pre-swap reserves', () => {
       WBTC,
       2n ** 256n - 1n,
       1_000_000n,
-      '',
-      0n,
       0n,
       25n,
       MINER_FEE

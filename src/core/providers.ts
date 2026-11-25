@@ -392,25 +392,3 @@ export async function sendBTC(
 
   return txid
 }
-
-/**
- * Signs a PSBT using the currently connected wallet provider.
- *
- * @param psbtBase64 The PSBT to sign, base64-encoded.
- * @param broadcast Whether to broadcast the signed transaction.
- * @param inputsToSign The inputs to sign.
- * @param message Optional message passed to providers that support it (ignored by others).
- */
-export async function signPSBT(
-  psbtBase64: string,
-  broadcast: boolean,
-  inputsToSign: any[],
-  message?: string
-) {
-  const walletInfo = getWalletInfo()
-
-  if (!walletInfo || !walletInfo.wallets) throw new Error('Wallets not found')
-
-  const provider = requireProvider(walletInfo.provider)
-  await provider.signPSBT(psbtBase64, broadcast, inputsToSign, message)
-}
