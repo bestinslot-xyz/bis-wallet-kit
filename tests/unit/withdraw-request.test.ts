@@ -1,4 +1,6 @@
-import { afterEach, assert, beforeEach, describe, it, vi } from 'vitest'
+import { Buffer } from 'node:buffer'
+import * as bitcoin from 'bitcoinjs-lib'
+import { afterEach, assert, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // The /withdraw POST body, against a stubbed backend. The sequencer reads exactly the three
 // brc20_withdraw hex keys, so they are spelled out here independently of the kit's code.
@@ -70,15 +72,25 @@ async function freshSwapModule() {
   return await import('../../src/core/bis_swap.ts')
 }
 
-const CHAIN = {
-  inscriptionId: 'abc',
-  commitTxId: 'c1',
-  commitTxHex: '0a0a',
-  revealTxId: 'c2',
-  revealTxHex: '0b0b',
-  sendTxId: 'c3',
-  sendTxHex: '0c0c',
-  feeSats: 1000,
+/** A send moving `<revealTxId>:0` to `address` at dust, as `prepareBrc20ProgWithdraw` signs it. */
+function sendHexTo(address: string): string {
+  const tx = new bitcoin.Transaction()
+  tx.addInput(Buffer.alloc(32, 2), 0)
+  tx.addOutput(bitcoin.address.toOutputScript(address, bitcoin.networks.bitcoin), 294)
+  return tx.toHex()
+}
+
+function chainTo(address: string) {
+  return {
+    inscriptionId: 'abc',
+    commitTxId: 'c1',
+    commitTxHex: '0a0a',
+    revealTxId: 'c2',
+    revealTxHex: '0b0b',
+    sendTxId: 'c3',
+    sendTxHex: sendHexTo(address),
+    feeSats: 1000,
+  }
 }
 
 beforeEach(() => {
@@ -93,23 +105,40 @@ describe('withdraw request body', () => {
   it('carries the held chain hexes to another address', async () => {
     const { prepareAndSendWithdrawOrderToOrdinalWallet } = await freshSwapModule()
     await prepareAndSendWithdrawOrderToOrdinalWallet(TOKEN, RECIPIENT, 5n, {
-      brc20Withdraw: CHAIN,
+      brc20Withdraw: chainTo(RECIPIENT),
     })
     assert.deepEqual(withdrawBodies[0].brc20_withdraw, {
       commit_txhex: '0a0a',
       reveal_txhex: '0b0b',
-      send_txhex: '0c0c',
+      send_txhex: sendHexTo(RECIPIENT),
     })
   })
 
   it('carries the held chain hexes to the own ordinals wallet', async () => {
     const { prepareAndSendWithdrawOrderToSelfOrdinalWallet } = await freshSwapModule()
-    await prepareAndSendWithdrawOrderToSelfOrdinalWallet(TOKEN, 5n, { brc20Withdraw: CHAIN })
+    await prepareAndSendWithdrawOrderToSelfOrdinalWallet(TOKEN, 5n, {
+      brc20Withdraw: chainTo(OWN),
+    })
     assert.deepEqual(withdrawBodies[0].brc20_withdraw, {
       commit_txhex: '0a0a',
       reveal_txhex: '0b0b',
-      send_txhex: '0c0c',
+      send_txhex: sendHexTo(OWN),
     })
+  })
+
+  it('refuses a chain whose send pays another address than the withdraw target', async () => {
+    const swap = await freshSwapModule()
+    await expect(
+      swap.prepareAndSendWithdrawOrderToSelfOrdinalWallet(TOKEN, 5n, {
+        brc20Withdraw: chainTo(RECIPIENT),
+      })
+    ).rejects.toThrow(/target/)
+    await expect(
+      swap.prepareAndSendWithdrawOrderToOrdinalWallet(TOKEN, RECIPIENT, 5n, {
+        brc20Withdraw: chainTo(OWN),
+      })
+    ).rejects.toThrow(/target/)
+    assert.equal(withdrawBodies.length, 0)
   })
 
   it('leaves the body unchanged without the option', async () => {

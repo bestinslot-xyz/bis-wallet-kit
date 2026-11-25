@@ -80,6 +80,7 @@ export type {
   TvlPoint,
   WalletActivityEntry,
   WalletActivityKind,
+  WithdrawOrderOptions,
 } from '../core/bis_swap' // Export types related to wallet activities
 export type { AllBalanceDetails } from '../core/helpers' // Export the AllBalanceDetails type from the core helpers module
 export type { SignProgressOptions, SignRequest } from '../core/sign-progress' // Per-prompt progress for multi-signature flows
@@ -360,7 +361,7 @@ export async function wrapBtc(
  * @param tokenAddress - The address of the token to withdraw.
  * @param amount - The amount of the token to withdraw, specified as a bigint.
  * @param targetAddress - (Optional) The target address to which the tokens should be withdrawn. If not provided, the tokens will be withdrawn to the user's own Ordinals wallet.
- * @param opts - `brc20Withdraw` is a BRC-20 transfer chain prepared by `brc20.prepareBrc20ProgWithdraw`. It is sent with the order as `brc20_withdraw` so the sequencer broadcasts it to pay the withdraw out directly. Without it the request body carries no `brc20_withdraw`.
+ * @param opts - `brc20Withdraw` is a BRC-20 transfer chain prepared by `brc20.prepareBrc20ProgWithdraw`. It is sent with the order as `brc20_withdraw` so the sequencer broadcasts it to pay the withdraw out directly. Prepare the chain with `targetAddress` set to the connected ordinals address, the same target this withdraw pays (omit `targetAddress` here, or pass that address); a chain whose send pays another address is refused before any signature. Without it the request body carries no `brc20_withdraw`.
  * @returns A promise that resolves when the withdrawal process is complete.
  */
 export async function withdraw(

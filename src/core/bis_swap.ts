@@ -4370,19 +4370,30 @@ export interface WithdrawOrderOptions {
   brc20Withdraw?: PreparedBrc20Withdraw
 }
 
+/**
+ * The `brc20_withdraw` part of a withdraw order's body.
+ *
+ * @throws When the held send's first output does not pay `targetBtcAddr`, the withdraw's target.
+ */
 function brc20WithdrawBody(
+  targetBtcAddr: string,
   opts?: WithdrawOrderOptions
 ): Pick<WithdrawOrderRequest, 'brc20_withdraw'> {
   const held = opts?.brc20Withdraw
-  return held
-    ? {
-        brc20_withdraw: {
-          commit_txhex: held.commitTxHex,
-          reveal_txhex: held.revealTxHex,
-          send_txhex: held.sendTxHex,
-        },
-      }
-    : {}
+  if (!held) return {}
+  const sendOut = bitcoinjs.Transaction.fromHex(held.sendTxHex).outs[0]
+  const targetScript = bitcoinjs.address.toOutputScript(targetBtcAddr, getBitcoinNetwork())
+  if (!sendOut?.script.equals(targetScript))
+    throw new Error(
+      'The BRC-20 withdraw chain sends to another address than the withdraw target; prepare it with the same target'
+    )
+  return {
+    brc20_withdraw: {
+      commit_txhex: held.commitTxHex,
+      reveal_txhex: held.revealTxHex,
+      send_txhex: held.sendTxHex,
+    },
+  }
 }
 export interface WithdrawOrderResponse {
   success: boolean
@@ -4422,6 +4433,7 @@ export async function prepareAndSendWithdrawOrderToOrdinalWallet(
 
   const targetBtcAddr = ordinalAddr
   const targetAddr = btcAddressToEvmAddress(targetBtcAddr)
+  const brc20Withdraw = brc20WithdrawBody(targetBtcAddr, opts)
 
   const token1FeeBPS = 0n
   const token2FeeBPS = 0n
@@ -4457,7 +4469,7 @@ export async function prepareAndSendWithdrawOrderToOrdinalWallet(
     token2FeeBps: token2FeeBPS.toString(),
     btc_fee: btcFee.toString(),
     bip322_signature: bip322Signature,
-    ...brc20WithdrawBody(opts),
+    ...brc20Withdraw,
   })
 }
 
@@ -4486,6 +4498,7 @@ export async function prepareAndSendWithdrawOrderToSelfOrdinalWallet(
   }
   const targetBtcAddr = ordinalsWallet.address
   const targetAddr = btcAddressToEvmAddress(targetBtcAddr)
+  const brc20Withdraw = brc20WithdrawBody(targetBtcAddr, opts)
 
   const token1FeeBPS = 0n
   const token2FeeBPS = 0n
@@ -4521,7 +4534,7 @@ export async function prepareAndSendWithdrawOrderToSelfOrdinalWallet(
     token2FeeBps: token2FeeBPS.toString(),
     btc_fee: btcFee.toString(),
     bip322_signature: bip322Signature,
-    ...brc20WithdrawBody(opts),
+    ...brc20Withdraw,
   })
 }
 
