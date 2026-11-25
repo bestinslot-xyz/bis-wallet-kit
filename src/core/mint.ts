@@ -3056,6 +3056,46 @@ export async function sendInscriptionAll(
   dryRun: boolean,
   signFunc: SignFunction
 ): Promise<SendInscriptionResult> {
+  const userOrdinalsWallet = getOrdinalsWallet()
+  if (!userOrdinalsWallet) throw new Error('Wallets not found')
+
+  const inscriptionDetails = await getInscriptionDetails(inscriptionId, userOrdinalsWallet.address)
+  if (inscriptionDetails == null) {
+    throw new Error('Inscription cannot be found in wallet')
+  }
+  return await sendInscriptionUtxoAll(
+    inscriptionDetails,
+    targetWallet,
+    targetPostage,
+    feeRate,
+    dryRun,
+    signFunc
+  )
+}
+
+/**
+ * Sends the inscription on the first sat of `inscriptionDetails.satpoint`'s output, held at the
+ * connected ordinals address, to a target address. That output is input 0 and the target's output
+ * is output 0; cardinal UTXOs of the payment address pay the fee, and every input signals RBF. The
+ * output is spent as given, so the send can replace a mempool transaction spending it.
+ *
+ * @param inscriptionDetails - the inscription's satpoint (`<txid>:<vout>:0`), output value and script type
+ * @param targetWallet - the wallet to send the inscription to (only the address field is used)
+ * @param targetPostage - the target output's value; the target's dust value when null or not positive
+ * @param feeRate - the fee rate in sat/vbyte to use for the transaction
+ * @param dryRun - if true, the transaction is not broadcast
+ * @param signFunc - the function that signs the transaction
+ *
+ * @returns the transaction ID, signed transaction hex, the inscription's vout and that output's value
+ */
+export async function sendInscriptionUtxoAll(
+  inscriptionDetails: Pick<InscriptionUTXODetails, 'satpoint' | 'value' | 'script_type'>,
+  targetWallet: WalletInfo,
+  targetPostage: number | null,
+  feeRate: number,
+  dryRun: boolean,
+  signFunc: SignFunction
+): Promise<SendInscriptionResult> {
   // Get connected wallet
   const userPaymentWallet = getPaymentWallet()
   const userOrdinalsWallet = getOrdinalsWallet()
@@ -3077,25 +3117,25 @@ export async function sendInscriptionAll(
 
   if (!inscriptionWallet.addr) throw new Error('inscription_wallet is null')
 
-  const inscriptionDetails = await getInscriptionDetails(inscriptionId, inscriptionWallet.addr)
-  if (inscriptionDetails == null) {
-    throw new Error('Inscription cannot be found in wallet')
-  }
-  if (inscriptionDetails.satpoint.split(':')[2] !== '0') {
+  const [inscrTxid, inscrVout, inscrOffset] = inscriptionDetails.satpoint.split(':')
+  if (inscrOffset !== '0') {
     // TODO: implement this case as well
     throw new Error('Inscription is at the first sat of utxo')
   }
 
   if (!payerWallet.addr) throw new Error('payer_wallet.addr is null')
 
-  const cardinalUtxos = await getCardinalUtxos(payerWallet.addr)
+  const inscrOutpoint = `${inscrTxid}:${inscrVout}`
+  const cardinalUtxos = (await getCardinalUtxos(payerWallet.addr)).filter(
+    u => u.utxo !== inscrOutpoint
+  )
 
   if (targetPostage == null || targetPostage <= 0) {
     targetPostage = getDustValue(targetWallet)
   }
 
   const inscrUtxo: UtxoInfoWithWallet = {
-    utxo: `${inscriptionDetails.satpoint.split(':')[0]}:${inscriptionDetails.satpoint.split(':')[1]}`,
+    utxo: inscrOutpoint,
     value: inscriptionDetails.value,
     script_type: inscriptionDetails.script_type,
     wallet: inscriptionWallet,

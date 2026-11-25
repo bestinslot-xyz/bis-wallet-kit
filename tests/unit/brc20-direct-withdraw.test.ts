@@ -1,9 +1,13 @@
+import type { BISProvider } from '../../src/provider/api.ts'
 import { Buffer } from 'node:buffer'
 import * as ecc from '@bitcoinerlab/secp256k1'
 import * as bitcoin from 'bitcoinjs-lib'
+import { ECPairFactory } from 'ecpair'
 import { afterEach, assert, describe, expect, it, vi } from 'vitest'
 import { selfFundedSendPostage, sendVsize } from '../../src/core/brc20-direct-withdraw.ts'
 import { clearExtraUtxos, saveExtraUtxos } from '../../src/core/helpers.ts'
+import { registerProvider } from '../../src/core/providers.ts'
+import { saveWalletInfo } from '../../src/core/store.ts'
 import { brc20, wallet } from '../../src/node.ts'
 
 // Fixed testnet key (see local-wallet.test.ts). Never use for real funds.
@@ -80,6 +84,67 @@ async function connect(type: 'p2wpkh' | 'p2tr') {
   return { address, script, prevValue: 200000 }
 }
 
+const KEY = ECPairFactory(ecc).fromWIF(WIF, net)
+const X_ONLY = Buffer.from(KEY.publicKey).subarray(1, 33)
+const TWEAKED = KEY.tweak(bitcoin.crypto.taggedHash('TapTweak', X_ONLY))
+
+/**
+ * A split wallet of the test key, as Xverse connects: payment and ordinals at different addresses.
+ * It signs every input it is asked to with the key its script needs.
+ */
+const SPLIT_PROVIDER: BISProvider = {
+  getWallets: async () => [],
+  signMessage: async () => '',
+  sign: async (unsignedPsbtHex, _payment, _ord, _ordIdxes, _tweak, noSignIdxes) => {
+    const psbt = bitcoin.Psbt.fromHex(unsignedPsbtHex, { network: net })
+    for (let i = 0; i < psbt.inputCount; i++) {
+      if (noSignIdxes?.includes(i)) continue
+      const script = psbt.data.inputs[i]!.witnessUtxo!.script
+      if (script[0] === bitcoin.opcodes.OP_1) {
+        psbt.signInput(i, {
+          publicKey: Buffer.from(TWEAKED.publicKey),
+          sign: h => Buffer.from(TWEAKED.signSchnorr(h)),
+          signSchnorr: h => Buffer.from(TWEAKED.signSchnorr(h)),
+        })
+      } else {
+        psbt.signInput(i, {
+          publicKey: Buffer.from(KEY.publicKey),
+          sign: h => Buffer.from(KEY.sign(h)),
+        })
+      }
+      psbt.finalizeInput(i)
+    }
+    const tx = psbt.extractTransaction()
+    return { txId: tx.getId(), signedTxHex: tx.toHex() }
+  },
+} as BISProvider
+
+/**
+ * Connects the split wallet with ordinals at `ordinalsType` and payment at the other type. The
+ * payment address holds one 200000-sat cardinal UTXO, with chain calls stubbed.
+ */
+async function connectSplit(ordinalsType: 'p2wpkh' | 'p2tr') {
+  const paymentType = ordinalsType === 'p2wpkh' ? 'p2tr' : 'p2wpkh'
+  const payment = await connect(paymentType)
+  const address = ordinalsType === 'p2wpkh' ? P2WPKH : P2TR
+  const pubkey = Buffer.from(KEY.publicKey).toString('hex')
+  registerProvider('xverse', SPLIT_PROVIDER)
+  saveWalletInfo({
+    provider: 'xverse',
+    wallets: [
+      { address: payment.address, pubkey, purpose: 'payment' },
+      { address, pubkey, purpose: 'ordinals' },
+    ],
+    signature: null,
+  })
+  return {
+    address,
+    script: bitcoin.address.toOutputScript(address, net),
+    paymentScript: payment.script,
+    prevValue: payment.prevValue,
+  }
+}
+
 function witnessHex(tx: bitcoin.Transaction): string {
   return tx.ins.flatMap(i => i.witness.map(w => w.toString('hex'))).join('')
 }
@@ -111,9 +176,11 @@ const CONTENT =
 
 describe('selfFundedSendPostage', () => {
   it('covers the dust output plus the 1-in 1-out send fee', () => {
-    assert.equal(selfFundedSendPostage('p2tr', 10), 330 + Math.ceil(111 * 10))
+    // p2tr: 10.5 + 57.75 (a 67-byte witness, room for an explicit sighash byte) + 43 = 111.25.
+    assert.equal(sendVsize('p2tr', 'p2tr'), 112)
+    assert.equal(selfFundedSendPostage('p2tr', 10), 330 + 112 * 10)
     assert.equal(selfFundedSendPostage('p2wpkh', 10), 294 + Math.ceil(110 * 10))
-    assert.equal(selfFundedSendPostage('p2tr', 1.5), 330 + Math.ceil(111 * 1.5))
+    assert.equal(selfFundedSendPostage('p2tr', 1.5), 330 + Math.ceil(112 * 1.5))
   })
 
   it('prices a send whose target type differs from the inscription input', () => {
@@ -132,67 +199,123 @@ describe('sendBrc20ProgWithdrawToSelf', () => {
     vi.unstubAllGlobals()
   })
 
-  for (const type of ['p2wpkh', 'p2tr'] as const) {
-    it(`re-sends a held ${type} withdraw inscription to the ordinals address and broadcasts`, async () => {
-      const { address, script } = await connect(type)
-      // The held inscription output: 700 sats at the ordinals address, funded by a stand-in parent.
-      const held = new bitcoin.Transaction()
-      held.addInput(Buffer.alloc(32, 9), 0)
-      held.addOutput(script, 700)
-      const heldTxid = held.getId()
-      const inscriptionId = `${heldTxid}i0`
-      const baseFetch = globalThis.fetch as unknown as (u: string, o?: any) => Promise<any>
-      vi.stubGlobal(
-        'fetch',
-        vi.fn(async (url: string | URL, opts?: any) => {
-          const u = String(url)
-          if (u.includes('/inscription_utxo/'))
-            return jsonResponse({
-              data: {
-                txid: heldTxid,
-                vout: 0,
-                value: 700,
-                script_type: SCRIPT_TYPE[type],
-                script: script.toString('hex'),
-                address,
-                block_height: null,
-                inscription_ids: [inscriptionId],
-                satpoints: [`${heldTxid}:0:0`],
-                amounts: null,
-                rune_ids: null,
-                txfee: null,
-                vsize: null,
-              },
-            })
-          if (u.includes('/gettxhex/') && u.endsWith(heldTxid)) return jsonResponse(held.toHex())
-          if (u.includes('/sendrawtransactions')) {
-            const txhexes: string[] = JSON.parse(opts.body).txhexes
-            sentBodies.push(txhexes)
-            return jsonResponse(txhexes.map(h => bitcoin.Transaction.fromHex(h).getId()))
-          }
-          return baseFetch(u, opts)
-        })
-      )
-      const prompts: { step: number; total?: number }[] = []
+  const DUST = { p2wpkh: 294, p2tr: 330 } as const
 
-      const res = await brc20.sendBrc20ProgWithdrawToSelf({
-        inscriptionId,
-        feeRate: 12,
-        onSignRequest: r => prompts.push(r),
+  /**
+   * Stubs a revealed withdraw inscription at `script` whose relay send sits in the mempool. The
+   * provider reports the inscription on the stuck send's output (`elsewhere`) or not at all
+   * (`missing`), as providers that follow or drop mempool spends do.
+   */
+  function stubStuckReveal(
+    address: string,
+    script: Buffer,
+    type: 'p2wpkh' | 'p2tr',
+    report: 'elsewhere' | 'missing'
+  ) {
+    // The reveal: 700 sats at the ordinals address, funded by a stand-in parent.
+    const reveal = new bitcoin.Transaction()
+    reveal.addInput(Buffer.alloc(32, 9), 0)
+    reveal.addOutput(script, 700)
+    const revealTxid = reveal.getId()
+    const inscriptionId = `${revealTxid}i0`
+    const stuck = new bitcoin.Transaction()
+    stuck.addInput(Buffer.from(revealTxid, 'hex').reverse(), 0)
+    stuck.addOutput(script, DUST[type])
+    const stuckTxid = stuck.getId()
+    const baseFetch = globalThis.fetch as unknown as (u: string, o?: any) => Promise<any>
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string | URL, opts?: any) => {
+        const u = String(url)
+        if (u.includes('/inscription_utxo/')) {
+          if (report === 'missing')
+            return {
+              ok: false,
+              status: 404,
+              statusText: 'Not Found',
+              json: async () => ({}),
+              text: async () => '',
+            }
+          return jsonResponse({
+            data: {
+              txid: stuckTxid,
+              vout: 0,
+              value: DUST[type],
+              script_type: SCRIPT_TYPE[type],
+              script: script.toString('hex'),
+              address,
+              block_height: null,
+              inscription_ids: [inscriptionId],
+              satpoints: [`${stuckTxid}:0:0`],
+              amounts: null,
+              rune_ids: null,
+              txfee: null,
+              vsize: null,
+            },
+          })
+        }
+        if (u.includes('/gettxhex/') && u.endsWith(revealTxid)) return jsonResponse(reveal.toHex())
+        if (u.includes('/gettxhex/') && u.endsWith(stuckTxid)) return jsonResponse(stuck.toHex())
+        if (u.includes('/sendrawtransactions')) {
+          const txhexes: string[] = JSON.parse(opts.body).txhexes
+          sentBodies.push(txhexes)
+          return jsonResponse(txhexes.map(h => bitcoin.Transaction.fromHex(h).getId()))
+        }
+        return baseFetch(u, opts)
       })
-
-      assert.equal(sentBodies.length, 1)
-      assert.equal(sentBodies[0]!.length, 1)
-      const send = bitcoin.Transaction.fromHex(sentBodies[0]![0]!)
-      assert.equal(send.getId(), res.txId)
-      assert.equal(send.outs[0]!.script.toString('hex'), script.toString('hex'))
-      assert.equal(outpoint(send.ins[0]!), `${heldTxid}:0`)
-      // The fee comes from a cardinal UTXO, so there is an input beyond the inscription.
-      assert.isAbove(send.ins.length, 1)
-      for (const input of send.ins) assert.isBelow(input.sequence, 0xfffffffe)
-      assert.equal(prompts.length, 1)
-    })
+    )
+    return { revealTxid, inscriptionId }
   }
+
+  for (const type of ['p2wpkh', 'p2tr'] as const) {
+    for (const report of ['elsewhere', 'missing'] as const) {
+      it(`replaces a stuck ${type} relay send spending the reveal output (provider: ${report})`, async () => {
+        const { address, script } = await connect(type)
+        const { revealTxid, inscriptionId } = stubStuckReveal(address, script, type, report)
+        const prompts: { step: number; total?: number }[] = []
+
+        const res = await brc20.sendBrc20ProgWithdrawToSelf({
+          inscriptionId,
+          feeRate: 12,
+          onSignRequest: r => prompts.push(r),
+        })
+
+        assert.equal(sentBodies.length, 1)
+        assert.equal(sentBodies[0]!.length, 1)
+        const send = bitcoin.Transaction.fromHex(sentBodies[0]![0]!)
+        assert.equal(send.getId(), res.txId)
+        // Input 0 is the reveal output itself, so the send conflicts with the stuck one.
+        assert.equal(outpoint(send.ins[0]!), `${revealTxid}:0`)
+        assert.ok(send.outs[0]!.script.equals(script))
+        assert.equal(send.outs[0]!.value, DUST[type])
+        // The fee comes from a cardinal UTXO, so there is an input beyond the inscription.
+        assert.isAbove(send.ins.length, 1)
+        for (const input of send.ins) assert.isBelow(input.sequence, 0xfffffffe)
+        assert.equal(prompts.length, 1)
+      })
+    }
+  }
+
+  it('pays the fee from the payment address of a split wallet', async () => {
+    const { address, script, paymentScript } = await connectSplit('p2tr')
+    const { revealTxid, inscriptionId } = stubStuckReveal(address, script, 'p2tr', 'elsewhere')
+
+    await brc20.sendBrc20ProgWithdrawToSelf({ inscriptionId, feeRate: 12 })
+
+    const send = bitcoin.Transaction.fromHex(sentBodies[0]![0]!)
+    assert.equal(outpoint(send.ins[0]!), `${revealTxid}:0`)
+    assert.ok(send.outs[0]!.script.equals(script))
+    assert.isAbove(send.ins.length, 1)
+    assert.ok(send.outs.slice(1).every(o => o.script.equals(paymentScript)))
+  })
+
+  it('refuses an inscription id that is not the first inscription of a reveal', async () => {
+    await connect('p2wpkh')
+    await expect(
+      brc20.sendBrc20ProgWithdrawToSelf({ inscriptionId: `${'ab'.repeat(32)}i1`, feeRate: 3 })
+    ).rejects.toThrow(/inscription/)
+    assert.equal(sentBodies.length, 0)
+  })
 
   it('refuses an invalid fee rate before signing', async () => {
     await connect('p2wpkh')
@@ -210,7 +333,8 @@ describe('prepareBrc20ProgWithdraw', () => {
 
   for (const type of ['p2wpkh', 'p2tr'] as const) {
     it(`signs a ${type} commit, reveal and self-funded send without broadcasting`, async () => {
-      const { address, script, prevValue } = await connect(type)
+      const { address, script, paymentScript, prevValue } = await connectSplit(type)
+      assert.isTrue(brc20.canPrepareBrc20ProgWithdraw())
       const prompts: { step: number; total?: number }[] = []
       const feeRate = 10
 
@@ -253,7 +377,7 @@ describe('prepareBrc20ProgWithdraw', () => {
 
       // Miner fees of all three: everything the commit spends, less its change and the dust kept.
       const change = commit.outs
-        .filter(o => o.script.equals(script))
+        .filter(o => o.script.equals(paymentScript))
         .reduce((sum, o) => sum + o.value, 0)
       assert.equal(res.feeSats, prevValue - change - dust)
 
@@ -279,7 +403,7 @@ describe('prepareBrc20ProgWithdraw', () => {
   }
 
   it('pays the dust of a target whose type differs from the ordinals address', async () => {
-    await connect('p2wpkh')
+    await connectSplit('p2wpkh')
     const res = await brc20.prepareBrc20ProgWithdraw({
       tick: 'ordi',
       amount: '1.5',
@@ -293,8 +417,24 @@ describe('prepareBrc20ProgWithdraw', () => {
     assert.equal(send.outs[0]!.value, 330)
   })
 
-  it('refuses the chain when the package rejects the send', async () => {
+  it('refuses a single-address wallet before signing', async () => {
     await connect('p2tr')
+    assert.isFalse(brc20.canPrepareBrc20ProgWithdraw())
+    const args = { tick: 'ordi', amount: '1.5', targetAddress: P2TR, feeRate: 3 }
+    await expect(brc20.prepareBrc20ProgWithdraw(args)).rejects.toThrow(/separate payment/)
+    await expect(brc20.getBrc20ProgWithdrawFee(args)).rejects.toThrow(/separate payment/)
+    assert.equal(testedBodies.length, 0)
+  })
+
+  it('cannot prepare without a connected wallet', () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    saveWalletInfo({ provider: 'xverse', wallets: [], signature: null })
+    assert.isFalse(brc20.canPrepareBrc20ProgWithdraw())
+    logged.mockRestore()
+  })
+
+  it('refuses the chain when the package rejects the send', async () => {
+    await connectSplit('p2tr')
     rejectThirdTx = true
     await expect(
       brc20.prepareBrc20ProgWithdraw({
@@ -333,7 +473,7 @@ describe('prepareBrc20ProgWithdraw', () => {
     })
   }
 
-  for (const amount of ['1.', '.5', '1e3', '-1', '1.5"', ' 1', '']) {
+  for (const amount of ['1.', '.5', '1e3', '-1', '1.5"', ' 1', '', '0', '0.0', '000']) {
     it(`refuses the amount ${JSON.stringify(amount)} before signing`, async () => {
       await connect('p2wpkh')
       const args = { tick: 'ordi', amount, targetAddress: P2WPKH, feeRate: 3 }
