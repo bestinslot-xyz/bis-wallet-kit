@@ -241,7 +241,10 @@ await swap.withdraw(tokenAddress, amount /* , targetAddress? */) // omit target 
 `withdraw` takes a fourth argument, `{ brc20Withdraw }`: a chain from
 `brc20.prepareBrc20ProgWithdraw`. It is sent with the order as `brc20_withdraw` (`commit_txhex`,
 `reveal_txhex`, `send_txhex`) so the sequencer broadcasts it to pay the withdraw out directly.
-Without it the request body is unchanged.
+Prepare the chain with `targetAddress` set to the connected ordinals address, the same target the
+withdraw pays (omit `targetAddress` on `withdraw`, or pass that address); `withdraw` refuses a chain
+whose send pays another address before asking for any signature. Without it the request body is
+unchanged. See [Held withdraw for a relay](./brc20.md#held-withdraw-for-a-relay).
 
 ### Send to another swap wallet
 
