@@ -46,6 +46,59 @@ const result = await brc20.withdrawFromBrc20Prog(
 )
 ```
 
+### Held withdraw for a relay
+
+A DEX withdraw can pay a BRC-20 token out as plain BRC-20 instead of a BRC2.0 balance. The wallet
+signs a withdraw inscription chain up front and hands it to the sequencer with the withdraw order;
+the sequencer broadcasts the commit and reveal, and relays the held send once the withdraw settles.
+
+```ts
+import { brc20, swap } from '@bestinslot/wallet-kit'
+
+if (brc20.canPrepareBrc20ProgWithdraw()) {
+  const args = {
+    tick: 'ordi',
+    amount: '1.5', // decimal string, as inscribed; must be above zero
+    targetAddress: ordinalsAddress, // the connected ordinals address
+    feeRate: 4, // sats/vB for the commit, reveal and send
+  }
+  const feeSats = await brc20.getBrc20ProgWithdrawFee(args) // signs nothing
+
+  const chain = await brc20.prepareBrc20ProgWithdraw({
+    ...args,
+    onSignRequest: ({ step, total }) => console.log(`sign ${step}/${total}`), // total is 2
+  })
+  // Nothing is broadcast yet. The order's own signature is the third prompt.
+  await swap.withdraw(tokenAddress, amount, undefined, { brc20Withdraw: chain })
+}
+
+// "Send now": the relay's send is stuck, so return the inscription to the ordinals address.
+const { txId } = await brc20.sendBrc20ProgWithdrawToSelf({ inscriptionId, feeRate: 12 })
+```
+
+- **Two sign prompts.** `prepareBrc20ProgWithdraw` asks the wallet to sign the commit, then the
+  send. The reveal is signed by the kit. The three transactions are tested for mempool acceptance as
+  one package and **nothing is broadcast**.
+- **The send pays its own fee.** The reveal output carries the target's dust plus the send's fee,
+  and the send spends only `<revealTxId>:0`, so no other wallet UTXO is needed when the relay
+  broadcasts it.
+- **`feeSats` is what the user pays miners.** It is the commit, reveal and send fees together, and
+  excludes the dust the user keeps on the returned inscription output.
+- **One target.** Prepare the chain with `targetAddress` set to the connected ordinals address, and
+  pass the same target to `swap.withdraw` (omit `targetAddress` there). `withdraw` refuses a chain
+  whose send pays another address before asking for any signature.
+- **Supported wallets.** The ordinals address is `p2tr` or `p2wpkh`, and the wallet has a payment
+  address of its own. A single-address wallet is refused, because another kit flow could spend the
+  held reveal output as a cardinal UTXO before the relay sends it. `canPrepareBrc20ProgWithdraw()`
+  answers this without prompting, so an app can hide the option.
+- **Confirmed inputs only.** The relay holds only the three signed transactions, so both calls
+  refuse while unbroadcast extra transactions are saved (outputs of a chain this session has not
+  broadcast).
+- **Send now is the recovery path.** `sendBrc20ProgWithdrawToSelf` spends `<revealTxId>:0` directly
+  and sends the inscription back to the ordinals address at dust, paying the fee from cardinal UTXOs
+  with every input signalling RBF. At a fee rate above the stuck send's, it replaces it. One sign
+  prompt; the transaction is broadcast.
+
 ## Send to another address
 
 A sender can hold a ticker in two places: the base BRC-20 balance and the BRC2.0 balance. The two

@@ -313,6 +313,11 @@ export function saveExtraUtxos(txHexes: string[], inscription: string[] | null) 
   }
 }
 
+/** Whether unbroadcast extra transactions are saved, so new transactions may spend their outputs. */
+export function hasExtraTxes(): boolean {
+  return currentExtraTxHexes.length > 0
+}
+
 /**
  * Retrieves the currently saved extra UTXOs that are being used in transactions but not yet confirmed on the blockchain.
  */

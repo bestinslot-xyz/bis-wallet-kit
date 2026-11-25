@@ -1,4 +1,10 @@
 import type {
+  Brc20ProgWithdrawArgs,
+  PrepareBrc20ProgWithdrawArgs,
+  PreparedBrc20Withdraw,
+  SendBrc20ProgWithdrawToSelfArgs,
+} from '../core/brc20-direct-withdraw'
+import type {
   Brc20SendQuote,
   SendAsBrc20Args,
   SendAsBrc20ProgArgs,
@@ -18,6 +24,12 @@ import {
   withdrawFromBrc20Prog as withdrawFromBrc20ProgCore,
 } from '../core/brc20'
 import {
+  canPrepareBrc20ProgWithdraw as canPrepareBrc20ProgWithdrawCore,
+  getBrc20ProgWithdrawFee as getBrc20ProgWithdrawFeeCore,
+  prepareBrc20ProgWithdraw as prepareBrc20ProgWithdrawCore,
+  sendBrc20ProgWithdrawToSelf as sendBrc20ProgWithdrawToSelfCore,
+} from '../core/brc20-direct-withdraw'
+import {
   sendAsBrc20 as sendAsBrc20Core,
   sendAsBrc20Prog as sendAsBrc20ProgCore,
 } from '../core/brc20-send'
@@ -26,6 +38,13 @@ import {
   unwrapBtcFromBrc20Prog as unwrapBtcFromBrc20ProgCore,
   wrapBtcToBrc20Prog as wrapBtcToBrc20ProgCore,
 } from '../core/frbtc'
+
+export type {
+  Brc20ProgWithdrawArgs,
+  PrepareBrc20ProgWithdrawArgs,
+  PreparedBrc20Withdraw,
+  SendBrc20ProgWithdrawToSelfArgs,
+} from '../core/brc20-direct-withdraw'
 
 // Pure builders for base BRC-20 inscription payloads (deploy / mint / transfer
 // and the 6-byte namespace predeploy → deploy pair). These generate content
@@ -105,6 +124,68 @@ export async function sendAsBrc20Prog(
   args: SendAsBrc20ProgArgs
 ): Promise<Brc20SendQuote | SendAsBrc20ProgResult> {
   return await sendAsBrc20ProgCore(args)
+}
+
+/**
+ * Signs a BRC2.0 withdraw chain without broadcasting it, so a relay can broadcast it later. The
+ * commit and reveal inscribe `{"p":"brc20-module","op":"withdraw",...}` to the ordinals address; the
+ * send moves the inscription to `targetAddress`. The send spends only the reveal output
+ * (`<revealTxId>:0`) and pays its fee from that output's postage, so it needs no other wallet UTXO.
+ * The three transactions are tested for mempool acceptance as one package. The commit must spend
+ * confirmed or broadcast outputs: the call refuses while unbroadcast extra transactions are saved.
+ * It also refuses a wallet `canPrepareBrc20ProgWithdraw` rejects, such as a single-address wallet.
+ *
+ * For a withdraw order, pass the connected ordinals address as `targetAddress`: the same target
+ * given to `swap.withdraw` (its default when `targetAddress` is omitted there).
+ *
+ * `onSignRequest` is called before each wallet prompt with `{ step, total }`; `total` is 2.
+ *
+ * @param args - `tick`, `amount` (decimal string, as inscribed), `targetAddress`, `feeRate` (sats/vB), and optional `onSignRequest`.
+ * @returns The inscription id, each transaction's id and signed hex, and `feeSats`, the miner fees of all three.
+ */
+export async function prepareBrc20ProgWithdraw(
+  args: PrepareBrc20ProgWithdrawArgs
+): Promise<PreparedBrc20Withdraw> {
+  return await prepareBrc20ProgWithdrawCore(args)
+}
+
+/**
+ * Whether the connected wallet can prepare a BRC2.0 withdraw chain: it has separate payment and
+ * ordinals addresses, and the ordinals address is `p2tr` or `p2wpkh`. A single-address wallet could
+ * spend the held reveal output as a cardinal UTXO before the relay sends it, so it cannot.
+ *
+ * @returns `false` when no wallet is connected, or it cannot hold a withdraw chain.
+ */
+export function canPrepareBrc20ProgWithdraw(): boolean {
+  return canPrepareBrc20ProgWithdrawCore()
+}
+
+/**
+ * Prices the chain `prepareBrc20ProgWithdraw` signs for the same arguments, without signing. It
+ * refuses the same wallets and arguments `prepareBrc20ProgWithdraw` refuses.
+ *
+ * @param args - `tick`, `amount`, `targetAddress` and `feeRate` (sats/vB).
+ * @returns The miner fees of the commit, reveal and send, in sats.
+ */
+export async function getBrc20ProgWithdrawFee(args: Brc20ProgWithdrawArgs): Promise<number> {
+  return await getBrc20ProgWithdrawFeeCore(args)
+}
+
+/**
+ * Sends a withdraw inscription from its reveal output back to the connected ordinals address and
+ * broadcasts it. Input 0 is `<revealTxId>:0` itself, so the send replaces a stuck relay send of the
+ * inscription when `feeRate` beats it. The fee comes from cardinal UTXOs and every input signals RBF.
+ *
+ * `onSignRequest` is called before the wallet prompt with `{ step, total }`; `total` is 1.
+ *
+ * @param args - `inscriptionId` (`<revealTxId>i0`), `feeRate` (sats/vB), and optional `onSignRequest`.
+ * @returns The broadcast transaction's id.
+ * @throws {Error} When the reveal output is not at the connected ordinals address, or the wallet cannot cover the fee.
+ */
+export async function sendBrc20ProgWithdrawToSelf(
+  args: SendBrc20ProgWithdrawToSelfArgs
+): Promise<{ txId: string }> {
+  return await sendBrc20ProgWithdrawToSelfCore(args)
 }
 
 export type { TransactArgs, TransactResult } from '../core/brc20-transact'
