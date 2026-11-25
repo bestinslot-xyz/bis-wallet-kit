@@ -43,7 +43,7 @@ import {
   outputRanges,
 } from './used-inscriptions'
 
-const ENABLE_RBF_NO_LOCKTIME = 0xfffffffd
+export const ENABLE_RBF_NO_LOCKTIME = 0xfffffffd
 
 const DUST_VALUE_P2PKH = 546
 const DUST_VALUE_P2WPKH = 294
@@ -395,7 +395,7 @@ function calculateAdditionalFee(scriptType: string, feeRate: number): number {
   return 0
 }
 
-const TO_X_ONLY = (pubKey: Buffer) => (pubKey.length === 32 ? pubKey : pubKey.slice(1, 33))
+export const TO_X_ONLY = (pubKey: Buffer) => (pubKey.length === 32 ? pubKey : pubKey.slice(1, 33))
 
 async function getMintMultipleFeeAll(
   inscriptionDetailsArray: InscriptionDetails[],
@@ -3848,6 +3848,8 @@ export async function mintAll(
       inscription_id: `${revealTx.txId}i0`,
       postage,
       secret,
+      commit_fee: commitTx.commit_fee,
+      reveal_fee: commitTx.reveal_fee,
     }
   }
 
@@ -3861,6 +3863,8 @@ export async function mintAll(
     inscription_id: `${revealTx.txId}i0`,
     postage,
     secret,
+    commit_fee: commitTx.commit_fee,
+    reveal_fee: commitTx.reveal_fee,
   }
 }
 

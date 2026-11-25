@@ -5,8 +5,8 @@ import { Address } from '@cmdcode/tapscript'
 import * as bitcoinjs from 'bitcoinjs-lib'
 import { getBitcoinNetwork } from '../lib/bitcoin'
 import { textInscription } from '../types/inscription'
-import { getTxhex, validateTxes } from './helpers'
-import { assertFeeRate, mintAll, mintAllCheckFees } from './mint'
+import { hasExtraTxes, validateTxes } from './helpers'
+import { assertFeeRate, ENABLE_RBF_NO_LOCKTIME, mintAll, mintAllCheckFees, TO_X_ONLY } from './mint'
 import { getOrdinalsWallet, getSignFn } from './providers'
 import { SignProgress } from './sign-progress'
 import { getWalletInfo } from './store'
@@ -29,8 +29,8 @@ const INPUT_WEIGHT: Partial<Record<SendScriptType, number>> = {
 }
 /** Version, locktime and the in/out counts at 4 WU each, plus the segwit marker and flag. */
 const TX_OVERHEAD_WEIGHT = 10 * 4 + 2
-/** nSequence that signals RBF with no relative locktime. */
-const ENABLE_RBF_NO_LOCKTIME = 0xfffffffd
+/** A decimal amount as inscribed: digits with an optional fractional part. */
+const AMOUNT_RE = /^\d+(?:\.\d+)?$/
 
 function asScriptType(type: string): SendScriptType {
   if (type === 'p2w-pkh') return 'p2wpkh'
@@ -109,10 +109,16 @@ interface WithdrawPlan {
 
 function planWithdraw(args: Brc20ProgWithdrawArgs): WithdrawPlan {
   const { tick, amount, targetAddress, feeRate } = args
-  if (typeof tick !== 'string') throw new Error('tick must be a string')
-  if (typeof amount !== 'string') throw new Error('amount must be a string')
+  if (typeof tick !== 'string' || tick.length === 0 || /["\\]/.test(tick))
+    throw new Error('tick must be a non-empty string without " or \\')
+  if (typeof amount !== 'string' || !AMOUNT_RE.test(amount))
+    throw new Error('amount must be a decimal string, such as "1.5"')
   if (typeof targetAddress !== 'string') throw new Error('targetAddress must be a string')
   assertFeeRate(feeRate)
+  // The relay holds only the three signed transactions, so the commit must spend confirmed or
+  // broadcast outputs, never an unbroadcast chained one.
+  if (hasExtraTxes())
+    throw new Error('A BRC2.0 withdraw chain cannot spend outputs of unbroadcast transactions')
 
   const ordinals = getOrdinalsWallet()
   if (!ordinals?.pubkey) throw new Error('Wallets not found')
@@ -157,7 +163,6 @@ export async function prepareBrc20ProgWithdraw(
     true,
     signFn
   )
-  const commit = bitcoinjs.Transaction.fromHex(minted.signed_commit_tx_hex)
   const reveal = bitcoinjs.Transaction.fromHex(minted.signed_reveal_tx_hex)
   const revealOut = reveal.outs[0]
   if (revealOut?.value !== plan.postage)
@@ -170,7 +175,7 @@ export async function prepareBrc20ProgWithdraw(
     sequence: ENABLE_RBF_NO_LOCKTIME,
     witnessUtxo: { script: revealOut.script, value: revealOut.value },
     ...(plan.ordinalsType === 'p2tr'
-      ? { tapInternalKey: Buffer.from(plan.ordinalsPubkey, 'hex').subarray(-32) }
+      ? { tapInternalKey: TO_X_ONLY(Buffer.from(plan.ordinalsPubkey, 'hex')) }
       : {}),
   })
   psbt.addOutput({ script: plan.targetScript, value: plan.dust })
@@ -184,14 +189,6 @@ export async function prepareBrc20ProgWithdraw(
     if (!entry.allowed) throw new Error(entry['reject-reason'])
   }
 
-  let spent = 0
-  for (const input of commit.ins) {
-    const prevTxId = Buffer.from(input.hash).reverse().toString('hex')
-    spent += bitcoinjs.Transaction.fromHex(await getTxhex(prevTxId)).outs[input.index]!.value
-  }
-  const commitFee = spent - commit.outs.reduce((sum, o) => sum + o.value, 0)
-  const revealFee = commit.outs[reveal.ins[0]!.index]!.value - plan.postage
-
   return {
     inscriptionId: minted.inscription_id,
     commitTxId: minted.commit_txid,
@@ -200,7 +197,7 @@ export async function prepareBrc20ProgWithdraw(
     revealTxHex: minted.signed_reveal_tx_hex,
     sendTxId: send.txId,
     sendTxHex: send.signedTxHex,
-    feeSats: commitFee + revealFee + plan.postage - plan.dust,
+    feeSats: minted.commit_fee + minted.reveal_fee + plan.postage - plan.dust,
   }
 }
 

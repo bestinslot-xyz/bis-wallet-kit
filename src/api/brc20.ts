@@ -125,9 +125,10 @@ export async function sendAsBrc20Prog(
 /**
  * Signs a BRC2.0 withdraw chain without broadcasting it, so a relay can broadcast it later. The
  * commit and reveal inscribe `{"p":"brc20-module","op":"withdraw",...}` to the ordinals address; the
- * send moves the inscription to `targetAddress`, spending only `<revealTxId>:0` and paying its fee
- * from the reveal output's postage, so no other spend from the wallet can invalidate it while it is
- * held. The three transactions are tested for mempool acceptance as one package.
+ * send moves the inscription to `targetAddress`. The send spends only the reveal output
+ * (`<revealTxId>:0`) and pays its fee from that output's postage, so it needs no other wallet UTXO.
+ * The three transactions are tested for mempool acceptance as one package. The commit must spend
+ * confirmed or broadcast outputs: the call refuses while unbroadcast extra transactions are saved.
  *
  * `onSignRequest` is called before each wallet prompt with `{ step, total }`; `total` is 2.
  *

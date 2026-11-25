@@ -3,6 +3,7 @@ import * as ecc from '@bitcoinerlab/secp256k1'
 import * as bitcoin from 'bitcoinjs-lib'
 import { afterEach, assert, describe, expect, it, vi } from 'vitest'
 import { selfFundedSendPostage, sendVsize } from '../../src/core/brc20-direct-withdraw.ts'
+import { clearExtraUtxos, saveExtraUtxos } from '../../src/core/helpers.ts'
 import { brc20, wallet } from '../../src/node.ts'
 
 // Fixed testnet key (see local-wallet.test.ts). Never use for real funds.
@@ -229,4 +230,40 @@ describe('prepareBrc20ProgWithdraw', () => {
     ).rejects.toThrow('bad-send')
     assert.equal(sentBodies.length, 0)
   })
+
+  it('refuses while unbroadcast extra transactions are saved', async () => {
+    await connect('p2wpkh')
+    const parent = new bitcoin.Transaction()
+    parent.addInput(Buffer.alloc(32, 5), 0)
+    parent.addOutput(bitcoin.address.toOutputScript(P2WPKH, net), 10000)
+    saveExtraUtxos([parent.toHex()], null)
+    try {
+      const args = { tick: 'ordi', amount: '1.5', targetAddress: P2WPKH, feeRate: 3 }
+      await expect(brc20.prepareBrc20ProgWithdraw(args)).rejects.toThrow(/unbroadcast/)
+      await expect(brc20.getBrc20ProgWithdrawFee(args)).rejects.toThrow(/unbroadcast/)
+    } finally {
+      clearExtraUtxos()
+    }
+    assert.equal(testedBodies.length, 0)
+  })
+
+  for (const tick of ['or"di', 'or\\di', '']) {
+    it(`refuses the tick ${JSON.stringify(tick)} before signing`, async () => {
+      await connect('p2wpkh')
+      const args = { tick, amount: '1.5', targetAddress: P2WPKH, feeRate: 3 }
+      await expect(brc20.prepareBrc20ProgWithdraw(args)).rejects.toThrow(/tick/)
+      await expect(brc20.getBrc20ProgWithdrawFee(args)).rejects.toThrow(/tick/)
+      assert.equal(testedBodies.length, 0)
+    })
+  }
+
+  for (const amount of ['1.', '.5', '1e3', '-1', '1.5"', ' 1', '']) {
+    it(`refuses the amount ${JSON.stringify(amount)} before signing`, async () => {
+      await connect('p2wpkh')
+      const args = { tick: 'ordi', amount, targetAddress: P2WPKH, feeRate: 3 }
+      await expect(brc20.prepareBrc20ProgWithdraw(args)).rejects.toThrow(/amount/)
+      await expect(brc20.getBrc20ProgWithdrawFee(args)).rejects.toThrow(/amount/)
+      assert.equal(testedBodies.length, 0)
+    })
+  }
 })
