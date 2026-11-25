@@ -34,6 +34,7 @@ const SHARED_NAMESPACES: Record<string, string[]> = {
     'ensureSwapWallet',
     'getSwapWalletSecurityCode',
     'importSwapWallet',
+    'signBlsMessage',
     'getAddLiquidityResult',
     'getKlines',
     'getMinerFee',
