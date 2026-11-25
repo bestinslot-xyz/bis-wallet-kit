@@ -1,4 +1,9 @@
 import type {
+  Brc20ProgWithdrawArgs,
+  PrepareBrc20ProgWithdrawArgs,
+  PreparedBrc20Withdraw,
+} from '../core/brc20-direct-withdraw'
+import type {
   Brc20SendQuote,
   SendAsBrc20Args,
   SendAsBrc20ProgArgs,
@@ -18,6 +23,10 @@ import {
   withdrawFromBrc20Prog as withdrawFromBrc20ProgCore,
 } from '../core/brc20'
 import {
+  getBrc20ProgWithdrawFee as getBrc20ProgWithdrawFeeCore,
+  prepareBrc20ProgWithdraw as prepareBrc20ProgWithdrawCore,
+} from '../core/brc20-direct-withdraw'
+import {
   sendAsBrc20 as sendAsBrc20Core,
   sendAsBrc20Prog as sendAsBrc20ProgCore,
 } from '../core/brc20-send'
@@ -26,6 +35,12 @@ import {
   unwrapBtcFromBrc20Prog as unwrapBtcFromBrc20ProgCore,
   wrapBtcToBrc20Prog as wrapBtcToBrc20ProgCore,
 } from '../core/frbtc'
+
+export type {
+  Brc20ProgWithdrawArgs,
+  PrepareBrc20ProgWithdrawArgs,
+  PreparedBrc20Withdraw,
+} from '../core/brc20-direct-withdraw'
 
 // Pure builders for base BRC-20 inscription payloads (deploy / mint / transfer
 // and the 6-byte namespace predeploy → deploy pair). These generate content
@@ -105,6 +120,34 @@ export async function sendAsBrc20Prog(
   args: SendAsBrc20ProgArgs
 ): Promise<Brc20SendQuote | SendAsBrc20ProgResult> {
   return await sendAsBrc20ProgCore(args)
+}
+
+/**
+ * Signs a BRC2.0 withdraw chain without broadcasting it, so a relay can broadcast it later. The
+ * commit and reveal inscribe `{"p":"brc20-module","op":"withdraw",...}` to the ordinals address; the
+ * send moves the inscription to `targetAddress`, spending only `<revealTxId>:0` and paying its fee
+ * from the reveal output's postage, so no other spend from the wallet can invalidate it while it is
+ * held. The three transactions are tested for mempool acceptance as one package.
+ *
+ * `onSignRequest` is called before each wallet prompt with `{ step, total }`; `total` is 2.
+ *
+ * @param args - `tick`, `amount` (decimal string, as inscribed), `targetAddress`, `feeRate` (sats/vB), and optional `onSignRequest`.
+ * @returns The inscription id, each transaction's id and signed hex, and `feeSats`, the miner fees of all three.
+ */
+export async function prepareBrc20ProgWithdraw(
+  args: PrepareBrc20ProgWithdrawArgs
+): Promise<PreparedBrc20Withdraw> {
+  return await prepareBrc20ProgWithdrawCore(args)
+}
+
+/**
+ * Prices the chain `prepareBrc20ProgWithdraw` signs for the same arguments, without signing.
+ *
+ * @param args - `tick`, `amount`, `targetAddress` and `feeRate` (sats/vB).
+ * @returns The miner fees of the commit, reveal and send, in sats.
+ */
+export async function getBrc20ProgWithdrawFee(args: Brc20ProgWithdrawArgs): Promise<number> {
+  return await getBrc20ProgWithdrawFeeCore(args)
 }
 
 export type { TransactArgs, TransactResult } from '../core/brc20-transact'
