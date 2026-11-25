@@ -4,6 +4,7 @@ import type { RawSwapRoute, SwapBLSMessageFields, SwapRoute } from '../lib/swap-
 import type { UniswapInfoProxy } from '../lib/uniswap_ops'
 import type { SignFunction, SignManyFunction } from '../provider/api'
 import type { BISNetwork } from '../types/common'
+import type { PreparedBrc20Withdraw } from './brc20-direct-withdraw'
 import type { Utxo } from './chain-providers'
 import type { BatchedReveal, BatchedSendLayout, ReclaimInput } from './mint'
 import type { SignProgressOptions } from './sign-progress'
@@ -4360,6 +4361,28 @@ interface WithdrawOrderRequest {
   token2FeeBps: string
   btc_fee: string
   bip322_signature: string
+  brc20_withdraw?: { commit_txhex: string; reveal_txhex: string; send_txhex: string }
+}
+
+/** Options for a withdraw order. */
+export interface WithdrawOrderOptions {
+  /** A BRC-20 transfer chain the sequencer broadcasts to pay the withdraw out directly. */
+  brc20Withdraw?: PreparedBrc20Withdraw
+}
+
+function brc20WithdrawBody(
+  opts?: WithdrawOrderOptions
+): Pick<WithdrawOrderRequest, 'brc20_withdraw'> {
+  const held = opts?.brc20Withdraw
+  return held
+    ? {
+        brc20_withdraw: {
+          commit_txhex: held.commitTxHex,
+          reveal_txhex: held.revealTxHex,
+          send_txhex: held.sendTxHex,
+        },
+      }
+    : {}
 }
 export interface WithdrawOrderResponse {
   success: boolean
@@ -4382,13 +4405,15 @@ async function sendWithdrawOrder(toSend: WithdrawOrderRequest): Promise<Withdraw
  * @param tokenAddr The address of the token to be withdrawn.
  * @param ordinalAddr The Bitcoin address of the target ordinal wallet.
  * @param amt The amount of the token to be withdrawn, represented as a bigint.
+ * @param opts `brc20Withdraw` attaches a held BRC-20 transfer chain for the sequencer to broadcast.
  *
  * @returns A promise that resolves to an object indicating the success of the withdraw order request.
  */
 export async function prepareAndSendWithdrawOrderToOrdinalWallet(
   tokenAddr: string,
   ordinalAddr: string,
-  amt: bigint
+  amt: bigint,
+  opts?: WithdrawOrderOptions
 ): Promise<WithdrawOrderResponse> {
   const pubkey = (await getSwapWalletFromDB())?.swapPubkey
   if (!pubkey) {
@@ -4432,6 +4457,7 @@ export async function prepareAndSendWithdrawOrderToOrdinalWallet(
     token2FeeBps: token2FeeBPS.toString(),
     btc_fee: btcFee.toString(),
     bip322_signature: bip322Signature,
+    ...brc20WithdrawBody(opts),
   })
 }
 
@@ -4440,12 +4466,14 @@ export async function prepareAndSendWithdrawOrderToOrdinalWallet(
  *
  * @param tokenAddr The address of the token to be withdrawn.
  * @param amt The amount of the token to be withdrawn, represented as a bigint.
+ * @param opts `brc20Withdraw` attaches a held BRC-20 transfer chain for the sequencer to broadcast.
  *
  * @returns A promise that resolves to an object indicating the success of the withdraw order request.
  */
 export async function prepareAndSendWithdrawOrderToSelfOrdinalWallet(
   tokenAddr: string,
-  amt: bigint
+  amt: bigint,
+  opts?: WithdrawOrderOptions
 ): Promise<WithdrawOrderResponse> {
   const pubkey = (await getSwapWalletFromDB())?.swapPubkey
   if (!pubkey) {
@@ -4493,6 +4521,7 @@ export async function prepareAndSendWithdrawOrderToSelfOrdinalWallet(
     token2FeeBps: token2FeeBPS.toString(),
     btc_fee: btcFee.toString(),
     bip322_signature: bip322Signature,
+    ...brc20WithdrawBody(opts),
   })
 }
 

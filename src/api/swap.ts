@@ -2,6 +2,7 @@ import type {
   DepositOrderOptions,
   GetRecentActivityRequest,
   WalletActivityKind,
+  WithdrawOrderOptions,
 } from '../core/bis_swap'
 import type { SignProgressOptions } from '../core/sign-progress'
 import {
@@ -359,18 +360,22 @@ export async function wrapBtc(
  * @param tokenAddress - The address of the token to withdraw.
  * @param amount - The amount of the token to withdraw, specified as a bigint.
  * @param targetAddress - (Optional) The target address to which the tokens should be withdrawn. If not provided, the tokens will be withdrawn to the user's own Ordinals wallet.
+ * @param opts - `brc20Withdraw` is a BRC-20 transfer chain prepared by `brc20.prepareBrc20ProgWithdraw`. It is sent with the order as `brc20_withdraw` so the sequencer broadcasts it to pay the withdraw out directly. Without it the request body carries no `brc20_withdraw`.
  * @returns A promise that resolves when the withdrawal process is complete.
  */
 export async function withdraw(
   tokenAddress: string,
   amount: bigint,
-  targetAddress?: string
+  targetAddress?: string,
+  opts?: WithdrawOrderOptions
 ): Promise<boolean> {
   if (targetAddress) {
-    return (await prepareAndSendWithdrawOrderToOrdinalWallet(tokenAddress, targetAddress, amount))
-      .success
+    return (
+      await prepareAndSendWithdrawOrderToOrdinalWallet(tokenAddress, targetAddress, amount, opts)
+    ).success
   } else {
-    return (await prepareAndSendWithdrawOrderToSelfOrdinalWallet(tokenAddress, amount)).success
+    return (await prepareAndSendWithdrawOrderToSelfOrdinalWallet(tokenAddress, amount, opts))
+      .success
   }
 }
 

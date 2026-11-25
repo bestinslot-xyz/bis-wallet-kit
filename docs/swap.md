@@ -238,6 +238,11 @@ await swap.deposit(tokenAddress, amount, feeRate /* , createAllowanceIfNeeded = 
 await swap.withdraw(tokenAddress, amount /* , targetAddress? */) // omit target → self
 ```
 
+`withdraw` takes a fourth argument, `{ brc20Withdraw }`: a chain from
+`brc20.prepareBrc20ProgWithdraw`. It is sent with the order as `brc20_withdraw` (`commit_txhex`,
+`reveal_txhex`, `send_txhex`) so the sequencer broadcasts it to pay the withdraw out directly.
+Without it the request body is unchanged.
+
 ### Send to another swap wallet
 
 `transfer` moves a token balance to another user's smart wallet inside the swap, so the token never
