@@ -82,6 +82,8 @@ export type {
   WalletActivityKind,
   WithdrawOrderOptions,
 } from '../core/bis_swap' // Export types related to wallet activities
+export { signBlsMessage } from '../core/bls-sign' // Sign arbitrary bytes with the stored swap BLS key
+export type { SignBlsMessageOptions } from '../core/bls-sign'
 export type { AllBalanceDetails } from '../core/helpers' // Export the AllBalanceDetails type from the core helpers module
 export type { SignProgressOptions, SignRequest } from '../core/sign-progress' // Per-prompt progress for multi-signature flows
 export type { BISSwapWalletInfo } from '../core/store' // Export the BISSwapWalletInfo type from the core store module
