@@ -82,6 +82,7 @@ const SHARED_NAMESPACES: Record<string, string[]> = {
     'withdrawFromBrc20Prog',
     'prepareBrc20ProgWithdraw',
     'getBrc20ProgWithdrawFee',
+    'sendBrc20ProgWithdrawToSelf',
     'sendAsBrc20',
     'sendAsBrc20Prog',
     'getFrBtcAddress',

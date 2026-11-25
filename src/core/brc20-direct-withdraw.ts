@@ -5,8 +5,16 @@ import { Address } from '@cmdcode/tapscript'
 import * as bitcoinjs from 'bitcoinjs-lib'
 import { getBitcoinNetwork } from '../lib/bitcoin'
 import { textInscription } from '../types/inscription'
+import { WalletInfo } from '../types/wallet'
 import { hasExtraTxes, validateTxes } from './helpers'
-import { assertFeeRate, ENABLE_RBF_NO_LOCKTIME, mintAll, mintAllCheckFees, TO_X_ONLY } from './mint'
+import {
+  assertFeeRate,
+  ENABLE_RBF_NO_LOCKTIME,
+  mintAll,
+  mintAllCheckFees,
+  sendInscriptionAll,
+  TO_X_ONLY,
+} from './mint'
 import { getOrdinalsWallet, getSignFn } from './providers'
 import { SignProgress } from './sign-progress'
 import { getWalletInfo } from './store'
@@ -199,6 +207,40 @@ export async function prepareBrc20ProgWithdraw(
     sendTxHex: send.signedTxHex,
     feeSats: minted.commit_fee + minted.reveal_fee + plan.postage - plan.dust,
   }
+}
+
+export interface SendBrc20ProgWithdrawToSelfArgs extends SignProgressOptions {
+  /** The withdraw inscription held at the connected ordinals address. */
+  inscriptionId: string
+  /** Fee rate in sat/vB for the send. */
+  feeRate: number
+}
+
+/**
+ * Sends a withdraw inscription held at the connected ordinals address back to that address and
+ * broadcasts it. The fee comes from cardinal UTXOs, and every input signals RBF, so the send
+ * replaces a stuck relay copy of the same inscription send.
+ *
+ * `onSignRequest` is called before the wallet prompt with `{ step, total }`; `total` is 1.
+ */
+export async function sendBrc20ProgWithdrawToSelf(
+  args: SendBrc20ProgWithdrawToSelfArgs
+): Promise<{ txId: string }> {
+  assertFeeRate(args.feeRate)
+  const ordinals = getOrdinalsWallet()
+  const walletInfo = getWalletInfo()
+  if (!ordinals?.pubkey || !walletInfo || !walletInfo.wallets) throw new Error('Wallets not found')
+  const signFn = new SignProgress(args, 1).wrap(getSignFn(walletInfo.provider))
+  const target = new WalletInfo(false, null, ordinals.address, null, ordinals.pubkey)
+  const sent = await sendInscriptionAll(
+    args.inscriptionId,
+    target,
+    null,
+    args.feeRate,
+    false,
+    signFn
+  )
+  return { txId: sent.txId }
 }
 
 /**

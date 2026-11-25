@@ -2,6 +2,7 @@ import type {
   Brc20ProgWithdrawArgs,
   PrepareBrc20ProgWithdrawArgs,
   PreparedBrc20Withdraw,
+  SendBrc20ProgWithdrawToSelfArgs,
 } from '../core/brc20-direct-withdraw'
 import type {
   Brc20SendQuote,
@@ -25,6 +26,7 @@ import {
 import {
   getBrc20ProgWithdrawFee as getBrc20ProgWithdrawFeeCore,
   prepareBrc20ProgWithdraw as prepareBrc20ProgWithdrawCore,
+  sendBrc20ProgWithdrawToSelf as sendBrc20ProgWithdrawToSelfCore,
 } from '../core/brc20-direct-withdraw'
 import {
   sendAsBrc20 as sendAsBrc20Core,
@@ -40,6 +42,7 @@ export type {
   Brc20ProgWithdrawArgs,
   PrepareBrc20ProgWithdrawArgs,
   PreparedBrc20Withdraw,
+  SendBrc20ProgWithdrawToSelfArgs,
 } from '../core/brc20-direct-withdraw'
 
 // Pure builders for base BRC-20 inscription payloads (deploy / mint / transfer
@@ -149,6 +152,23 @@ export async function prepareBrc20ProgWithdraw(
  */
 export async function getBrc20ProgWithdrawFee(args: Brc20ProgWithdrawArgs): Promise<number> {
   return await getBrc20ProgWithdrawFeeCore(args)
+}
+
+/**
+ * Sends a withdraw inscription held at the connected ordinals address back to that address and
+ * broadcasts it, so a stuck relay copy of the inscription's send is replaced. The fee comes from
+ * cardinal UTXOs and every input signals RBF.
+ *
+ * `onSignRequest` is called before the wallet prompt with `{ step, total }`; `total` is 1.
+ *
+ * @param args - `inscriptionId`, `feeRate` (sats/vB), and optional `onSignRequest`.
+ * @returns The broadcast transaction's id.
+ * @throws {Error} When the ordinals address does not hold the inscription, or the wallet cannot cover the fee.
+ */
+export async function sendBrc20ProgWithdrawToSelf(
+  args: SendBrc20ProgWithdrawToSelfArgs
+): Promise<{ txId: string }> {
+  return await sendBrc20ProgWithdrawToSelfCore(args)
 }
 
 export type { TransactArgs, TransactResult } from '../core/brc20-transact'

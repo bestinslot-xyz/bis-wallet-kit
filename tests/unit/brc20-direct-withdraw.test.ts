@@ -127,6 +127,82 @@ describe('selfFundedSendPostage', () => {
   })
 })
 
+describe('sendBrc20ProgWithdrawToSelf', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  for (const type of ['p2wpkh', 'p2tr'] as const) {
+    it(`re-sends a held ${type} withdraw inscription to the ordinals address and broadcasts`, async () => {
+      const { address, script } = await connect(type)
+      // The held inscription output: 700 sats at the ordinals address, funded by a stand-in parent.
+      const held = new bitcoin.Transaction()
+      held.addInput(Buffer.alloc(32, 9), 0)
+      held.addOutput(script, 700)
+      const heldTxid = held.getId()
+      const inscriptionId = `${heldTxid}i0`
+      const baseFetch = globalThis.fetch as unknown as (u: string, o?: any) => Promise<any>
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (url: string | URL, opts?: any) => {
+          const u = String(url)
+          if (u.includes('/inscription_utxo/'))
+            return jsonResponse({
+              data: {
+                txid: heldTxid,
+                vout: 0,
+                value: 700,
+                script_type: SCRIPT_TYPE[type],
+                script: script.toString('hex'),
+                address,
+                block_height: null,
+                inscription_ids: [inscriptionId],
+                satpoints: [`${heldTxid}:0:0`],
+                amounts: null,
+                rune_ids: null,
+                txfee: null,
+                vsize: null,
+              },
+            })
+          if (u.includes('/gettxhex/') && u.endsWith(heldTxid)) return jsonResponse(held.toHex())
+          if (u.includes('/sendrawtransactions')) {
+            const txhexes: string[] = JSON.parse(opts.body).txhexes
+            sentBodies.push(txhexes)
+            return jsonResponse(txhexes.map(h => bitcoin.Transaction.fromHex(h).getId()))
+          }
+          return baseFetch(u, opts)
+        })
+      )
+      const prompts: { step: number; total?: number }[] = []
+
+      const res = await brc20.sendBrc20ProgWithdrawToSelf({
+        inscriptionId,
+        feeRate: 12,
+        onSignRequest: r => prompts.push(r),
+      })
+
+      assert.equal(sentBodies.length, 1)
+      assert.equal(sentBodies[0]!.length, 1)
+      const send = bitcoin.Transaction.fromHex(sentBodies[0]![0]!)
+      assert.equal(send.getId(), res.txId)
+      assert.equal(send.outs[0]!.script.toString('hex'), script.toString('hex'))
+      assert.equal(outpoint(send.ins[0]!), `${heldTxid}:0`)
+      // The fee comes from a cardinal UTXO, so there is an input beyond the inscription.
+      assert.isAbove(send.ins.length, 1)
+      for (const input of send.ins) assert.isBelow(input.sequence, 0xfffffffe)
+      assert.equal(prompts.length, 1)
+    })
+  }
+
+  it('refuses an invalid fee rate before signing', async () => {
+    await connect('p2wpkh')
+    await expect(
+      brc20.sendBrc20ProgWithdrawToSelf({ inscriptionId: `${'ab'.repeat(32)}i0`, feeRate: 0 })
+    ).rejects.toThrow()
+    assert.equal(sentBodies.length, 0)
+  })
+})
+
 describe('prepareBrc20ProgWithdraw', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
