@@ -43,9 +43,9 @@ const AMOUNT_RE = /^\d+(?:\.\d+)?$/
 const FIRST_INSCRIPTION_RE = /^([0-9a-f]{64})i0$/
 
 /**
- * Whether the connected wallet can prepare a BRC2.0 withdraw chain: it has separate payment and
- * ordinals addresses, and the ordinals address is `p2tr` or `p2wpkh`. A wallet whose one address
- * serves both roles may spend the held reveal output as a cardinal UTXO before the relay sends it.
+ * Whether the connected wallet can prepare a BRC2.0 withdraw chain: true for any connected wallet
+ * whose ordinals address is `p2tr` or `p2wpkh`, including a wallet whose one address serves as both
+ * payment and ordinals address.
  */
 export function canPrepareBrc20ProgWithdraw(): boolean {
   try {
@@ -60,10 +60,6 @@ function connectedOrdinals(): { address: string; pubkey: string; type: SendScrip
   const ordinals = getOrdinalsWallet()
   const payment = getPaymentWallet()
   if (!ordinals?.pubkey || !payment) throw new Error('Wallets not found')
-  if (payment.address === ordinals.address)
-    throw new Error(
-      'A BRC2.0 withdraw chain needs a wallet with separate payment and ordinals addresses'
-    )
   const type = asScriptType(Address.decode(ordinals.address).type)
   if (INPUT_WEIGHT[type] == null)
     throw new Error(`Cannot sign a withdraw send from a ${type} address`)
@@ -181,6 +177,10 @@ function planWithdraw(args: Brc20ProgWithdrawArgs): WithdrawPlan {
  * `targetAddress` as its only input and output. The three are tested for mempool acceptance as one
  * package. Refuses a wallet `canPrepareBrc20ProgWithdraw` rejects.
  *
+ * The chain is handed to the backend with the withdraw order. The backend broadcasts the commit at
+ * once and holds the reveal and the send until the withdraw settles, so no revealed inscription
+ * waits at the user's address. The commit spends only cardinal UTXOs.
+ *
  * `onSignRequest` is called before each wallet prompt with `{ step, total }`; `total` is 2.
  */
 export async function prepareBrc20ProgWithdraw(
@@ -247,7 +247,8 @@ export interface SendBrc20ProgWithdrawToSelfArgs extends SignProgressOptions {
 
 /**
  * Sends a withdraw inscription from its reveal output back to the connected ordinals address and
- * broadcasts it. Input 0 is `<revealTxId>:0`, read from the reveal transaction rather than from
+ * broadcasts it. It applies to a withdraw whose reveal was broadcast, such as a stuck relayed send.
+ * Input 0 is `<revealTxId>:0`, read from the reveal transaction rather than from
  * where an indexer places the inscription, so the send conflicts with (and, at a higher fee,
  * replaces) a stuck relay send of the same output. Output 0 returns the inscription at the ordinals
  * address's dust value; cardinal UTXOs of the payment address pay the fee, and every input signals
