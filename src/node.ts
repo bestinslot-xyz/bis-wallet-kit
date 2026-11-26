@@ -26,7 +26,7 @@ export * as balances from './api/balances'
 export * from './api/helpers'
 
 // -------- Common types -------
-export type { PaymentOpts } from './types/common'
+export type { CommitInput, CommitOpts, PaymentOpts } from './types/common'
 
 // ---- Re-exports ----
 export * as bitcoinjs from 'bitcoinjs-lib'

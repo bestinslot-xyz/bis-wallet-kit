@@ -1,5 +1,5 @@
 import type { SignFunction, SignManyFunction, SignPsbtRequest, SignResponse } from '../provider/api'
-import type { PaymentOpts } from '../types/common'
+import type { CommitOpts, PaymentOpts } from '../types/common'
 import type {
   InscribeFees,
   InscribeMultipleResult,
@@ -19,6 +19,7 @@ import * as bitcoinjs from 'bitcoinjs-lib'
 import {
   broadcastTxes,
   clearExtraUtxos,
+  fetchCardinalUtxos,
   getCardinalUtxos,
   getInscriptionUtxo,
   getTxhex,
@@ -1035,6 +1036,7 @@ interface BuildTransactionResult {
 // payment_wallet is the wallet to send the payment to (can be null)
 // payment is the amount to send to payment_wallet (can be null, must be bigger than DUST_LIMIT)
 // min_change is change a later transaction will spend (see withSetAsideReserve), 0 for none
+// min_fee is the least absolute fee in sat the transaction pays, 0 for the fee rate's fee alone
 export function buildTransaction(
   utxoInfos: UtxoInfo[],
   forceInUtxos: UtxoInfoWithWallet[],
@@ -1046,7 +1048,8 @@ export function buildTransaction(
   amount: number,
   paymentWallet: WalletInfo | null,
   payment: number | null,
-  minChange = 0
+  minChange = 0,
+  minFee = 0
 ): BuildTransactionResult {
   return withSetAsideReserve(
     (reserve, pool) =>
@@ -1061,7 +1064,8 @@ export function buildTransaction(
         amount,
         paymentWallet,
         payment,
-        reserve
+        reserve,
+        minFee
       ),
     utxoInfos,
     minChange
@@ -1069,6 +1073,7 @@ export function buildTransaction(
 }
 
 // `reserve` is extra input value selection gathers for change, to pay set-aside outputs.
+// `minFee` is the least absolute fee the transaction pays; the fee-paying output gives up the rest.
 function buildTransactionWithReserve(
   utxoInfos: UtxoInfo[],
   forceInUtxos: UtxoInfoWithWallet[],
@@ -1080,8 +1085,11 @@ function buildTransactionWithReserve(
   amount: number,
   paymentWallet: WalletInfo | null,
   payment: number | null,
-  reserve: number
+  reserve: number,
+  minFee = 0
 ): BuildTransactionResult {
+  const feeFor = (ins: TxInput[], outs: TxOutput[]) =>
+    Math.max(estimateFee(ins, outs, feeRate), minFee)
   const utxos = utxoInfos.slice()
 
   utxos.sort((a: UtxoInfo, b: UtxoInfo) => a.value - b.value)
@@ -1132,7 +1140,7 @@ function buildTransactionWithReserve(
     }
   }
 
-  let fee = estimateFee(inputs, outputs, feeRate)
+  let fee = feeFor(inputs, outputs)
   while (totalOutputAmount < amount + fee + reserve) {
     let deficit = amount + fee + reserve - totalOutputAmount
     while (deficit > 0) {
@@ -1179,7 +1187,7 @@ function buildTransactionWithReserve(
   }
 
   const additionalOutputFee = Math.ceil((changeWallet.outputScript.length + 9) * feeRate)
-  fee = estimateFee(inputs, outputs, feeRate)
+  fee = feeFor(inputs, outputs)
   const excess = totalOutputAmount - fee - amount
   let feePayerOutputIndex = -1
   const hasChange = excess > getDustValue(changeWallet) + additionalOutputFee
@@ -1228,7 +1236,7 @@ function buildTransactionWithReserve(
   // payment_wallet <- payment (may not exist)
   // change_wallet <- change (may not exist)
 
-  fee = estimateFee(inputs, outputs, feeRate)
+  fee = feeFor(inputs, outputs)
   if (feePayerOutputIndex === -1) {
     if (totalOutputAmount < fee) {
       throw new Error('Not enough funds to pay fee')
@@ -1442,7 +1450,8 @@ async function buildCommitTx(
   payment: number | null,
   forceInUtxos: UtxoInfoWithWallet[],
   fetchedCardinalUtxos?: Utxo[],
-  minChange = 0
+  minChange = 0,
+  minFee = 0
 ): Promise<BuildCommitTxResult> {
   if (payment == null || payment < 0) payment = 0
   const changeWallet = payerWallet
@@ -1521,7 +1530,8 @@ async function buildCommitTx(
     postage + revealFee + payment,
     null,
     null,
-    minChange
+    minChange,
+    minFee
   )
   const unsignedCommitTx = unsignedCommitTxResp.tx
   const commitFee = unsignedCommitTxResp.tx_fee
@@ -3373,6 +3383,71 @@ async function buildRevealTxWithParent(
   }
 }
 
+const OUTPOINT_PATTERN = /^[0-9a-f]{64}:\d{1,10}$/i
+
+/**
+ * Checks a commit's `CommitOpts` against the payer: each input must be an output of the payer
+ * address with the stated value (read from its transaction), named once, and without inscriptions
+ * when the chain provider lists it among the payer's cardinal UTXOs.
+ *
+ * @param opts The commit options, or undefined for none.
+ * @param payerWallet The wallet that funds and signs the commit.
+ * @returns The forced inputs, the payer's fetched cardinal UTXOs when there are any, and the fee floor.
+ * @throws {Error} When an input or the fee floor is malformed or fails a check.
+ */
+async function resolveCommitOpts(
+  opts: CommitOpts | undefined,
+  payerWallet: WalletInfo
+): Promise<{
+  forceInUtxos: UtxoInfoWithWallet[]
+  fetchedCardinalUtxos?: Utxo[]
+  minFee: number
+}> {
+  const minFee = opts?.minCommitFee ?? 0
+  if (!Number.isSafeInteger(minFee) || minFee < 0)
+    throw new Error('minCommitFee must be a non-negative integer')
+  const inputs = opts?.inputs ?? []
+  if (!Array.isArray(inputs)) throw new Error('inputs must be an array')
+  if (inputs.length === 0) return { forceInUtxos: [], minFee }
+  if (!payerWallet.addr) throw new Error('Payer wallet address is not set.')
+
+  const fetchedCardinalUtxos = await fetchCardinalUtxos(payerWallet.addr)
+  const listed = await getCardinalUtxos(payerWallet.addr, fetchedCardinalUtxos)
+  const scriptType = utxoOutputTypeFromOutputScript(payerWallet.outputScript, getBitcoinNetwork())
+  const seen = new Set<string>()
+  const forceInUtxos: UtxoInfoWithWallet[] = []
+  for (const input of inputs) {
+    const raw = input?.outpoint
+    if (typeof raw != 'string' || !OUTPOINT_PATTERN.test(raw))
+      throw new Error(`Commit input must be a txid:vout outpoint: ${String(raw)}`)
+    const outpoint = raw.toLowerCase()
+    const [txid, voutText] = outpoint.split(':') as [string, string]
+    const vout = Number(voutText)
+    if (seen.has(outpoint)) throw new Error(`Commit input ${outpoint} is listed twice`)
+    seen.add(outpoint)
+    if (!Number.isSafeInteger(input.value) || input.value <= 0)
+      throw new Error(`Commit input ${outpoint} must have a positive integer value`)
+
+    const out = bitcoinjs.Transaction.fromHex(await getTxhex(txid)).outs[vout]
+    if (!out) throw new Error(`Commit input ${outpoint} does not exist`)
+    if (!Buffer.from(out.script).equals(payerWallet.outputScript))
+      throw new Error(`Commit input ${outpoint} is not an output of the payer address`)
+    if (Number(out.value) !== input.value)
+      throw new Error(`Commit input ${outpoint} holds ${out.value} sats, not ${input.value}`)
+    const entry = listed.find(u => u.utxo === outpoint)
+    if (entry && isInscribed(entry))
+      throw new Error(`Commit input ${outpoint} carries an inscription`)
+
+    forceInUtxos.push({
+      utxo: outpoint,
+      value: input.value,
+      script_type: scriptType,
+      wallet: payerWallet,
+    })
+  }
+  return { forceInUtxos, fetchedCardinalUtxos, minFee }
+}
+
 /**
  * Mints an inscription by building and signing the commit and reveal transactions. The commit transaction is built using the buildCommitTx function, and the reveal transaction is built using the buildRevealTx function. The function also validates the transactions before broadcasting them to the network. If dryRun is true, the transactions will not be broadcasted and the signed transaction hex will be returned for inspection.
  *
@@ -3383,6 +3458,7 @@ async function buildRevealTxWithParent(
  * @param payment - amount to pay (if payment is not null)
  * @param dryRun - if true, the transactions will not be broadcasted and the signed transaction hex will be returned for inspection
  * @param signFunc - function to sign the transactions
+ * @param commitOpts - outputs of the payer the commit spends, and the least fee it pays (see `CommitOpts`)
  *
  * @returns an object containing the commit transaction ID, signed commit transaction hex, reveal transaction ID, signed reveal transaction hex, inscription ID, postage used, and the secret token used for minting
  */
@@ -3393,7 +3469,8 @@ export async function mintAll(
   paymentAddr: string | null,
   payment: number | null,
   dryRun: boolean,
-  signFunc: SignFunction
+  signFunc: SignFunction,
+  commitOpts?: CommitOpts
 ) {
   // Get connected wallet
   const userPaymentWallet = getPaymentWallet()
@@ -3422,6 +3499,7 @@ export async function mintAll(
     postage = getDustValue(inscriptionWallet)
   }
 
+  const commit = await resolveCommitOpts(commitOpts, payerWallet)
   const secret = createSecretToken()
   const commitTx = await buildCommitTx(
     payerWallet,
@@ -3432,7 +3510,10 @@ export async function mintAll(
     postage,
     paymentWallet,
     payment,
-    []
+    commit.forceInUtxos,
+    commit.fetchedCardinalUtxos,
+    0,
+    commit.minFee
   )
   const signedCommitTx = await signFunc(
     commitTx.unsigned_psbt_hex,
@@ -3503,6 +3584,7 @@ export async function mintAll(
  * @param payment - amount to pay (if payment is not null)
  * @param dryRun - if true, the transactions will not be broadcasted and the signed transaction hex will be returned for inspection
  * @param signFunc - function to sign the transactions
+ * @param commitOpts - outputs of the payer the commit spends, and the least fee it pays (see `CommitOpts`)
  *
  * @returns an object containing the commit transaction ID, signed commit transaction hex, reveal transaction ID, signed reveal transaction hex, inscription ID, postage used, and the secret token used for minting
  */
@@ -3513,7 +3595,8 @@ export async function mintAllPaymentWallet(
   paymentAddr: string | null,
   payment: number | null,
   dryRun: boolean,
-  signFunc: SignFunction
+  signFunc: SignFunction,
+  commitOpts?: CommitOpts
 ): Promise<InscribeResult> {
   // Get connected wallet
   const userPaymentWallet = getPaymentWallet()
@@ -3534,6 +3617,7 @@ export async function mintAllPaymentWallet(
     postage = getDustValue(payerWallet)
   }
 
+  const commit = await resolveCommitOpts(commitOpts, payerWallet)
   const secret = createSecretToken()
   const commitTx = await buildCommitTx(
     payerWallet,
@@ -3544,7 +3628,10 @@ export async function mintAllPaymentWallet(
     postage,
     paymentWallet,
     payment,
-    []
+    commit.forceInUtxos,
+    commit.fetchedCardinalUtxos,
+    0,
+    commit.minFee
   )
   const signedCommitTx = await signFunc(
     commitTx.unsigned_psbt_hex,

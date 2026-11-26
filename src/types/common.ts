@@ -50,3 +50,36 @@ export interface PaymentOpts {
   paymentAddress: string
   paymentAmount: number
 }
+
+/**
+ * An output the commit transaction must spend.
+ *
+ * @property outpoint - The output as `txid:vout`.
+ * @property value - The output's value in sats.
+ */
+export interface CommitInput {
+  outpoint: string
+  value: number
+}
+
+/**
+ * Options for the commit transaction of a smart contract call. With neither set, coin selection
+ * funds the commit from the payer's cardinal UTXOs.
+ *
+ * Spending the inputs of an earlier call package that is unconfirmed, or that mempools dropped,
+ * replaces that package with the new one: pass the earlier commit's inputs as `inputs`, and while
+ * the earlier package is still in mempools, a `minCommitFee` above the total fee of every
+ * transaction the new commit evicts (BIP125 rule 3).
+ *
+ * @property inputs - Outputs the commit spends, ahead of any extra funding coin selection adds.
+ *   Each must be an output of the payer (payment) address with the given value, which the kit
+ *   checks against the output's transaction. Each must also carry no inscription: the kit rejects
+ *   one its chain provider lists with inscriptions, and the caller guarantees it for any other.
+ * @property minCommitFee - The least absolute fee the commit pays, in sats. When the fee rate
+ *   gives a lower fee, the commit's change (or, without change, its commit output) gives up the
+ *   difference. A value at or below the fee-rate fee changes nothing.
+ */
+export interface CommitOpts {
+  inputs?: CommitInput[]
+  minCommitFee?: number
+}
