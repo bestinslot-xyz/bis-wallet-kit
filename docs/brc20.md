@@ -49,8 +49,9 @@ const result = await brc20.withdrawFromBrc20Prog(
 ### Held withdraw for a relay
 
 A DEX withdraw can pay a BRC-20 token out as plain BRC-20 instead of a BRC2.0 balance. The wallet
-signs a withdraw inscription chain up front and hands it to the sequencer with the withdraw order;
-the sequencer broadcasts the commit and reveal, and relays the held send once the withdraw settles.
+signs a withdraw inscription chain up front and hands it to the backend with the withdraw order. The
+backend broadcasts the commit at once, then holds the reveal and the send and broadcasts them
+together when the withdraw settles, so no revealed inscription waits at the user's address.
 
 ```ts
 import { brc20, swap } from '@bestinslot/wallet-kit'
@@ -87,17 +88,19 @@ const { txId } = await brc20.sendBrc20ProgWithdrawToSelf({ inscriptionId, feeRat
 - **One target.** Prepare the chain with `targetAddress` set to the connected ordinals address, and
   pass the same target to `swap.withdraw` (omit `targetAddress` there). `withdraw` refuses a chain
   whose send pays another address before asking for any signature.
-- **Supported wallets.** The ordinals address is `p2tr` or `p2wpkh`, and the wallet has a payment
-  address of its own. A single-address wallet is refused, because another kit flow could spend the
-  held reveal output as a cardinal UTXO before the relay sends it. `canPrepareBrc20ProgWithdraw()`
-  answers this without prompting, so an app can hide the option.
+- **Supported wallets.** Any wallet whose ordinals address is `p2tr` or `p2wpkh`, including a
+  single-address wallet whose payment and ordinals addresses are the same. The reveal is not
+  broadcast until the withdraw settles, so no revealed inscription sits among the wallet's spendable
+  outputs, and the commit and the send's fee inputs are cardinal UTXOs only.
+  `canPrepareBrc20ProgWithdraw()` answers this without prompting, so an app can hide the option.
 - **Confirmed inputs only.** The relay holds only the three signed transactions, so both calls
   refuse while unbroadcast extra transactions are saved (outputs of a chain this session has not
   broadcast).
-- **Send now is the recovery path.** `sendBrc20ProgWithdrawToSelf` spends `<revealTxId>:0` directly
-  and sends the inscription back to the ordinals address at dust, paying the fee from cardinal UTXOs
-  with every input signalling RBF. At a fee rate above the stuck send's, it replaces it. One sign
-  prompt; the transaction is broadcast.
+- **Send now is the recovery path.** It applies to a withdraw whose reveal was broadcast, such as a
+  stuck relayed send. `sendBrc20ProgWithdrawToSelf` spends `<revealTxId>:0` directly and sends the
+  inscription back to the ordinals address at dust, paying the fee from cardinal UTXOs with every
+  input signalling RBF. At a fee rate above the stuck send's, it replaces it. One sign prompt; the
+  transaction is broadcast.
 
 ## Send to another address
 

@@ -81,7 +81,7 @@ async function connect(type: 'p2wpkh' | 'p2tr') {
     })
   )
   await wallet.connectLocalWallet(WIF, 'testnet', type, 'unisat')
-  return { address, script, prevValue: 200000 }
+  return { address, script, prevValue: 200000, cardinal: utxo.utxo }
 }
 
 const KEY = ECPairFactory(ecc).fromWIF(WIF, net)
@@ -296,6 +296,34 @@ describe('sendBrc20ProgWithdrawToSelf', () => {
     }
   }
 
+  it('never takes the inscription output as a fee input on a single-address wallet', async () => {
+    const { address, script, cardinal } = await connect('p2tr')
+    const { revealTxid, inscriptionId } = stubStuckReveal(address, script, 'p2tr', 'elsewhere')
+    // A provider that has not indexed the reveal yet lists its output as a plain UTXO.
+    const baseFetch = globalThis.fetch as unknown as (u: string, o?: any) => Promise<any>
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string | URL, opts?: any) => {
+        if (String(url).includes('/cardinal_utxos/')) {
+          const listed = await (await baseFetch(String(url), opts)).json()
+          const [funding] = listed.data
+          return jsonResponse({
+            data: [
+              { ...funding, utxo: `${revealTxid}:0`, txid: revealTxid, vout: 0, value: 700 },
+              funding,
+            ],
+          })
+        }
+        return baseFetch(String(url), opts)
+      })
+    )
+
+    await brc20.sendBrc20ProgWithdrawToSelf({ inscriptionId, feeRate: 12 })
+
+    const send = bitcoin.Transaction.fromHex(sentBodies[0]![0]!)
+    assert.deepEqual(send.ins.map(outpoint), [`${revealTxid}:0`, cardinal])
+  })
+
   it('pays the fee from the payment address of a split wallet', async () => {
     const { address, script, paymentScript } = await connectSplit('p2tr')
     const { revealTxid, inscriptionId } = stubStuckReveal(address, script, 'p2tr', 'elsewhere')
@@ -417,14 +445,76 @@ describe('prepareBrc20ProgWithdraw', () => {
     assert.equal(send.outs[0]!.value, 330)
   })
 
-  it('refuses a single-address wallet before signing', async () => {
-    await connect('p2tr')
-    assert.isFalse(brc20.canPrepareBrc20ProgWithdraw())
-    const args = { tick: 'ordi', amount: '1.5', targetAddress: P2TR, feeRate: 3 }
-    await expect(brc20.prepareBrc20ProgWithdraw(args)).rejects.toThrow(/separate payment/)
-    await expect(brc20.getBrc20ProgWithdrawFee(args)).rejects.toThrow(/separate payment/)
-    assert.equal(testedBodies.length, 0)
-  })
+  for (const type of ['p2wpkh', 'p2tr'] as const) {
+    it(`signs a ${type} chain for a wallet whose payment and ordinals address are the same`, async () => {
+      const { address, script, prevValue, cardinal } = await connect(type)
+      assert.isTrue(brc20.canPrepareBrc20ProgWithdraw())
+      const feeRate = 10
+
+      const res = await brc20.prepareBrc20ProgWithdraw({
+        tick: 'ordi',
+        amount: '1.5',
+        targetAddress: address,
+        feeRate,
+      })
+
+      const commit = bitcoin.Transaction.fromHex(res.commitTxHex)
+      const reveal = bitcoin.Transaction.fromHex(res.revealTxHex)
+      const send = bitcoin.Transaction.fromHex(res.sendTxHex)
+      // The commit's only inputs are the wallet's cardinal UTXOs.
+      assert.deepEqual(commit.ins.map(outpoint), [cardinal])
+      assert.ok(reveal.outs[0]!.script.equals(script))
+      assert.equal(reveal.outs[0]!.value, selfFundedSendPostage(type, feeRate))
+      assert.equal(send.ins.length, 1)
+      assert.equal(outpoint(send.ins[0]!), `${res.revealTxId}:0`)
+      assert.ok(send.outs[0]!.script.equals(script))
+      assert.ok(sendSignatureValid(send, reveal.outs[0]!))
+      assert.isBelow(res.feeSats, prevValue)
+      assert.deepEqual(testedBodies.at(-1), [res.commitTxHex, res.revealTxHex, res.sendTxHex])
+      assert.equal(sentBodies.length, 0)
+
+      // The quote prices the same chain.
+      assert.equal(
+        await brc20.getBrc20ProgWithdrawFee({
+          tick: 'ordi',
+          amount: '1.5',
+          targetAddress: address,
+          feeRate,
+        }),
+        res.feeSats
+      )
+    })
+  }
+
+  for (const ordinals of ['p2pkh', 'p2sh'] as const) {
+    it(`refuses a ${ordinals} ordinals address before signing`, async () => {
+      await connect('p2wpkh')
+      const publicKey = Buffer.from(KEY.publicKey)
+      const address =
+        ordinals === 'p2pkh'
+          ? bitcoin.payments.p2pkh({ pubkey: publicKey, network: net }).address!
+          : bitcoin.payments.p2sh({
+              redeem: bitcoin.payments.p2wpkh({ pubkey: publicKey, network: net }),
+              network: net,
+            }).address!
+      registerProvider('xverse', SPLIT_PROVIDER)
+      saveWalletInfo({
+        provider: 'xverse',
+        wallets: [
+          { address: P2WPKH, pubkey: publicKey.toString('hex'), purpose: 'payment' },
+          { address, pubkey: publicKey.toString('hex'), purpose: 'ordinals' },
+        ],
+        signature: null,
+      })
+      assert.isFalse(brc20.canPrepareBrc20ProgWithdraw())
+      const args = { tick: 'ordi', amount: '1.5', targetAddress: P2WPKH, feeRate: 3 }
+      await expect(brc20.prepareBrc20ProgWithdraw(args)).rejects.toThrow(
+        new RegExp(`Cannot sign a withdraw send from a ${ordinals}`)
+      )
+      await expect(brc20.getBrc20ProgWithdrawFee(args)).rejects.toThrow(/withdraw send/)
+      assert.equal(testedBodies.length, 0)
+    })
+  }
 
   it('cannot prepare without a connected wallet', () => {
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
