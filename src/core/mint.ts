@@ -3386,13 +3386,25 @@ async function buildRevealTxWithParent(
 const OUTPOINT_PATTERN = /^[0-9a-f]{64}:\d{1,10}$/i
 
 /**
+ * The provider's outputs without the ones it reports unconfirmed (`block_height: null`). A
+ * replacement funds only from these, since an unconfirmed output may belong to the package it
+ * evicts. Outputs without `block_height` stay.
+ */
+function confirmedOnly(utxos: Utxo[]): Utxo[] {
+  return utxos.filter(u => u.block_height !== null)
+}
+
+/**
  * Checks a commit's `CommitOpts` against the payer: each input must be an output of the payer
  * address with the stated value (read from its transaction), named once, and without inscriptions
  * when the chain provider lists it among the payer's cardinal UTXOs.
  *
+ * With inputs, the commit replaces an earlier package, so coin selection draws only on the
+ * provider's confirmed outputs (see {@link confirmedOnly}).
+ *
  * @param opts The commit options, or undefined for none.
  * @param payerWallet The wallet that funds and signs the commit.
- * @returns The forced inputs, the payer's fetched cardinal UTXOs when there are any, and the fee floor.
+ * @returns The forced inputs, the payer's confirmed cardinal UTXOs when there are any, and the fee floor.
  * @throws {Error} When an input or the fee floor is malformed or fails a check.
  */
 async function resolveCommitOpts(
@@ -3445,7 +3457,31 @@ async function resolveCommitOpts(
       wallet: payerWallet,
     })
   }
-  return { forceInUtxos, fetchedCardinalUtxos, minFee }
+  return { forceInUtxos, fetchedCardinalUtxos: confirmedOnly(fetchedCardinalUtxos), minFee }
+}
+
+/**
+ * The payer's cardinal UTXOs a send-to-OP_RETURN funds from, with the saved extra transactions
+ * applied. After a replacing commit, unconfirmed provider outputs are left out (see
+ * {@link confirmedOnly}); the new commit's change still arrives through the saved extra transactions.
+ */
+async function sendFundingUtxos(addr: string, replacing: boolean): Promise<UtxoInfo[]> {
+  if (!replacing) return getCardinalUtxos(addr)
+  return getCardinalUtxos(addr, confirmedOnly(await fetchCardinalUtxos(addr)))
+}
+
+/**
+ * The transactions a mint tests for mempool acceptance. A commit with forced inputs may replace
+ * transactions still in mempools, and a multi-transaction `testmempoolaccept` refuses any list
+ * that conflicts with the mempool, so that commit is tested alone, where Bitcoin Core applies its
+ * replacement rules. The reveal, which spends it, then goes untested.
+ */
+function txesToValidate(
+  forceInUtxos: UtxoInfoWithWallet[],
+  commitHex: string,
+  revealHex: string
+): string[] {
+  return forceInUtxos.length > 0 ? [commitHex] : [commitHex, revealHex]
 }
 
 /**
@@ -3535,7 +3571,9 @@ export async function mintAll(
     commitTx.commit_vout
   )
 
-  const isValid = await validateTxes([signedCommitTx.signedTxHex, revealTx.signedTxHex])
+  const isValid = await validateTxes(
+    txesToValidate(commit.forceInUtxos, signedCommitTx.signedTxHex, revealTx.signedTxHex)
+  )
   if (isValid == null)
     throw new Error('Mint commit/reveal validation failed (testmempoolaccept request failed)')
 
@@ -3653,7 +3691,9 @@ export async function mintAllPaymentWallet(
     commitTx.commit_vout
   )
 
-  const isValid = await validateTxes([signedCommitTx.signedTxHex, revealTx.signedTxHex])
+  const isValid = await validateTxes(
+    txesToValidate(commit.forceInUtxos, signedCommitTx.signedTxHex, revealTx.signedTxHex)
+  )
   if (isValid == null)
     throw new Error(
       'Payment-wallet mint commit/reveal validation failed (testmempoolaccept request failed)'
@@ -3792,6 +3832,7 @@ export async function mintAllCheckFees(
  * @param feeRate - fee rate in sat/vbyte to use for the transaction
  * @param dryRun - if true, the transaction will not be broadcasted
  * @param signFunc - function to sign the transaction
+ * @param replacing - true when the saved extra transactions start with a commit that replaces an earlier package: the send then funds only from confirmed provider outputs and the saved extra transactions, and skips the mempool test, which would include that commit
  *
  * @returns an object containing the transaction ID and signed transaction hex of the sent transaction
  */
@@ -3801,7 +3842,8 @@ export async function sendInscriptionToOpReturnAll(
   targetPostage: number | null,
   feeRate: number,
   dryRun: boolean,
-  signFunc: SignFunction
+  signFunc: SignFunction,
+  replacing = false
 ): Promise<SendInscriptionResult> {
   // Get connected wallet
   const userPaymentWallet = getPaymentWallet()
@@ -3839,7 +3881,7 @@ export async function sendInscriptionToOpReturnAll(
 
   if (!payerWallet.addr) throw new Error('Payer wallet address is not set.')
 
-  const cardinalUtxos = await getCardinalUtxos(payerWallet.addr)
+  const cardinalUtxos = await sendFundingUtxos(payerWallet.addr, replacing)
 
   if (targetPostage <= 0 || targetPostage == null) {
     targetPostage = 1 // 1 sat for inscription
@@ -3871,15 +3913,17 @@ export async function sendInscriptionToOpReturnAll(
 
   const signedTx = await signFunc(unsignedPsbtHex, payerWallet.addr, inscriptionWallet.addr, [0])
 
-  const isValid = await validateTxes([signedTx.signedTxHex])
-  if (isValid == null)
-    throw new Error(
-      'OP_RETURN inscription send validation failed (testmempoolaccept request failed)'
-    )
+  if (!replacing) {
+    const isValid = await validateTxes([signedTx.signedTxHex])
+    if (isValid == null)
+      throw new Error(
+        'OP_RETURN inscription send validation failed (testmempoolaccept request failed)'
+      )
 
-  for (const entry of isValid) {
-    if (!entry.allowed) {
-      throw new Error(entry['reject-reason'])
+    for (const entry of isValid) {
+      if (!entry.allowed) {
+        throw new Error(entry['reject-reason'])
+      }
     }
   }
 
@@ -3912,6 +3956,7 @@ export async function sendInscriptionToOpReturnAll(
  * @param feeRate - fee rate in sat/vbyte to use for the transaction
  * @param dryRun - if true, the transaction will not be broadcasted
  * @param signFunc - function to sign the transaction
+ * @param replacing - true when the saved extra transactions start with a commit that replaces an earlier package: the send then funds only from confirmed provider outputs and the saved extra transactions, and skips the mempool test, which would include that commit
  *
  * @returns an object containing the transaction ID and signed transaction hex of the sent transaction
  */
@@ -3921,7 +3966,8 @@ export async function sendInscriptionInPaymentWalletToOpReturnAll(
   targetPostage: number | null,
   feeRate: number,
   dryRun: boolean,
-  signFunc: SignFunction
+  signFunc: SignFunction,
+  replacing = false
 ): Promise<SendInscriptionResult> {
   // Get connected wallet
   const userPaymentWallet = getPaymentWallet()
@@ -3954,7 +4000,7 @@ export async function sendInscriptionInPaymentWalletToOpReturnAll(
 
   if (!payerWallet.addr) throw new Error('Payer wallet address is not set.')
 
-  const cardinalUtxos = await getCardinalUtxos(payerWallet.addr)
+  const cardinalUtxos = await sendFundingUtxos(payerWallet.addr, replacing)
 
   if (targetPostage <= 0 || targetPostage == null) {
     targetPostage = 1 // 1 sat for inscription
@@ -3986,15 +4032,17 @@ export async function sendInscriptionInPaymentWalletToOpReturnAll(
 
   const signedTx = await signFunc(unsignedPsbtHex, payerWallet.addr, inscriptionWallet.addr, [])
 
-  const isValid = await validateTxes([signedTx.signedTxHex])
-  if (isValid == null)
-    throw new Error(
-      'Payment-wallet OP_RETURN inscription send validation failed (testmempoolaccept request failed)'
-    )
+  if (!replacing) {
+    const isValid = await validateTxes([signedTx.signedTxHex])
+    if (isValid == null)
+      throw new Error(
+        'Payment-wallet OP_RETURN inscription send validation failed (testmempoolaccept request failed)'
+      )
 
-  for (const entry of isValid) {
-    if (!entry.allowed) {
-      throw new Error(entry['reject-reason'])
+    for (const entry of isValid) {
+      if (!entry.allowed) {
+        throw new Error(entry['reject-reason'])
+      }
     }
   }
 

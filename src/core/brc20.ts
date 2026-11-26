@@ -387,6 +387,11 @@ export async function deploySmartContractAbi(
   )
 }
 
+/** Whether a call's commit spends given inputs, and so may replace an earlier call package. */
+function replacesPackage(commitOpts: CommitOpts | undefined): boolean {
+  return (commitOpts?.inputs?.length ?? 0) > 0
+}
+
 /**
  * Calls a smart contract function by creating an inscription with the provided input data and sending it to the OP_RETURN output. The function first compresses the input data, then creates an inscription with the compressed data and mints it. After minting, it sends the inscription to an OP_RETURN output with a specific format. The function also handles optional payment parameters and allows for a dry run mode where the transaction hexes are returned without broadcasting.
  *
@@ -479,7 +484,8 @@ export async function callSmartContract(
       1,
       feeRate,
       true,
-      signFn
+      signFn,
+      replacesPackage(commitOpts)
     )
   } finally {
     clearExtraUtxos()
@@ -615,7 +621,8 @@ export async function callSmartContractFromPaymentWallet(
       1,
       feeRate,
       true,
-      signFn
+      signFn,
+      replacesPackage(commitOpts)
     )
   } finally {
     clearExtraUtxos()
