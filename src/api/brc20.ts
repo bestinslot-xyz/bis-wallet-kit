@@ -13,7 +13,7 @@ import type {
 } from '../core/brc20-send'
 import type { TransactArgs, TransactResult } from '../core/brc20-transact'
 import type { FrBtcResult, UnwrapBtcFromBrc20ProgArgs, WrapBtcToBrc20ProgArgs } from '../core/frbtc'
-import type { BISWalletPurpose, PaymentOpts } from '../types/common'
+import type { BISWalletPurpose, CommitOpts, PaymentOpts } from '../types/common'
 import {
   callSmartContract as callSmartContractFromOrdinalsWallet,
   callSmartContractFromPaymentWallet,
@@ -331,8 +331,9 @@ export interface InscribeAndSendToAddress {
  * @param dryRun A boolean indicating whether to perform a dry run of the transaction (i.e., simulate the transaction without actually sending it).
  * @param paymentOpts Optional extra payment output: when `paymentOpts.paymentAmount` is greater than 0, the transaction sends that many sats to `paymentOpts.paymentAddress` (funded by the connected wallet — e.g. a service fee). Omit, or pass a non-positive amount, for no extra payment.
  * @param walletType The type of wallet to use for the transaction, either 'payment' or 'ordinals'. If not specified, defaults to 'payment'.
+ * @param commitOpts Optional commit options: `inputs` are outputs of the payment address the commit spends ahead of any extra funding coin selection adds, and `minCommitFee` is the least absolute fee in sats the commit pays. Together they replace an earlier unconfirmed or dropped call package by spending its inputs at a higher fee (see `CommitOpts`). Omit for plain coin selection at the fee rate.
  * @returns The result of the smart contract call, which may vary depending on the wallet type and the specifics of the transaction. The exact structure of the result will depend on the implementation of the callSmartContractFromOrdinalsWallet and callSmartContractFromPaymentWallet functions.
- * @throws An error if an unsupported wallet type is specified or if there is an issue with the smart contract call.
+ * @throws An error if an unsupported wallet type is specified, if a commit input is malformed, not an output of the payment address with the given value, or listed with inscriptions, or if there is an issue with the smart contract call.
  */
 export async function callSmartContract(
   contractAddress: string,
@@ -342,7 +343,8 @@ export async function callSmartContract(
   postage: number | null,
   dryRun: boolean,
   paymentOpts?: PaymentOpts,
-  walletType?: BISWalletPurpose
+  walletType?: BISWalletPurpose,
+  commitOpts?: CommitOpts
 ): Promise<InscribeAndSendToOpReturn> {
   if (!walletType || walletType === 'ordinals') {
     return await callSmartContractFromOrdinalsWallet(
@@ -353,7 +355,8 @@ export async function callSmartContract(
       postage,
       paymentOpts?.paymentAddress || null,
       paymentOpts?.paymentAmount || null,
-      dryRun
+      dryRun,
+      commitOpts
     )
   } else if (walletType === 'payment') {
     return await callSmartContractFromPaymentWallet(
@@ -364,7 +367,8 @@ export async function callSmartContract(
       postage,
       paymentOpts?.paymentAddress || null,
       paymentOpts?.paymentAmount || null,
-      dryRun
+      dryRun,
+      commitOpts
     )
   } else {
     throw new Error(`Unsupported wallet type: ${walletType}`)
@@ -384,6 +388,7 @@ export async function callSmartContract(
  * @param dryRun A boolean indicating whether to perform a dry run of the transaction (i.e., simulate the transaction without actually sending it). This can be useful for testing and debugging purposes to ensure that the function call is correctly encoded and that the transaction would succeed before actually sending it to the network.
  * @param paymentOpts Optional extra payment output: when `paymentOpts.paymentAmount` is greater than 0, the transaction sends that many sats to `paymentOpts.paymentAddress` (funded by the connected wallet — e.g. a service fee). Omit, or pass a non-positive amount, for no extra payment.
  * @param walletType The type of wallet to use for the transaction, either 'payment' or 'ordinals'. This parameter allows the caller to specify which wallet implementation to use when executing the smart contract call, providing flexibility in how the transaction is processed based on the capabilities and requirements of the chosen wallet type.
+ * @param commitOpts Optional commit options, as in `callSmartContract`: outputs of the payment address the commit spends, and the least fee it pays (see `CommitOpts`).
  * @returns The result of the smart contract call, which may vary depending on the wallet type and the specifics of the transaction. The exact structure of the result will depend on the implementation of the callSmartContractFromOrdinalsWallet and callSmartContractFromPaymentWallet functions, as well as the nature of the smart contract being called and the function being invoked.
  * @throws An error if the ABI is not an object, if the function name is not a string, if the parameters are not an array, if an unsupported wallet type is specified, or if there is an issue with the smart contract call.
  */
@@ -397,7 +402,8 @@ export async function callSmartContractAbi(
   postage: number | null,
   dryRun: boolean,
   paymentOpts?: PaymentOpts,
-  walletType?: BISWalletPurpose
+  walletType?: BISWalletPurpose,
+  commitOpts?: CommitOpts
 ): Promise<InscribeAndSendToOpReturn> {
   if (typeof abi != 'object') throw new Error('abi must be an object')
   if (typeof funcName != 'string') throw new Error('func_name must be a string')
@@ -414,7 +420,8 @@ export async function callSmartContractAbi(
     postage,
     dryRun,
     paymentOpts,
-    walletTypeString
+    walletTypeString,
+    commitOpts
   )
 }
 

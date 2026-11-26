@@ -25,6 +25,12 @@ export interface Utxo {
   satpoints?: string[] | null
   /** What each entry of `inscription_ids` was used for, as the Best in Slot API reports it. */
   brc20_inscriptions?: UsedBrc20Inscription[] | null
+  /**
+   * The height of the block that confirmed the output, or `null` while it is unconfirmed. A
+   * provider that leaves it out reports nothing about confirmation, and the kit treats its
+   * outputs as confirmed.
+   */
+  block_height?: number | null
 }
 
 /** A used BRC-20 inscription on a cardinal output, as the Best in Slot API describes it. */
@@ -47,8 +53,6 @@ export interface OrdinalUtxo extends Utxo {
   inscription_ids: string[]
   /** The satpoint (`txid:vout:offset`) of each entry of `inscription_ids`, in the same order. */
   satpoints: string[]
-  /** The height of the block that confirmed the output, or `null` while it is unconfirmed. */
-  block_height?: number | null
 }
 
 /**

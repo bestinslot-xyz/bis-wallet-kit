@@ -319,7 +319,8 @@ await brc20.callSmartContract(
   postage, // or null
   dryRun,
   paymentOpts, // optional
-  walletType // optional 'ordinals' | 'payment' | 'all'
+  walletType, // optional 'ordinals' | 'payment' | 'all'
+  commitOpts // optional { inputs, minCommitFee }, see below
 )
 ```
 
@@ -342,8 +343,65 @@ The kit pads the call inscription with spaces until its `content bytes × 12000`
 `estimatedGas`.
 
 Every function takes a final optional `paymentOpts` (`{ paymentAddress, paymentAmount }`); the
-contract-call functions also take an optional `walletType`. Use `dryRun: true` to assemble
-transactions without broadcasting.
+contract-call functions also take an optional `walletType` and `commitOpts`. Use `dryRun: true` to
+assemble transactions without broadcasting.
+
+### Replace an earlier call package
+
+A call is a package of three transactions: commit, reveal and send-to-OP_RETURN. The commit is
+funded from the payment address's cardinal UTXOs. `commitOpts` (type `CommitOpts`) lets the commit
+spend given outputs and pay a fee floor, so a new call can replace an earlier one that is still
+unconfirmed, or that mempools dropped, by spending its inputs:
+
+- `inputs`: `{ outpoint: 'txid:vout', value }[]`, outputs of the payment address the commit spends.
+  Coin selection adds more funding when they fall short. The kit reads each output's transaction and
+  rejects one that does not pay the payment address or holds a different value, and one its chain
+  provider lists with inscriptions. While the earlier package is unconfirmed, its inputs are spent
+  in the mempool, so the provider no longer lists them and the kit cannot see their inscriptions:
+  pass only the earlier commit's own inputs, which the caller guarantees carry no inscription, and
+  never an output of the earlier package.
+- `minCommitFee`: the least absolute fee in sats the commit pays. When the fee rate gives less, the
+  commit's change gives up the difference. A floor at or below the fee-rate fee changes nothing. A
+  replacement pays at least the fees of every transaction it evicts (BIP125 rule 3), plus the
+  incremental relay fee for its own size (rule 4). While the earlier package is in mempools, set
+  this to the earlier commit, reveal and send fees combined, plus that relay fee.
+
+```ts
+await brc20.callSmartContractAbi(
+  contractAddress,
+  abi,
+  'transfer',
+  [recipient, amount],
+  estimatedGas,
+  feeRate,
+  null,
+  false,
+  undefined,
+  'payment',
+  {
+    inputs: earlierCommitInputs, // [{ outpoint: 'txid:vout', value }]
+    minCommitFee: earlierPackageFees + relayFee,
+  }
+)
+```
+
+Without `commitOpts`, coin selection alone funds the commit, at the fee rate.
+
+Non-empty `inputs` put the call in replacement mode, with or without `dryRun`:
+
+- **Funding.** Coin selection for the commit and for the send skips provider outputs reported
+  unconfirmed (`block_height: null`), since they may be outputs of the earlier package, such as its
+  commit or send change. The new commit's own change still funds the send. A provider that does not
+  report `block_height` gets no such filter: with it, run the call with `dryRun: true` first and
+  check that no new transaction spends an output of the earlier package.
+- **Mempool test.** A multi-transaction `testmempoolaccept` refuses any transaction that conflicts
+  with the mempool, so the kit tests the new commit alone, where Bitcoin Core applies the
+  replacement rules against `minCommitFee`. The reveal and send, which spend it, go untested.
+- **Broadcast.** The default `BisChainProvider` posts commit, reveal and send in one request to the
+  `sendrawtransactions` route, which relays them one at a time in that order (`sendrawtransaction`
+  each, not a package). The commit replaces the earlier package on its own fee; the reveal and send
+  follow as its descendants. A custom provider broadcasts the list in order, as the
+  [chain provider contract](./chain-providers.md) asks.
 
 ## Base BRC-20 inscriptions
 

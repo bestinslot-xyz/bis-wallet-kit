@@ -1,3 +1,4 @@
+import type { CommitOpts } from '../types/common'
 import { Buffer } from 'node:buffer'
 import { encode as nadaEncode } from '@bestinslot/nada'
 import { init as initZstd, compress as zstdCompress } from '@bokuweb/zstd-wasm'
@@ -386,6 +387,11 @@ export async function deploySmartContractAbi(
   )
 }
 
+/** Whether a call's commit spends given inputs, and so may replace an earlier call package. */
+function replacesPackage(commitOpts: CommitOpts | undefined): boolean {
+  return (commitOpts?.inputs?.length ?? 0) > 0
+}
+
 /**
  * Calls a smart contract function by creating an inscription with the provided input data and sending it to the OP_RETURN output. The function first compresses the input data, then creates an inscription with the compressed data and mints it. After minting, it sends the inscription to an OP_RETURN output with a specific format. The function also handles optional payment parameters and allows for a dry run mode where the transaction hexes are returned without broadcasting.
  *
@@ -397,6 +403,7 @@ export async function deploySmartContractAbi(
  * @param paymentAddr - An optional parameter representing the Bitcoin address to which payment should be sent for the minting transaction. If null, no payment will be made.
  * @param payment - An optional parameter representing the amount of payment to be sent for the minting transaction, specified in sats. If null or less than or equal to 0, no payment will be made.
  * @param dryRun - A boolean flag indicating whether to perform a dry run. If true, the function will return the transaction hexes without broadcasting them to the network. If false, the transactions will be broadcasted after creation.
+ * @param commitOpts - Outputs of the payment address the commit spends, and the least fee it pays (see `CommitOpts`). Omit for plain coin selection at the fee rate.
  *
  * @returns An object containing details of the function call process, including transaction IDs, signed transaction hexes, inscription ID, postage, and secret used in the minting process. If dryRun is true, the transactions will not be broadcasted and the hexes will be returned for inspection.
  */
@@ -408,7 +415,8 @@ export async function callSmartContract(
   postage: number | null,
   paymentAddr: string | null,
   payment: number | null,
-  dryRun: boolean
+  dryRun: boolean,
+  commitOpts?: CommitOpts
 ) {
   // Get connected wallet
   const walletInfo = getWalletInfo()
@@ -454,7 +462,8 @@ export async function callSmartContract(
     paymentAddr,
     payment,
     true,
-    signFn
+    signFn,
+    commitOpts
   )
   const inscriptionId = res.inscription_id
   const satpoint = `${inscriptionId.split('i')[0]}:0:0`
@@ -475,7 +484,8 @@ export async function callSmartContract(
       1,
       feeRate,
       true,
-      signFn
+      signFn,
+      replacesPackage(commitOpts)
     )
   } finally {
     clearExtraUtxos()
@@ -527,6 +537,8 @@ export async function callSmartContract(
  * @param dryRun - A boolean flag indicating whether to perform a dry run. If true, the function will return the transaction hexes without broadcasting them to the network. If false, the transactions will be broadcasted after creation.
  *
  * @returns An object containing details of the function call process, including transaction IDs, signed transaction hexes, inscription ID, postage, and secret used in the minting process. If dryRun is true, the transactions will not be broadcasted and the hexes will be returned for inspection.
+ * @param commitOpts - Outputs of the payment address the commit spends, and the least fee it pays (see `CommitOpts`). Omit for plain coin selection at the fee rate.
+ *
  * @throws Will throw an error if the wallet is not connected, if the input parameters are of incorrect types, or if there is a failure in creating or sending the inscription.
  */
 export async function callSmartContractFromPaymentWallet(
@@ -537,7 +549,8 @@ export async function callSmartContractFromPaymentWallet(
   postage: number | null,
   paymentAddr: string | null,
   payment: number | null,
-  dryRun: boolean
+  dryRun: boolean,
+  commitOpts?: CommitOpts
 ) {
   // Get connected wallet
   const walletInfo = getWalletInfo()
@@ -583,7 +596,8 @@ export async function callSmartContractFromPaymentWallet(
     paymentAddr,
     payment,
     true,
-    signFn
+    signFn,
+    commitOpts
   )
   const inscriptionId = mintResult.inscriptionId
   const satpoint = `${inscriptionId.split('i')[0]}:0:0`
@@ -607,7 +621,8 @@ export async function callSmartContractFromPaymentWallet(
       1,
       feeRate,
       true,
-      signFn
+      signFn,
+      replacesPackage(commitOpts)
     )
   } finally {
     clearExtraUtxos()

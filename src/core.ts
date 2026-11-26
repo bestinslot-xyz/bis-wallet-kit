@@ -25,7 +25,7 @@ export type { Endpoints, EndpointsConfig } from './core/store-network'
 export { getProviders, setProviders } from './core/chain-providers'
 export type { NetworkProviders, ProvidersConfig } from './core/chain-providers'
 
-export type { PaymentOpts } from './types/common'
+export type { CommitInput, CommitOpts, PaymentOpts } from './types/common'
 
 export * as bitcoinjs from 'bitcoinjs-lib'
 export * as Buff from '@cmdcode/buff-utils'
